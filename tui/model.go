@@ -47,6 +47,17 @@ var (
 			Foreground(lipgloss.Color("#FF0000")).
 			Bold(true).
 			MarginTop(1)
+
+	sshPanelStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#00D7AF")).
+			Padding(1, 2).
+			Height(30)
+
+	sshPanelTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#00D7AF")).
+			MarginBottom(1)
 )
 
 type sshMsg struct {
@@ -90,6 +101,7 @@ type model struct {
 	usernamePrompt  bool   // Whether we're prompting for username
 	usernameInput   string // Current username being typed
 	sshUsername     string // Stored SSH username
+	showSSHPanel    bool   // Whether to show the right SSH panel in split mode
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string) model {
@@ -106,6 +118,7 @@ func NewModel(devices []client.Device, version string, sshUsername string) model
 		usernamePrompt:  false,
 		usernameInput:   "",
 		sshUsername:     sshUsername,
+		showSSHPanel:    true, // Start with SSH panel visible
 	}
 }
 
@@ -161,10 +174,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.sshUsername = m.usernameInput
 					m.usernamePrompt = false
 					m.usernameInput = ""
-					
+
 					// Store username for future use
 					cmd := m.storeUsername(m.sshUsername)
-					
+
 					// SSH to selected device
 					target := m.selected
 					if target < 0 {
@@ -223,6 +236,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+
+		case "tab":
+			// Toggle SSH panel visibility
+			m.showSSHPanel = !m.showSSHPanel
+			return m, nil
 
 		case "/":
 			// Enter search mode (vim-style)
@@ -304,6 +322,50 @@ func (m model) View() string {
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
 
+	// Render in split mode or single mode
+	if m.showSSHPanel && m.width > 80 {
+		// Split screen mode - left and right panels
+		leftPanel := m.renderLeftPanel()
+		rightPanel := m.renderSSHPanel()
+		
+		// Join panels horizontally
+		panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+		b.WriteString(panels)
+		b.WriteString("\n")
+	} else {
+		// Single panel mode (original layout)
+		b.WriteString(m.renderLeftPanel())
+	}
+
+	// Help text
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab panel • q quit"
+	if m.usernamePrompt {
+		help = "Enter SSH username • esc cancel • enter confirm"
+	} else if m.searchMode {
+		help = "Type to search • esc cancel • enter confirm"
+	}
+	b.WriteString(helpStyle.Render(help))
+
+	// Show copy success message if any
+	if m.copiedText != "" {
+		b.WriteString("\n")
+		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
+		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.copiedText)))
+	}
+
+	// Show SSH error if any
+	if m.sshError != nil {
+		b.WriteString("\n")
+		b.WriteString(errorStyle.Render(fmt.Sprintf("SSH Error: %v", m.sshError)))
+	}
+
+	return b.String()
+}
+
+// renderLeftPanel renders the device list and details panel
+func (m model) renderLeftPanel() string {
+	var b strings.Builder
+
 	// Build device list content
 	var listContent strings.Builder
 	maxVisible := m.getMaxVisibleItems()
@@ -345,7 +407,13 @@ func (m model) View() string {
 		// Get status icon
 		statusIcon := getStatusIcon(device)
 
-		line := fmt.Sprintf("%s%s %-28s %s", cursor, statusIcon, name, address)
+		// Adjust width for split mode
+		nameWidth := 28
+		if m.showSSHPanel && m.width > 80 {
+			nameWidth = 20
+		}
+
+		line := fmt.Sprintf("%s%s %-*s %s", cursor, statusIcon, nameWidth, name, address)
 		listContent.WriteString(style.Render(line))
 		listContent.WriteString("\n")
 	}
@@ -356,10 +424,17 @@ func (m model) View() string {
 	}
 
 	// Render the list in a frame
-	b.WriteString(listStyle.Render(listContent.String()))
+	listPanel := listStyle.Render(listContent.String())
+	
+	// Set width for split mode
+	if m.showSSHPanel && m.width > 80 {
+		listPanel = lipgloss.NewStyle().Width(m.width / 2 - 4).Render(listPanel)
+	}
+	
+	b.WriteString(listPanel)
 
-	// Device details if selected
-	if m.selected >= 0 && m.selected < len(m.filteredDevices) {
+	// Device details if selected (only in single panel mode)
+	if !m.showSSHPanel && m.selected >= 0 && m.selected < len(m.filteredDevices) {
 		device := m.filteredDevices[m.selected]
 		name := device.Name
 		if name == "" {
@@ -393,29 +468,95 @@ func (m model) View() string {
 		b.WriteString("\n")
 	}
 
-	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • q quit"
-	if m.usernamePrompt {
-		help = "Enter SSH username • esc cancel • enter confirm"
-	} else if m.searchMode {
-		help = "Type to search • esc cancel • enter confirm"
-	}
-	b.WriteString(helpStyle.Render(help))
-
-	// Show copy success message if any
-	if m.copiedText != "" {
-		b.WriteString("\n")
-		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
-		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.copiedText)))
-	}
-
-	// Show SSH error if any
-	if m.sshError != nil {
-		b.WriteString("\n")
-		b.WriteString(errorStyle.Render(fmt.Sprintf("SSH Error: %v", m.sshError)))
-	}
-
 	return b.String()
+}
+
+// renderSSHPanel renders the right panel with SSH session information
+func (m model) renderSSHPanel() string {
+	var content strings.Builder
+	
+	content.WriteString(sshPanelTitleStyle.Render("SSH Connection"))
+	content.WriteString("\n\n")
+
+	// Show selected device info or prompt
+	if m.selected >= 0 && m.selected < len(m.filteredDevices) {
+		device := m.filteredDevices[m.selected]
+		name := device.Name
+		if name == "" {
+			name = device.Hostname
+		}
+
+		address := "N/A"
+		if len(device.Addresses) > 0 {
+			address = device.Addresses[0]
+		}
+
+		statusText := "🟢 Online"
+		statusColor := "#00FF00"
+		if !isDeviceOnline(device) {
+			statusText = "🔴 Offline"
+			statusColor = "#FF0000"
+		}
+
+		// Device info
+		content.WriteString(lipgloss.NewStyle().Bold(true).Render("Device Details"))
+		content.WriteString("\n\n")
+		content.WriteString(fmt.Sprintf("Name:       %s\n", name))
+		content.WriteString(fmt.Sprintf("Hostname:   %s\n", device.Hostname))
+		content.WriteString(fmt.Sprintf("Status:     %s\n", 
+			lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render(statusText)))
+		content.WriteString(fmt.Sprintf("OS:         %s\n", device.OS))
+		content.WriteString(fmt.Sprintf("Address:    %s\n", address))
+		content.WriteString(fmt.Sprintf("Authorized: %t\n", device.Authorized))
+		content.WriteString("\n")
+
+		// SSH command info
+		content.WriteString(lipgloss.NewStyle().Bold(true).Render("SSH Command"))
+		content.WriteString("\n\n")
+		
+		var sshCommand string
+		if m.sshUsername != "" {
+			sshCommand = fmt.Sprintf("ssh %s@%s", m.sshUsername, address)
+		} else {
+			sshCommand = fmt.Sprintf("ssh %s", address)
+		}
+		
+		cmdStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#00D7AF")).
+			Background(lipgloss.Color("#1a1a1a")).
+			Padding(0, 1)
+		content.WriteString(cmdStyle.Render(sshCommand))
+		content.WriteString("\n\n")
+
+		// Instructions
+		content.WriteString(lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#808080")).Render(
+			"Press 's' to open SSH connection\n" +
+			"Press 'c' to copy SSH command\n" +
+			"Press 'tab' to toggle this panel"))
+		
+		if m.sshUsername == "" {
+			content.WriteString("\n\n")
+			content.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500")).Render(
+				"⚠ No SSH username set\n" +
+				"Press 's' to configure"))
+		}
+	} else {
+		// No device selected
+		content.WriteString(lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#808080")).Render(
+			"No device selected\n\n" +
+			"Select a device from the list\n" +
+			"to view SSH connection details.\n\n" +
+			"Press 'tab' to toggle this panel"))
+	}
+
+	panelWidth := m.width/2 - 4
+	if panelWidth < 40 {
+		panelWidth = 40
+	}
+
+	return lipgloss.NewStyle().
+		Width(panelWidth).
+		Render(sshPanelStyle.Render(content.String()))
 }
 
 // getMaxVisibleItems calculates how many items can fit in the viewport
@@ -482,7 +623,7 @@ func (m model) copySSHCommand(index int) tea.Cmd {
 	}
 
 	address := device.Addresses[0]
-	
+
 	// Build SSH command with username if available
 	var sshCommand string
 	if m.sshUsername != "" {
