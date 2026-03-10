@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -50,14 +51,14 @@ type sshMsg struct {
 }
 
 type model struct {
-	devices      []client.Device
-	cursor       int
-	selected     int
-	err          error
-	width        int
-	height       int
-	sshError     error
-	viewportTop  int // First visible item in the list
+	devices     []client.Device
+	cursor      int
+	selected    int
+	err         error
+	width       int
+	height      int
+	sshError    error
+	viewportTop int // First visible item in the list
 }
 
 func NewModel(devices []client.Device) model {
@@ -142,7 +143,7 @@ func (m model) View() string {
 	// Build device list content
 	var listContent strings.Builder
 	maxVisible := m.getMaxVisibleItems()
-	
+
 	// Calculate visible range
 	visibleStart := m.viewportTop
 	visibleEnd := m.viewportTop + maxVisible
@@ -177,7 +178,10 @@ func (m model) View() string {
 			address = device.Addresses[0]
 		}
 
-		line := fmt.Sprintf("%s%-30s %s", cursor, name, address)
+		// Get status icon
+		statusIcon := getStatusIcon(device)
+
+		line := fmt.Sprintf("%s%s %-28s %s", cursor, statusIcon, name, address)
 		listContent.WriteString(style.Render(line))
 		listContent.WriteString("\n")
 	}
@@ -198,16 +202,23 @@ func (m model) View() string {
 			name = device.Hostname
 		}
 
+		statusText := "🟢 Online"
+		if !isDeviceOnline(device) {
+			statusText = "🔴 Offline"
+		}
+
 		details := fmt.Sprintf(
 			"Selected Device\n\n"+
 				"Name:       %s\n"+
 				"Hostname:   %s\n"+
+				"Status:     %s\n"+
 				"OS:         %s\n"+
 				"Authorized: %t\n"+
 				"Address:    %v\n"+
 				"ID:         %s",
 			name,
 			device.Hostname,
+			statusText,
 			device.OS,
 			device.Authorized,
 			strings.Join(device.Addresses, ", "),
@@ -237,14 +248,14 @@ func (m model) getMaxVisibleItems() int {
 	if m.height == 0 {
 		return 10
 	}
-	
+
 	// Account for: title (2 lines), frame borders (4 lines), detail panel (~10 lines), help (2 lines), padding (4)
 	// This leaves space for the device list
 	availableHeight := m.height - 22
 	if availableHeight < 5 {
 		availableHeight = 5 // Minimum visible items
 	}
-	
+
 	return availableHeight
 }
 
@@ -273,4 +284,18 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		}
 		return sshMsg{}
 	})
+}
+
+// isDeviceOnline checks if a device is considered online based on LastSeen time
+func isDeviceOnline(device client.Device) bool {
+	// Consider a device online if it was seen within the last 5 minutes
+	return time.Since(device.LastSeen) < 5*time.Minute
+}
+
+// getStatusIcon returns the appropriate status icon for a device
+func getStatusIcon(device client.Device) string {
+	if isDeviceOnline(device) {
+		return "🟢"
+	}
+	return "🔴"
 }
