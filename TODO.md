@@ -1,0 +1,7 @@
+- [ ] make interactive menu to navigate in list of machines
+- [ ] add ability to open ssh connetion to machine
+- [ ] once run witout command - just split screen to 2 panels (left and right):
+  - [ ] left - split to top and bottom.
+  - [ ] Top - list of machines wiht albilites to seach in vim like style.  
+  - [ ] bottom - details of selected machine
+  - [ ] right part of window - ssh connection (once on the left top machine selected and ssh connection is established by user)

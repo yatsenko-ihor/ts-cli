@@ -163,14 +163,14 @@ ts-cli/
 - **main.go**: Initializes the CLI application using Cobra framework
 - **commands/root.go**: Defines the root command and registers subcommands
 - **client/tailscale.go**: Handles all interactions with the Tailscale REST API
-  - HTTP client setup
-  - Authentication
-  - API request/response handling
-  - Error handling and JSON parsing
+    - HTTP client setup
+    - Authentication
+    - API request/response handling
+    - Error handling and JSON parsing
 - **commands/**: Individual command implementations
-  - Each command is a `*cobra.Command`
-  - Uses Cobra's flag system for argument parsing
-  - Implements RunE for execution with error handling
+    - Each command is a `*cobra.Command`
+    - Uses Cobra's flag system for argument parsing
+    - Implements RunE for execution with error handling
 
 ## Security
 
