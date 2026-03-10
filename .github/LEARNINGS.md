@@ -12,6 +12,7 @@ This document captures key learnings from building a production-ready Tailscale 
 **Migration**: Switched to `spf13/cobra` for better features
 
 **Reasons for Migration**:
+
 - Better shell completion support (bash, zsh, fish, PowerShell)
 - More active maintenance and community
 - Richer flag handling with pflag integration
@@ -19,6 +20,7 @@ This document captures key learnings from building a production-ready Tailscale 
 - Command aliasing support
 
 **Migration Pattern**:
+
 ```go
 // Before (mitchellh/cli)
 type LoginCommand struct{}
@@ -42,6 +44,7 @@ func NewLoginCommand() *cobra.Command {
 **Challenge**: Running SSH from within the TUI requires suspending the terminal UI
 
 **Wrong Approach**:
+
 ```go
 // ❌ This exits the TUI completely
 cmd := exec.Command("ssh", address)
@@ -53,6 +56,7 @@ return m, tea.Quit()
 ```
 
 **Correct Approach**:
+
 ```go
 // ✅ Properly suspends and resumes TUI
 func (m model) sshToDevice(address string) tea.Cmd {
@@ -71,6 +75,7 @@ func (m model) sshToDevice(address string) tea.Cmd {
 ### Navigation Patterns
 
 Implemented dual navigation modes:
+
 - Arrow keys (`↑`/`↓`) for general users
 - Vim bindings (`k`/`j`) for power users
 
@@ -82,6 +87,47 @@ case "down", "j":
 ```
 
 **Key Lesson**: Support both arrow keys and vim bindings for broader user appeal.
+
+## Cobra Command Delegation
+
+### Run vs RunE Gotcha
+
+**Problem**: When delegating from one command to another, calling `cmd.Run()` directly causes a nil pointer panic if the command uses `RunE` instead of `Run`.
+
+**Wrong Approach**:
+```go
+// ❌ Panic! RunE commands don't have Run set
+Run: func(cmd *cobra.Command, args []string) {
+    interactiveCmd := NewInteractiveCommand()
+    interactiveCmd.Run(cmd, args)  // nil pointer dereference!
+},
+```
+
+**Error Message**:
+```
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation]
+goroutine 1 [running]:
+github.com/ihor/ts-cli/commands.NewRootCommand.func1(...)
+```
+
+**Correct Approach**:
+```go
+// ✅ Call RunE and handle the error
+Run: func(cmd *cobra.Command, args []string) {
+    interactiveCmd := NewInteractiveCommand()
+    if err := interactiveCmd.RunE(cmd, args); err != nil {
+        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+        os.Exit(1)
+    }
+},
+```
+
+**Key Lesson**: When delegating between Cobra commands:
+- Commands using `RunE` have `Run` set to `nil`
+- Always call `RunE` when delegating to a command that returns errors
+- Handle errors explicitly in the delegating command
+- Consider using `cmd.Execute()` for proper subcommand execution
 
 ## API Client Design
 
@@ -97,6 +143,7 @@ commands/
 ```
 
 **Benefits**:
+
 - Easier to test API client independently
 - Can reuse client in different contexts
 - Clear separation between business logic and UI
@@ -172,6 +219,7 @@ Commit 5: (planned) Split-screen layout
 ```
 
 **Benefits**:
+
 - Clear history of feature development
 - Easy to revert specific features
 - Reviewable commits
@@ -204,6 +252,14 @@ package tui  // Duplicate!
 ```
 **Solution**: Copy-paste carefully; check for duplicates
 
+**Issue 3**: Nil pointer dereference when delegating commands
+```
+panic: runtime error: invalid memory address or nil pointer dereference
+goroutine 1 [running]:
+github.com/ihor/ts-cli/commands.NewRootCommand.func1(...)
+```
+**Solution**: Call `RunE` instead of `Run` when delegating to commands that use `RunE`
+
 **Key Lesson**: Build frequently to catch errors early. Don't accumulate changes.
 
 ## Style and UX
@@ -217,7 +273,7 @@ var (
     titleStyle = lipgloss.NewStyle().
         Bold(true).
         Foreground(lipgloss.Color("#7D56F4"))
-    
+
     selectedStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#FF06B7")).
         Bold(true)
@@ -273,6 +329,7 @@ cmd := &cobra.Command{
 ### Documentation Updates
 
 Update README.md as features are added:
+
 - Add new commands to usage section
 - Update feature list
 - Add examples for new functionality
@@ -281,8 +338,9 @@ Update README.md as features are added:
 ### TODO Management
 
 Use TODO.md for tracking multi-step features:
+
 - Break complex features into checkboxes
-- Mark items as completed: `- [x]` 
+- Mark items as completed: `- [x]`
 - Keep it visible in project root
 
 ## Performance Considerations
@@ -302,11 +360,13 @@ httpClient: &http.Client{
 ## Future Improvements
 
 Based on TODO.md, next step is split-screen layout:
+
 - Left panel: device list with search (top) + details (bottom)
 - Right panel: SSH session view
 - Vim-style search navigation
 
 **Implementation Notes**:
+
 - Will need to refactor model to support multiple panels
 - Consider using bubbletea's `tea.WindowSizeMsg` for responsive layout
 - May need to track panel focus state
