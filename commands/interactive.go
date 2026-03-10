@@ -69,7 +69,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 			}
 
 			// Launch TUI
-			m := tui.NewModel(devices)
+			m := tui.NewModel(devices, Version)
 			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				return fmt.Errorf("TUI error: %w", err)

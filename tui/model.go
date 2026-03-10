@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -50,6 +51,13 @@ type sshMsg struct {
 	err error
 }
 
+type copiedMsg struct {
+	success bool
+	text    string
+}
+
+type clearCopiedMsg struct{}
+
 type panelFocus int
 
 const (
@@ -59,30 +67,33 @@ const (
 )
 
 type model struct {
-	devices        []client.Device
+	devices         []client.Device
 	filteredDevices []client.Device
-	cursor         int
-	selected       int
-	err            error
-	width          int
-	height         int
-	sshError       error
-	viewportTop    int // First visible item in the list
-	searchMode     bool
-	searchQuery    string
-	activeFocus    panelFocus
+	cursor          int
+	selected        int
+	err             error
+	width           int
+	height          int
+	sshError        error
+	viewportTop     int // First visible item in the list
+	searchMode      bool
+	searchQuery     string
+	activeFocus     panelFocus
+	copiedText      string
+	version         string
 }
 
-func NewModel(devices []client.Device) model {
+func NewModel(devices []client.Device, version string) model {
 	return model{
-		devices:        devices,
+		devices:         devices,
 		filteredDevices: devices, // Initially show all devices
-		cursor:         0,
-		selected:       -1,
-		viewportTop:    0,
-		searchMode:     false,
-		searchQuery:    "",
-		activeFocus:    focusList,
+		cursor:          0,
+		selected:        -1,
+		viewportTop:     0,
+		searchMode:      false,
+		searchQuery:     "",
+		activeFocus:     focusList,
+		version:         version,
 	}
 }
 
@@ -101,6 +112,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.sshError = msg.err
 		}
+		return m, nil
+
+	case copiedMsg:
+		if msg.success {
+			m.copiedText = msg.text
+			// Clear the message after 3 seconds
+			return m, tea.Tick(time.Second*3, func(time.Time) tea.Msg {
+				return clearCopiedMsg{}
+			})
+		}
+		return m, nil
+
+	case clearCopiedMsg:
+		m.copiedText = ""
 		return m, nil
 
 	case tea.KeyMsg:
@@ -166,6 +191,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			m.selected = m.cursor
 
+		case "c":
+			// Copy SSH command to clipboard
+			target := m.selected
+			if target < 0 {
+				target = m.cursor
+			}
+			if target >= 0 && target < len(m.filteredDevices) {
+				return m, m.copySSHCommand(target)
+			}
+
 		case "s":
 			// SSH to currently selected or cursor device
 			target := m.selected
@@ -189,7 +224,7 @@ func (m model) View() string {
 	var b strings.Builder
 
 	// Title
-	title := "Tailscale Devices"
+	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
 	if m.searchMode {
 		title += " - Search: /" + m.searchQuery + "_"
 	} else if m.searchQuery != "" {
@@ -288,11 +323,18 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • q quit"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • q quit"
 	if m.searchMode {
 		help = "Type to search • esc cancel • enter confirm"
 	}
 	b.WriteString(helpStyle.Render(help))
+
+	// Show copy success message if any
+	if m.copiedText != "" {
+		b.WriteString("\n")
+		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
+		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.copiedText)))
+	}
 
 	// Show SSH error if any
 	if m.sshError != nil {
@@ -345,6 +387,63 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		}
 		return sshMsg{}
 	})
+}
+
+// copySSHCommand copies the SSH command to the clipboard
+func (m model) copySSHCommand(index int) tea.Cmd {
+	device := m.filteredDevices[index]
+
+	// Get the primary IP address
+	if len(device.Addresses) == 0 {
+		return func() tea.Msg {
+			return copiedMsg{success: false, text: ""}
+		}
+	}
+
+	address := device.Addresses[0]
+	sshCommand := fmt.Sprintf("ssh %s", address)
+
+	// Determine clipboard command based on OS
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin": // macOS
+		cmd = exec.Command("pbcopy")
+	case "linux":
+		cmd = exec.Command("xclip", "-selection", "clipboard")
+	case "windows":
+		cmd = exec.Command("clip")
+	default:
+		return func() tea.Msg {
+			return copiedMsg{success: false, text: ""}
+		}
+	}
+
+	// Write command to clipboard
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return func() tea.Msg {
+			return copiedMsg{success: false, text: ""}
+		}
+	}
+
+	if err := cmd.Start(); err != nil {
+		return func() tea.Msg {
+			return copiedMsg{success: false, text: ""}
+		}
+	}
+
+	if _, err := stdin.Write([]byte(sshCommand)); err != nil {
+		return func() tea.Msg {
+			return copiedMsg{success: false, text: ""}
+		}
+	}
+
+	stdin.Close()
+	cmd.Wait()
+
+	return func() tea.Msg {
+		return copiedMsg{success: true, text: sshCommand}
+	}
 }
 
 // isDeviceOnline checks if a device is considered online based on LastSeen time

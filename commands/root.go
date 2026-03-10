@@ -7,7 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.1.0"
+// Version is the current version of ts-cli
+const Version = "0.1.0"
 
 // NewRootCommand creates the root command for ts-cli
 func NewRootCommand() *cobra.Command {
@@ -15,7 +16,7 @@ func NewRootCommand() *cobra.Command {
 		Use:     "ts-cli",
 		Short:   "Tailscale CLI - Manage Tailscale devices via API",
 		Long:    `A command-line interface tool for managing Tailscale devices and resources via the Tailscale REST API.`,
-		Version: version,
+		Version: Version,
 		// Run interactive mode by default when no subcommand is provided
 		Run: func(cmd *cobra.Command, args []string) {
 			// If no subcommand, run interactive mode
