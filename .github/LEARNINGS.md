@@ -95,6 +95,7 @@ case "down", "j":
 **Problem**: When delegating from one command to another, calling `cmd.Run()` directly causes a nil pointer panic if the command uses `RunE` instead of `Run`.
 
 **Wrong Approach**:
+
 ```go
 // ❌ Panic! RunE commands don't have Run set
 Run: func(cmd *cobra.Command, args []string) {
@@ -104,6 +105,7 @@ Run: func(cmd *cobra.Command, args []string) {
 ```
 
 **Error Message**:
+
 ```
 panic: runtime error: invalid memory address or nil pointer dereference
 [signal SIGSEGV: segmentation violation]
@@ -112,6 +114,7 @@ github.com/ihor/ts-cli/commands.NewRootCommand.func1(...)
 ```
 
 **Correct Approach**:
+
 ```go
 // ✅ Call RunE and handle the error
 Run: func(cmd *cobra.Command, args []string) {
@@ -124,6 +127,7 @@ Run: func(cmd *cobra.Command, args []string) {
 ```
 
 **Key Lesson**: When delegating between Cobra commands:
+
 - Commands using `RunE` have `Run` set to `nil`
 - Always call `RunE` when delegating to a command that returns errors
 - Handle errors explicitly in the delegating command
@@ -240,24 +244,30 @@ Commit 5: (planned) Split-screen layout
 ### Common Build Issues
 
 **Issue 1**: Unused imports
+
 ```
 tui/model.go:5:2: "os" imported and not used
 ```
+
 **Solution**: Remove unused imports immediately
 
 **Issue 2**: Duplicate package declarations
+
 ```
 package tui
 package tui  // Duplicate!
 ```
+
 **Solution**: Copy-paste carefully; check for duplicates
 
 **Issue 3**: Nil pointer dereference when delegating commands
+
 ```
 panic: runtime error: invalid memory address or nil pointer dereference
 goroutine 1 [running]:
 github.com/ihor/ts-cli/commands.NewRootCommand.func1(...)
 ```
+
 **Solution**: Call `RunE` instead of `Run` when delegating to commands that use `RunE`
 
 **Key Lesson**: Build frequently to catch errors early. Don't accumulate changes.

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/creack/pty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ihor/ts-cli/client"
@@ -75,6 +77,14 @@ type usernameStoredMsg struct {
 	err error
 }
 
+type sshOutputMsg struct {
+	output string
+}
+
+type sshSessionEndedMsg struct {
+	err error
+}
+
 type panelFocus int
 
 const (
@@ -102,6 +112,10 @@ type model struct {
 	usernameInput   string // Current username being typed
 	sshUsername     string // Stored SSH username
 	showSSHPanel    bool   // Whether to show the right SSH panel in split mode
+	sshSession      *os.File // PTY file for SSH session
+	sshOutput       []string // SSH session output lines
+	sshActive       bool     // Whether SSH session is active
+	sshDevice       string   // Name of device with active SSH
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string) model {
@@ -119,6 +133,10 @@ func NewModel(devices []client.Device, version string, sshUsername string) model
 		usernameInput:   "",
 		sshUsername:     sshUsername,
 		showSSHPanel:    true, // Start with SSH panel visible
+		sshSession:      nil,
+		sshOutput:       []string{},
+		sshActive:       false,
+		sshDevice:       "",
 	}
 }
 
@@ -159,7 +177,65 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case sshOutputMsg:
+		// Append SSH output to buffer
+		if m.sshActive {
+			// Split output by newlines and append
+			lines := strings.Split(msg.output, "\n")
+			for i, line := range lines {
+				if i == 0 && len(m.sshOutput) > 0 {
+					// Append to last line if it doesn't end with newline
+					m.sshOutput[len(m.sshOutput)-1] += line
+				} else if i < len(lines)-1 || line != "" {
+					m.sshOutput = append(m.sshOutput, line)
+				}
+			}
+			// Continue reading
+			return m, m.readSSHOutput()
+		}
+		return m, nil
+
+	case sshSessionEndedMsg:
+		// Clean up SSH session
+		if m.sshSession != nil {
+			m.sshSession.Close()
+			m.sshSession = nil
+		}
+		m.sshActive = false
+		if msg.err != nil {
+			m.sshOutput = append(m.sshOutput, fmt.Sprintf("\n[SSH session ended with error: %v]", msg.err))
+		} else {
+			m.sshOutput = append(m.sshOutput, "\n[SSH session ended]")
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		// Handle SSH session input first (if active)
+		if m.sshActive && m.sshSession != nil {
+			// Route input to SSH session
+			switch msg.String() {
+			case "ctrl+c":
+				// Send Ctrl+C to SSH session
+				m.sshSession.Write([]byte{3})
+				return m, nil
+			case "ctrl+d":
+				// Close SSH session
+				return m, func() tea.Msg {
+					return sshSessionEndedMsg{err: nil}
+				}
+			default:
+				// Forward all other input to SSH session
+				if msg.Type == tea.KeyRunes {
+					m.sshSession.Write([]byte(string(msg.Runes)))
+				} else if msg.Type == tea.KeyEnter {
+					m.sshSession.Write([]byte{'\r'})
+				} else if msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete {
+					m.sshSession.Write([]byte{127})
+				}
+				return m, nil
+			}
+		}
+
 		// Handle username prompt mode first
 		if m.usernamePrompt {
 			switch msg.String() {
@@ -184,7 +260,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						target = m.cursor
 					}
 					if target >= 0 && target < len(m.filteredDevices) {
-						return m, tea.Batch(cmd, m.sshToDevice(target))
+						return m, tea.Batch(cmd, m.startSSHSession(target))
 					}
 					return m, cmd
 				}
@@ -315,8 +391,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.usernameInput = ""
 					return m, nil
 				}
-				// Username exists, SSH directly
-				return m, m.sshToDevice(target)
+				// Username exists, start embedded SSH session
+				return m, m.startSSHSession(target)
 			}
 		}
 	}
@@ -496,6 +572,49 @@ func (m model) renderLeftPanel() string {
 func (m model) renderSSHPanel() string {
 	var content strings.Builder
 
+	// If SSH session is active, show SSH output
+	if m.sshActive {
+		content.WriteString(sshPanelTitleStyle.Render(fmt.Sprintf("SSH Session: %s", m.sshDevice)))
+		content.WriteString("\n\n")
+
+		// Calculate available height for output
+		availableHeight := m.height - 6 // Leave room for title and borders
+
+		// Show the last N lines of output that fit in the panel
+		startLine := 0
+		if len(m.sshOutput) > availableHeight {
+			startLine = len(m.sshOutput) - availableHeight
+		}
+
+		for i := startLine; i < len(m.sshOutput); i++ {
+			content.WriteString(m.sshOutput[i])
+			if i < len(m.sshOutput)-1 {
+				content.WriteString("\n")
+			}
+		}
+
+		// Add instructions at the bottom
+		content.WriteString("\n\n")
+		content.WriteString(lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#808080")).Render(
+			"Ctrl+D to close session"))
+
+		panelWidth := m.width/2 - 4
+		if panelWidth < 40 {
+			panelWidth = 40
+		}
+
+		panelHeight := m.height - 2
+		panelStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#874BFD")).
+			Padding(1, 2).
+			Width(panelWidth).
+			Height(panelHeight)
+
+		return panelStyle.Render(content.String())
+	}
+
+	// Regular SSH panel content (when no session is active)
 	content.WriteString(sshPanelTitleStyle.Render("SSH Connection"))
 	content.WriteString("\n\n")
 
@@ -630,6 +749,76 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		}
 		return sshMsg{}
 	})
+}
+
+// startSSHSession initiates an embedded SSH session in the right panel
+func (m *model) startSSHSession(index int) tea.Cmd {
+	device := m.filteredDevices[index]
+
+	// Get the primary IP address
+	if len(device.Addresses) == 0 {
+		return func() tea.Msg {
+			return sshSessionEndedMsg{err: fmt.Errorf("device has no IP addresses")}
+		}
+	}
+
+	address := device.Addresses[0]
+	deviceName := device.Name
+	if deviceName == "" {
+		deviceName = device.Hostname
+	}
+
+	// Build SSH target with username
+	var sshTarget string
+	if m.sshUsername != "" {
+		sshTarget = fmt.Sprintf("%s@%s", m.sshUsername, address)
+	} else {
+		sshTarget = address
+	}
+
+	// Create SSH command
+	sshCmd := exec.Command("ssh", sshTarget)
+
+	// Start the command with a PTY
+	ptmx, err := pty.Start(sshCmd)
+	if err != nil {
+		return func() tea.Msg {
+			return sshSessionEndedMsg{err: fmt.Errorf("failed to start SSH: %w", err)}
+		}
+	}
+
+	// Set the SSH session state
+	m.sshSession = ptmx
+	m.sshActive = true
+	m.sshDevice = deviceName
+	m.sshOutput = []string{fmt.Sprintf("Connecting to %s...", deviceName)}
+
+	// Return a command that reads PTY output
+	return m.readSSHOutput()
+}
+
+// readSSHOutput reads from the SSH PTY and sends output messages
+func (m *model) readSSHOutput() tea.Cmd {
+	return func() tea.Msg {
+		if m.sshSession == nil {
+			return nil
+		}
+
+		buf := make([]byte, 1024)
+		n, err := m.sshSession.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				return sshSessionEndedMsg{err: nil}
+			}
+			return sshSessionEndedMsg{err: err}
+		}
+
+		if n > 0 {
+			return sshOutputMsg{output: string(buf[:n])}
+		}
+
+		return nil
+	}
 }
 
 // copySSHCommand copies the SSH command to the clipboard

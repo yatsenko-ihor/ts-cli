@@ -2,16 +2,16 @@
 name: go-cli-development
 description: Building production-ready CLI applications in Go using cobra framework and bubbletea TUI. Use this skill for Go CLI projects involving command-line interfaces, terminal UIs, API client integration, and SSH connectivity.
 tags:
-  - golang
-  - cli
-  - cobra
-  - bubbletea
-  - tui
-  - ssh
+    - golang
+    - cli
+    - cobra
+    - bubbletea
+    - tui
+    - ssh
 applyTo:
-  - "**/*.go"
-  - "**/go.mod"
-  - "**/go.sum"
+    - '**/*.go'
+    - '**/go.mod'
+    - '**/go.sum'
 ---
 
 # Go CLI Development Skill
@@ -43,11 +43,11 @@ func NewRootCommand() *cobra.Command {
             // Default behavior when no subcommand
         },
     }
-    
+
     // Register subcommands
     rootCmd.AddCommand(NewSubCommand1())
     rootCmd.AddCommand(NewSubCommand2())
-    
+
     return rootCmd
 }
 ```
@@ -85,15 +85,15 @@ Store configuration securely with appropriate permissions:
 func storeConfig(apiKey, value string) error {
     homeDir, _ := os.UserHomeDir()
     configDir := filepath.Join(homeDir, ".app-name")
-    
+
     // Create directory with restricted permissions
     if err := os.MkdirAll(configDir, 0700); err != nil {
         return err
     }
-    
+
     configPath := filepath.Join(configDir, "config")
     config := fmt.Sprintf("api_key=%s\nvalue=%s\n", apiKey, value)
-    
+
     // Write file with restricted permissions
     return os.WriteFile(configPath, []byte(config), 0600)
 }
@@ -173,14 +173,14 @@ Each command should follow this structure:
 ```go
 func NewCommandName() *cobra.Command {
     var flagVar string
-    
+
     cmd := &cobra.Command{
         Use:   "command [args]",
         Short: "Brief description",
         Long:  "Detailed description with usage context",
         Example: `  # Example 1
   app command arg1
-  
+
   # Example 2
   app command arg2 --flag=value`,
         Args: cobra.ExactArgs(1), // or other validator
@@ -190,9 +190,9 @@ func NewCommandName() *cobra.Command {
             return nil
         },
     }
-    
+
     cmd.Flags().StringVar(&flagVar, "flag", "", "Flag description")
-    
+
     return cmd
 }
 ```
@@ -253,12 +253,12 @@ cmd := &cobra.Command{
 func loadConfig() (string, string, error) {
     homeDir, _ := os.UserHomeDir()
     configPath := filepath.Join(homeDir, ".app-name", "config")
-    
+
     data, err := os.ReadFile(configPath)
     if err != nil {
         return "", "", err
     }
-    
+
     // Parse configuration
     return parseConfig(string(data))
 }

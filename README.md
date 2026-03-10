@@ -208,12 +208,13 @@ ts-cli tui    # Alternative alias
 **Split-Screen Mode:**
 
 When terminal width > 80 columns, the split-screen mode shows:
+
 - **Left Panel**: Device list with search and selection
 - **Right Panel**: SSH connection details including:
-  - Selected device information
-  - Formatted SSH command
-  - Connection instructions
-  - Username configuration status
+    - Selected device information
+    - Formatted SSH command
+    - Connection instructions
+    - Username configuration status
 
 Press `Tab` to toggle the SSH panel visibility.
 
