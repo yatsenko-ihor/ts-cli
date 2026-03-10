@@ -12,4 +12,10 @@
 - [x] once click s for eastablish ssh connection - prompt username for it (and remember it as default for future)
 - [x] click to "c" to copy ssh command to buffer
 - [x] put title "Tailscale Devices" to frame also and print version like "Tailscale Devices (ts-cli v0.1)
+- [x] once I'm on machine which is offline click "s" for ssh - got msg "Machine <name>" is offline
+- [ ] once I'm on machine which is online click "s" for ssh - on right page (full height and half terminal width) open interactive ssh connection (in this window)
+
+To be implemented later:
+- [ ] remove logic with tab?
+- [ ] make ability to make from interactive ssh session window make full screen
 - [ ] write unit test
