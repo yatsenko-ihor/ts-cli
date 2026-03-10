@@ -6,7 +6,8 @@ A command-line interface tool for managing Tailscale devices and resources via t
 
 - **Authentication**: Securely validate and store your Tailscale API key
 - **Device Management**: List and view all devices in your Tailscale tailnet
-- Clean and intuitive CLI interface powered by `mitchellh/cli`
+- **Shell Completion**: Built-in support for bash, zsh, fish, and powershell
+- Clean and intuitive CLI interface powered by `cobra`
 
 ## Prerequisites
 
@@ -62,6 +63,7 @@ Or provide the API key directly:
 **Note**: Replace `example.com` with your actual tailnet name (e.g., `mycompany.com` or `user@example.com`).
 
 The login command will:
+
 1. Validate your API key against the Tailscale API
 2. Store the configuration locally in `~/.ts-cli/config`
 
@@ -105,6 +107,7 @@ You can override the stored tailnet configuration:
 ## Configuration
 
 The CLI stores configuration in `~/.ts-cli/config`. This file contains:
+
 - Your Tailscale API key
 - Your tailnet name
 
@@ -121,6 +124,7 @@ ts-cli login --tailnet=<tailnet-name> [--api-key=<key>]
 ```
 
 **Flags:**
+
 - `--api-key`: Tailscale API key (optional if `TAILSCALE_API_KEY` env var is set)
 - `--tailnet`: Your tailnet name (required)
 
@@ -133,6 +137,7 @@ ts-cli list [--format=<table|json>] [--tailnet=<name>]
 ```
 
 **Flags:**
+
 - `--format`: Output format - `table` (default) or `json`
 - `--tailnet`: Override the configured tailnet name
 - `--api-key`: Override the configured API key
@@ -147,6 +152,7 @@ ts-cli/
 ├── client/
 │   └── tailscale.go     # Tailscale API client implementation
 ├── commands/
+│   ├── root.go          # Root command and CLI setup
 │   ├── login.go         # Login command implementation
 │   └── list.go          # List devices command implementation
 └── README.md            # This file
@@ -154,25 +160,17 @@ ts-cli/
 
 ## Architecture
 
-- **main.go**: Initializes the CLI application and registers available commands
+- **main.go**: Initializes the CLI application using Cobra framework
+- **commands/root.go**: Defines the root command and registers subcommands
 - **client/tailscale.go**: Handles all interactions with the Tailscale REST API
   - HTTP client setup
   - Authentication
   - API request/response handling
   - Error handling and JSON parsing
 - **commands/**: Individual command implementations
-  - Each command is self-contained
-  - Follows the `mitchellh/cli.Command` interface
-  - Handles its own flags and execution logic
-
-## Error Handling
-
-The CLI provides clear error messages for common issues:
-- Invalid or missing API key
-- Network connectivity problems
-- API rate limiting
-- Invalid tailnet names
-- Permission errors
+  - Each command is a `*cobra.Command`
+  - Uses Cobra's flag system for argument parsing
+  - Implements RunE for execution with error handling
 
 ## Security
 
@@ -181,6 +179,24 @@ The CLI provides clear error messages for common issues:
 - API keys can be provided via environment variables to avoid storing them on disk
 
 ## Development
+
+### Shell Completion
+
+Cobra provides built-in shell completion. Generate completion scripts for your shell:
+
+```bash
+# Bash
+./ts-cli completion bash > /etc/bash_completion.d/ts-cli
+
+# Zsh
+./ts-cli completion zsh > "${fpath[1]}/_ts-cli"
+
+# Fish
+./ts-cli completion fish > ~/.config/fish/completions/ts-cli.fish
+
+# PowerShell
+./ts-cli completion powershell > ts-cli.ps1
+```
 
 ### Running tests
 
@@ -191,12 +207,29 @@ go test ./...
 ### Adding new commands
 
 1. Create a new file in the `commands/` directory
-2. Implement the `cli.Command` interface
-3. Register the command in `main.go`
+2. Create a function that returns `*cobra.Command`
+3. Register the command in `commands/root.go` by adding it to the root command
+
+Example:
+
+```go
+func NewMyCommand() *cobra.Command {
+    cmd := &cobra.Command{
+        Use:   "mycommand",
+        Short: "Short description",
+        RunE: func(cmd *cobra.Command, args []string) error {
+            // Implementation
+            return nil
+        },
+    }
+    return cmd
+}
+```
 
 ## API Documentation
 
 This CLI uses the Tailscale API v2. For more information about available endpoints and capabilities, refer to:
+
 - https://tailscale.com/api
 
 ## License
@@ -206,5 +239,6 @@ BSD 3-Clause License (same as Tailscale)
 ## Support
 
 For issues and questions:
+
 - Tailscale API documentation: https://tailscale.com/kb/1101/api
 - Tailscale devices management: https://tailscale.com/kb/1372/manage-devices

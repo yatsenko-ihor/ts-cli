@@ -1,108 +1,80 @@
 package commands
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/ihor/ts-cli/client"
+	"github.com/spf13/cobra"
 )
 
-// LoginCommand implements the login command
-type LoginCommand struct{}
-
-// Help returns the help text for the login command
-func (c *LoginCommand) Help() string {
-	helpText := `
-Usage: ts-cli login [options]
-
-  Validate and store the Tailscale API key for authentication.
-  The API key can be provided via the TAILSCALE_API_KEY environment variable
-  or using the --api-key flag.
-
-Options:
-
-  --api-key=<key>     Tailscale API key (overrides TAILSCALE_API_KEY env var)
-  --tailnet=<name>    Tailnet name (e.g., example.com or user@example.com)
-                      If not provided, will use the tailnet from your API key
-
-Example:
-
-  export TAILSCALE_API_KEY=tskey-api-xxxxx
-  ts-cli login --tailnet=example.com
-
-  OR
-
-  ts-cli login --api-key=tskey-api-xxxxx --tailnet=example.com
-`
-	return strings.TrimSpace(helpText)
-}
-
-// Synopsis returns a short synopsis of the login command
-func (c *LoginCommand) Synopsis() string {
-	return "Validate and configure Tailscale API authentication"
-}
-
-// Run executes the login command
-func (c *LoginCommand) Run(args []string) int {
-	flags := flag.NewFlagSet("login", flag.ContinueOnError)
+// NewLoginCommand creates the login command
+func NewLoginCommand() *cobra.Command {
 	var apiKey string
 	var tailnet string
 
-	flags.StringVar(&apiKey, "api-key", "", "Tailscale API key")
-	flags.StringVar(&tailnet, "tailnet", "", "Tailnet name")
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "Validate and configure Tailscale API authentication",
+		Long: `Validate and store the Tailscale API key for authentication.
+The API key can be provided via the TAILSCALE_API_KEY environment variable
+or using the --api-key flag.`,
+		Example: `  # Using environment variable
+  export TAILSCALE_API_KEY=tskey-api-xxxxx
+  ts-cli login --tailnet=example.com
 
-	if err := flags.Parse(args); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", err)
-		return 1
+  # Using flag
+  ts-cli login --api-key=tskey-api-xxxxx --tailnet=example.com`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Try to get API key from flag first, then environment variable
+			if apiKey == "" {
+				apiKey = os.Getenv("TAILSCALE_API_KEY")
+			}
+
+			if apiKey == "" {
+				return fmt.Errorf("API key not provided.\nSet TAILSCALE_API_KEY environment variable or use --api-key flag")
+			}
+
+			// If tailnet not provided, return error
+			if tailnet == "" {
+				return fmt.Errorf("tailnet name is required.\nUse --tailnet flag to specify your tailnet name")
+			}
+
+			// Validate the API key
+			fmt.Println("Validating API key...")
+			apiClient := client.NewClient(apiKey)
+
+			if err := apiClient.ValidateAPIKey(tailnet); err != nil {
+				return fmt.Errorf("failed to validate API key: %w", err)
+			}
+
+			fmt.Println("✓ API key is valid")
+
+			// Store the configuration locally
+			if err := storeConfig(apiKey, tailnet); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to store config locally: %s\n", err)
+				fmt.Println("You can still use the API key via environment variable.")
+				return nil
+			}
+
+			fmt.Println("✓ Configuration saved successfully")
+			fmt.Printf("✓ Authenticated with tailnet: %s\n", tailnet)
+
+			return nil
+		},
 	}
 
-	// Try to get API key from flag first, then environment variable
-	if apiKey == "" {
-		apiKey = os.Getenv("TAILSCALE_API_KEY")
-	}
+	// Define flags
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "Tailscale API key (overrides TAILSCALE_API_KEY env var)")
+	cmd.Flags().StringVar(&tailnet, "tailnet", "", "Tailnet name (e.g., example.com or user@example.com)")
+	cmd.MarkFlagRequired("tailnet")
 
-	if apiKey == "" {
-		fmt.Fprintf(os.Stderr, "Error: API key not provided.\n")
-		fmt.Fprintf(os.Stderr, "Set TAILSCALE_API_KEY environment variable or use --api-key flag.\n")
-		return 1
-	}
-
-	// If tailnet not provided, try to use a default or prompt
-	if tailnet == "" {
-		fmt.Fprintf(os.Stderr, "Error: Tailnet name is required.\n")
-		fmt.Fprintf(os.Stderr, "Use --tailnet flag to specify your tailnet name.\n")
-		return 1
-	}
-
-	// Validate the API key
-	fmt.Println("Validating API key...")
-	apiClient := client.NewClient(apiKey)
-
-	if err := apiClient.ValidateAPIKey(tailnet); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to validate API key: %s\n", err)
-		return 1
-	}
-
-	fmt.Println("✓ API key is valid")
-
-	// Store the configuration locally
-	if err := c.storeConfig(apiKey, tailnet); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to store config locally: %s\n", err)
-		fmt.Println("You can still use the API key via environment variable.")
-		return 0
-	}
-
-	fmt.Println("✓ Configuration saved successfully")
-	fmt.Printf("✓ Authenticated with tailnet: %s\n", tailnet)
-
-	return 0
+	return cmd
 }
 
 // storeConfig stores the API configuration locally
-func (c *LoginCommand) storeConfig(apiKey, tailnet string) error {
+func storeConfig(apiKey, tailnet string) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)

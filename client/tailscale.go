@@ -20,19 +20,19 @@ type Client struct {
 
 // Device represents a Tailscale device
 type Device struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	Hostname          string    `json:"hostname"`
-	ClientVersion     string    `json:"clientVersion"`
-	OS                string    `json:"os"`
-	Created           time.Time `json:"created"`
-	LastSeen          time.Time `json:"lastSeen"`
-	Authorized        bool      `json:"authorized"`
-	IsExternal        bool      `json:"isExternal"`
-	UpdateAvailable   bool      `json:"updateAvailable"`
-	BlocksIncomingConnections bool `json:"blocksIncomingConnections"`
-	Addresses         []string  `json:"addresses"`
-	Tags              []string  `json:"tags,omitempty"`
+	ID                        string    `json:"id"`
+	Name                      string    `json:"name"`
+	Hostname                  string    `json:"hostname"`
+	ClientVersion             string    `json:"clientVersion"`
+	OS                        string    `json:"os"`
+	Created                   time.Time `json:"created"`
+	LastSeen                  time.Time `json:"lastSeen"`
+	Authorized                bool      `json:"authorized"`
+	IsExternal                bool      `json:"isExternal"`
+	UpdateAvailable           bool      `json:"updateAvailable"`
+	BlocksIncomingConnections bool      `json:"blocksIncomingConnections"`
+	Addresses                 []string  `json:"addresses"`
+	Tags                      []string  `json:"tags,omitempty"`
 }
 
 // DevicesResponse represents the response from the devices API
