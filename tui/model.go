@@ -50,23 +50,39 @@ type sshMsg struct {
 	err error
 }
 
+type panelFocus int
+
+const (
+	focusList panelFocus = iota
+	focusSearch
+	focusSSH
+)
+
 type model struct {
-	devices     []client.Device
-	cursor      int
-	selected    int
-	err         error
-	width       int
-	height      int
-	sshError    error
-	viewportTop int // First visible item in the list
+	devices        []client.Device
+	filteredDevices []client.Device
+	cursor         int
+	selected       int
+	err            error
+	width          int
+	height         int
+	sshError       error
+	viewportTop    int // First visible item in the list
+	searchMode     bool
+	searchQuery    string
+	activeFocus    panelFocus
 }
 
 func NewModel(devices []client.Device) model {
 	return model{
-		devices:     devices,
-		cursor:      0,
-		selected:    -1,
-		viewportTop: 0,
+		devices:        devices,
+		filteredDevices: devices, // Initially show all devices
+		cursor:         0,
+		selected:       -1,
+		viewportTop:    0,
+		searchMode:     false,
+		searchQuery:    "",
+		activeFocus:    focusList,
 	}
 }
 
@@ -88,9 +104,45 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle search mode separately
+		if m.searchMode {
+			switch msg.String() {
+			case "esc", "ctrl+c":
+				// Exit search mode
+				m.searchMode = false
+				m.searchQuery = ""
+				m.filterDevices()
+				return m, nil
+			case "enter":
+				// Confirm search and exit search mode
+				m.searchMode = false
+				return m, nil
+			case "backspace":
+				if len(m.searchQuery) > 0 {
+					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+					m.filterDevices()
+				}
+				return m, nil
+			default:
+				// Add character to search query
+				if len(msg.String()) == 1 {
+					m.searchQuery += msg.String()
+					m.filterDevices()
+				}
+				return m, nil
+			}
+		}
+
+		// Normal mode key handling
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+
+		case "/":
+			// Enter search mode (vim-style)
+			m.searchMode = true
+			m.searchQuery = ""
+			return m, nil
 
 		case "up", "k":
 			if m.cursor > 0 {
@@ -102,7 +154,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if m.cursor < len(m.devices)-1 {
+			if m.cursor < len(m.filteredDevices)-1 {
 				m.cursor++
 				// Scroll down if cursor goes below viewport
 				maxVisible := m.getMaxVisibleItems()
@@ -120,7 +172,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if target < 0 {
 				target = m.cursor
 			}
-			if target >= 0 && target < len(m.devices) {
+			if target >= 0 && target < len(m.filteredDevices) {
 				return m, m.sshToDevice(target)
 			}
 		}
@@ -137,7 +189,13 @@ func (m model) View() string {
 	var b strings.Builder
 
 	// Title
-	b.WriteString(titleStyle.Render("Tailscale Devices"))
+	title := "Tailscale Devices"
+	if m.searchMode {
+		title += " - Search: /" + m.searchQuery + "_"
+	} else if m.searchQuery != "" {
+		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.filteredDevices), len(m.devices))
+	}
+	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
 
 	// Build device list content
@@ -147,8 +205,8 @@ func (m model) View() string {
 	// Calculate visible range
 	visibleStart := m.viewportTop
 	visibleEnd := m.viewportTop + maxVisible
-	if visibleEnd > len(m.devices) {
-		visibleEnd = len(m.devices)
+	if visibleEnd > len(m.filteredDevices) {
+		visibleEnd = len(m.filteredDevices)
 	}
 
 	// Show scroll indicator at top if needed
@@ -159,7 +217,7 @@ func (m model) View() string {
 
 	// Render visible devices
 	for i := visibleStart; i < visibleEnd; i++ {
-		device := m.devices[i]
+		device := m.filteredDevices[i]
 		cursor := "  "
 		style := normalStyle
 
@@ -187,7 +245,7 @@ func (m model) View() string {
 	}
 
 	// Show scroll indicator at bottom if needed
-	if visibleEnd < len(m.devices) {
+	if visibleEnd < len(m.filteredDevices) {
 		listContent.WriteString(normalStyle.Render("  ↓ more below ↓"))
 	}
 
@@ -195,8 +253,8 @@ func (m model) View() string {
 	b.WriteString(listStyle.Render(listContent.String()))
 
 	// Device details if selected
-	if m.selected >= 0 && m.selected < len(m.devices) {
-		device := m.devices[m.selected]
+	if m.selected >= 0 && m.selected < len(m.filteredDevices) {
+		device := m.filteredDevices[m.selected]
 		name := device.Name
 		if name == "" {
 			name = device.Hostname
@@ -230,7 +288,10 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • enter select • s ssh • q quit"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • q quit"
+	if m.searchMode {
+		help = "Type to search • esc cancel • enter confirm"
+	}
 	b.WriteString(helpStyle.Render(help))
 
 	// Show SSH error if any
@@ -261,7 +322,7 @@ func (m model) getMaxVisibleItems() int {
 
 // sshToDevice creates a command to SSH into a device
 func (m model) sshToDevice(index int) tea.Cmd {
-	device := m.devices[index]
+	device := m.filteredDevices[index]
 
 	// Get the primary IP address
 	if len(device.Addresses) == 0 {
@@ -298,4 +359,44 @@ func getStatusIcon(device client.Device) string {
 		return "🟢"
 	}
 	return "🔴"
+}
+
+// filterDevices filters the device list based on the search query
+func (m *model) filterDevices() {
+	if m.searchQuery == "" {
+		m.filteredDevices = m.devices
+		m.cursor = 0
+		m.viewportTop = 0
+		return
+	}
+
+	query := strings.ToLower(m.searchQuery)
+	filtered := []client.Device{}
+
+	for _, device := range m.devices {
+		name := strings.ToLower(device.Name)
+		hostname := strings.ToLower(device.Hostname)
+		os := strings.ToLower(device.OS)
+
+		// Search in name, hostname, OS, and addresses
+		if strings.Contains(name, query) ||
+			strings.Contains(hostname, query) ||
+			strings.Contains(os, query) {
+			filtered = append(filtered, device)
+			continue
+		}
+
+		// Search in addresses
+		for _, addr := range device.Addresses {
+			if strings.Contains(strings.ToLower(addr), query) {
+				filtered = append(filtered, device)
+				break
+			}
+		}
+	}
+
+	m.filteredDevices = filtered
+	// Reset cursor to top of filtered list
+	m.cursor = 0
+	m.viewportTop = 0
 }
