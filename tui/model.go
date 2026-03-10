@@ -110,17 +110,17 @@ type model struct {
 	activeFocus     panelFocus
 	copiedText      string
 	version         string
-	usernamePrompt  bool        // Whether we're prompting for username
-	usernameInput   string      // Current username being typed
-	sshUsername     string      // Stored SSH username
-	showSSHPanel    bool        // Whether to show the right SSH panel in split mode
-	sshSession      *os.File    // PTY file for SSH session
+	usernamePrompt  bool           // Whether we're prompting for username
+	usernameInput   string         // Current username being typed
+	sshUsername     string         // Stored SSH username
+	showSSHPanel    bool           // Whether to show the right SSH panel in split mode
+	sshSession      *os.File       // PTY file for SSH session
 	sshTerminal     vt10x.Terminal // VT100 terminal emulator
-	sshActive       bool        // Whether SSH session is active
-	sshDevice       string      // Name of device with active SSH
-	sshCmd          *exec.Cmd   // SSH command process
-	termWidth       int         // Terminal width for SSH session
-	termHeight      int         // Terminal height for SSH session
+	sshActive       bool           // Whether SSH session is active
+	sshDevice       string         // Name of device with active SSH
+	sshCmd          *exec.Cmd      // SSH command process
+	termWidth       int            // Terminal width for SSH session
+	termHeight      int            // Terminal height for SSH session
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string) model {
@@ -159,7 +159,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		oldHeight := m.height
 		m.width = msg.Width
 		m.height = msg.Height
-		
+
 		// Resize PTY if SSH session is active and size changed
 		if m.sshActive && m.sshSession != nil && (oldWidth != m.width || oldHeight != m.height) {
 			panelWidth := m.width/2 - 8
@@ -170,16 +170,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if panelHeight < 10 {
 				panelHeight = 10
 			}
-			
+
 			// Update terminal size
 			pty.Setsize(m.sshSession, &pty.Winsize{
 				Rows: uint16(panelHeight),
 				Cols: uint16(panelWidth),
 			})
-			
+
 			m.termWidth = panelWidth
 			m.termHeight = panelHeight
-			
+
 			// Recreate terminal emulator with new size
 			term := vt10x.New(vt10x.WithSize(panelWidth, panelHeight))
 			m.sshTerminal = term
@@ -606,35 +606,12 @@ func (m model) renderSSHPanel() string {
 		content.WriteString(sshPanelTitleStyle.Render(fmt.Sprintf("SSH Session: %s", m.sshDevice)))
 		content.WriteString("\n\n")
 
-		// Render the terminal buffer
-		cols, rows := m.sshTerminal.Size()
+		// Render the terminal buffer - use String() method which preserves formatting
 		m.sshTerminal.Lock()
-		defer m.sshTerminal.Unlock()
+		terminalOutput := m.sshTerminal.String()
+		m.sshTerminal.Unlock()
 		
-		for row := 0; row < rows; row++ {
-			for col := 0; col < cols; col++ {
-				cell := m.sshTerminal.Cell(col, row)
-				
-				// Create style based on cell attributes
-				style := lipgloss.NewStyle()
-				
-				if cell.FG != vt10x.DefaultFG {
-					style = style.Foreground(lipgloss.Color(colorToHex(cell.FG)))
-				}
-				if cell.BG != vt10x.DefaultBG {
-					style = style.Background(lipgloss.Color(colorToHex(cell.BG)))
-				}
-				
-				if cell.Char == 0 {
-					content.WriteString(" ")
-				} else {
-					content.WriteString(style.Render(string(cell.Char)))
-				}
-			}
-			if row < rows-1 {
-				content.WriteString("\n")
-			}
-		}
+		content.WriteString(terminalOutput)
 
 		panelWidth := m.width/2 - 4
 		if panelWidth < 40 {
@@ -832,7 +809,7 @@ func (m *model) startSSHSession(index int) tea.Cmd {
 
 	// Create SSH command
 	sshCmd := exec.Command("ssh", "-t", sshTarget)
-	sshCmd.Env = append(os.Environ(), 
+	sshCmd.Env = append(os.Environ(),
 		fmt.Sprintf("TERM=xterm-256color"),
 		fmt.Sprintf("COLUMNS=%d", panelWidth),
 		fmt.Sprintf("LINES=%d", panelHeight),
@@ -873,37 +850,6 @@ func (m *model) Write(p []byte) (n int, err error) {
 	// This is called by vt10x when it needs to write to the terminal
 	// We don't need to do anything here as we're reading from PTY
 	return len(p), nil
-}
-
-// colorToHex converts vt10x color to hex string for lipgloss
-func colorToHex(color vt10x.Color) string {
-	// Handle basic ANSI colors (0-15)
-	if color.ANSI() {
-		colorMap := []string{
-			"#000000", // Black
-			"#CD0000", // Red
-			"#00CD00", // Green
-			"#CDCD00", // Yellow
-			"#0000EE", // Blue
-			"#CD00CD", // Magenta
-			"#00CDCD", // Cyan
-			"#E5E5E5", // White
-			"#7F7F7F", // Bright Black
-			"#FF0000", // Bright Red
-			"#00FF00", // Bright Green
-			"#FFFF00", // Bright Yellow
-			"#5C5CFF", // Bright Blue
-			"#FF00FF", // Bright Magenta
-			"#00FFFF", // Bright Cyan
-			"#FFFFFF", // Bright White
-		}
-		if int(color) < len(colorMap) {
-			return colorMap[color]
-		}
-	}
-	
-	// Default to terminal default
-	return ""
 }
 
 // readSSHOutput reads from the SSH PTY and sends output messages
