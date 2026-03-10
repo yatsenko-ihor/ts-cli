@@ -15,6 +15,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/hinshun/vt10x"
 	"github.com/ihor/ts-cli/client"
+	xterm "golang.org/x/term"
 )
 
 var (
@@ -846,6 +847,14 @@ func (m *model) startSSHSession(index int) tea.Cmd {
 		return func() tea.Msg {
 			return sshSessionEndedMsg{err: fmt.Errorf("failed to start SSH: %w", err)}
 		}
+	}
+
+	// Set the PTY to raw mode to disable local echo
+	// This prevents double-echoing of characters
+	oldState, err := xterm.MakeRaw(int(ptmx.Fd()))
+	if err == nil {
+		// Store old state if needed for restoration (though we close PTY on exit anyway)
+		_ = oldState
 	}
 
 	// Set the SSH session state
