@@ -55,9 +55,9 @@ var (
 			Height(30)
 
 	sshPanelTitleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#00D7AF")).
-			MarginBottom(1)
+				Bold(true).
+				Foreground(lipgloss.Color("#00D7AF")).
+				MarginBottom(1)
 )
 
 type sshMsg struct {
@@ -255,6 +255,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursor < m.viewportTop {
 					m.viewportTop = m.cursor
 				}
+				// Clear SSH error when moving cursor
+				m.sshError = nil
 			}
 
 		case "down", "j":
@@ -265,10 +267,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursor >= m.viewportTop+maxVisible {
 					m.viewportTop = m.cursor - maxVisible + 1
 				}
+				// Clear SSH error when moving cursor
+				m.sshError = nil
 			}
 
 		case "enter", " ":
 			m.selected = m.cursor
+			// Clear SSH error when selecting
+			m.sshError = nil
 
 		case "c":
 			// Copy SSH command to clipboard
@@ -287,6 +293,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				target = m.cursor
 			}
 			if target >= 0 && target < len(m.filteredDevices) {
+				device := m.filteredDevices[target]
+				
+				// Check if device is offline
+				if !isDeviceOnline(device) {
+					deviceName := device.Name
+					if deviceName == "" {
+						deviceName = device.Hostname
+					}
+					m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+					return m, nil
+				}
+				
+				// Clear any previous SSH errors
+				m.sshError = nil
+				
 				// Check if username is stored
 				if m.sshUsername == "" {
 					// Prompt for username
@@ -327,7 +348,7 @@ func (m model) View() string {
 		// Split screen mode - left and right panels
 		leftPanel := m.renderLeftPanel()
 		rightPanel := m.renderSSHPanel()
-		
+
 		// Join panels horizontally
 		panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 		b.WriteString(panels)
@@ -425,12 +446,12 @@ func (m model) renderLeftPanel() string {
 
 	// Render the list in a frame
 	listPanel := listStyle.Render(listContent.String())
-	
+
 	// Set width for split mode
 	if m.showSSHPanel && m.width > 80 {
-		listPanel = lipgloss.NewStyle().Width(m.width / 2 - 4).Render(listPanel)
+		listPanel = lipgloss.NewStyle().Width(m.width/2 - 4).Render(listPanel)
 	}
-	
+
 	b.WriteString(listPanel)
 
 	// Device details if selected (only in single panel mode)
@@ -474,7 +495,7 @@ func (m model) renderLeftPanel() string {
 // renderSSHPanel renders the right panel with SSH session information
 func (m model) renderSSHPanel() string {
 	var content strings.Builder
-	
+
 	content.WriteString(sshPanelTitleStyle.Render("SSH Connection"))
 	content.WriteString("\n\n")
 
@@ -503,7 +524,7 @@ func (m model) renderSSHPanel() string {
 		content.WriteString("\n\n")
 		content.WriteString(fmt.Sprintf("Name:       %s\n", name))
 		content.WriteString(fmt.Sprintf("Hostname:   %s\n", device.Hostname))
-		content.WriteString(fmt.Sprintf("Status:     %s\n", 
+		content.WriteString(fmt.Sprintf("Status:     %s\n",
 			lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render(statusText)))
 		content.WriteString(fmt.Sprintf("OS:         %s\n", device.OS))
 		content.WriteString(fmt.Sprintf("Address:    %s\n", address))
@@ -513,14 +534,14 @@ func (m model) renderSSHPanel() string {
 		// SSH command info
 		content.WriteString(lipgloss.NewStyle().Bold(true).Render("SSH Command"))
 		content.WriteString("\n\n")
-		
+
 		var sshCommand string
 		if m.sshUsername != "" {
 			sshCommand = fmt.Sprintf("ssh %s@%s", m.sshUsername, address)
 		} else {
 			sshCommand = fmt.Sprintf("ssh %s", address)
 		}
-		
+
 		cmdStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#00D7AF")).
 			Background(lipgloss.Color("#1a1a1a")).
@@ -531,22 +552,22 @@ func (m model) renderSSHPanel() string {
 		// Instructions
 		content.WriteString(lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#808080")).Render(
 			"Press 's' to open SSH connection\n" +
-			"Press 'c' to copy SSH command\n" +
-			"Press 'tab' to toggle this panel"))
-		
+				"Press 'c' to copy SSH command\n" +
+				"Press 'tab' to toggle this panel"))
+
 		if m.sshUsername == "" {
 			content.WriteString("\n\n")
 			content.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500")).Render(
 				"⚠ No SSH username set\n" +
-				"Press 's' to configure"))
+					"Press 's' to configure"))
 		}
 	} else {
 		// No device selected
 		content.WriteString(lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#808080")).Render(
 			"No device selected\n\n" +
-			"Select a device from the list\n" +
-			"to view SSH connection details.\n\n" +
-			"Press 'tab' to toggle this panel"))
+				"Select a device from the list\n" +
+				"to view SSH connection details.\n\n" +
+				"Press 'tab' to toggle this panel"))
 	}
 
 	panelWidth := m.width/2 - 4
