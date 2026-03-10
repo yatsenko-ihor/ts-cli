@@ -3,8 +3,11 @@
 - [x] list of machines put into to scrollable frame (frame like machine selected)
 - [x] once user navigate with j,k or arrows buttons - highlight the selected machine
 - [x] add stauts icon 🟢 to machines which are online
+- [x] add vim-style search functionality (press / to search)
 - [ ] once run witout command - just split screen to 2 panels (left and right):
-    - [ ] left - split to top and bottom.
-    - [ ] Top - list of machines wiht albilites to seach in vim like style.
-    - [ ] bottom - details of selected machine
+    - [x] left - split to top and bottom.
+    - [x] Top - list of machines wiht albilites to seach in vim like style.
+    - [x] bottom - details of selected machine
     - [ ] right part of window - ssh connection (once on the left top machine selected and ssh connection is established by user)
+- [ ] click to "c" to copy ssh command to buffer
+- [ ] put title "Tailscale Devices" to frame also and print version like "Tailscale Devices (ts-cli v0.1)
