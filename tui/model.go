@@ -440,6 +440,8 @@ func (m model) View() string {
 	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
 	if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"
+	} else if m.sshActive {
+		title += fmt.Sprintf(" - [SSH ACTIVE: %s - Press Ctrl+D to exit]", m.sshDevice)
 	} else if m.searchMode {
 		title += " - Search: /" + m.searchQuery + "_"
 	} else if m.searchQuery != "" {
@@ -467,6 +469,8 @@ func (m model) View() string {
 	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab panel • q quit"
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
+	} else if m.sshActive {
+		help = "SSH session active - Type normally • Ctrl+D exit session • Ctrl+C interrupt"
 	} else if m.searchMode {
 		help = "Type to search • esc cancel • enter confirm"
 	}
@@ -610,7 +614,7 @@ func (m model) renderSSHPanel() string {
 		m.sshTerminal.Lock()
 		terminalOutput := m.sshTerminal.String()
 		m.sshTerminal.Unlock()
-		
+
 		content.WriteString(terminalOutput)
 
 		panelWidth := m.width/2 - 4
