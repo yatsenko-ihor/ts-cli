@@ -1,6 +1,9 @@
 package commands
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +20,10 @@ func NewRootCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			// If no subcommand, run interactive mode
 			interactiveCmd := NewInteractiveCommand()
-			interactiveCmd.Run(cmd, args)
+			if err := interactiveCmd.RunE(cmd, args); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 		},
 	}
 
