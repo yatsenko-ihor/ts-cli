@@ -6,6 +6,8 @@ A command-line interface tool for managing Tailscale devices and resources via t
 
 - **Authentication**: Securely validate and store your Tailscale API key
 - **Device Management**: List and view all devices in your Tailscale tailnet
+- **SSH Integration**: Connect to devices via SSH with a single command
+- **Interactive TUI**: Browse devices with an intuitive terminal interface
 - **Shell Completion**: Built-in support for bash, zsh, fish, and powershell
 - Clean and intuitive CLI interface powered by `cobra`
 
@@ -142,6 +144,57 @@ ts-cli list [--format=<table|json>] [--tailnet=<name>]
 - `--tailnet`: Override the configured tailnet name
 - `--api-key`: Override the configured API key
 
+### `ssh`
+
+Open an SSH connection to a Tailscale device.
+
+```bash
+ts-cli ssh <device-name-or-hostname> [--user=<username>]
+```
+
+**Arguments:**
+
+- `device-name-or-hostname`: The name or hostname of the device to connect to
+
+**Flags:**
+
+- `--user`: SSH user (default: current user)
+- `--tailnet`: Override the configured tailnet name
+- `--api-key`: Override the configured API key
+
+**Examples:**
+
+```bash
+# SSH to a device by name
+ts-cli ssh laptop.example.com
+
+# SSH with custom user
+ts-cli ssh laptop.example.com --user=admin
+
+# SSH using device hostname
+ts-cli ssh laptop
+```
+
+### `interactive` (or `i`, `tui`)
+
+Launch an interactive terminal UI to browse and manage devices.
+
+```bash
+ts-cli interactive
+ts-cli i      # Short alias
+ts-cli tui    # Alternative alias
+```
+
+**Interactive Controls:**
+
+- `↑/k`: Move cursor up
+- `↓/j`: Move cursor down
+- `Enter`: Select device to view details
+- `s`: SSH to selected device
+- `q`: Quit
+
+**Note**: When you run `ts-cli` without any subcommand, it defaults to interactive mode.
+
 ## Project Structure
 
 ```
@@ -154,7 +207,11 @@ ts-cli/
 ├── commands/
 │   ├── root.go          # Root command and CLI setup
 │   ├── login.go         # Login command implementation
-│   └── list.go          # List devices command implementation
+│   ├── list.go          # List devices command implementation
+│   ├── ssh.go           # SSH connection command
+│   └── interactive.go   # Interactive TUI command
+├── tui/
+│   └── model.go         # Bubbletea TUI model and view logic
 └── README.md            # This file
 ```
 

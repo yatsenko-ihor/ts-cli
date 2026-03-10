@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,7 +33,16 @@ var (
 			BorderForeground(lipgloss.Color("#7D56F4")).
 			Padding(1).
 			MarginTop(1)
+
+	errorStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF0000")).
+			Bold(true).
+			MarginTop(1)
 )
+
+type sshMsg struct {
+	err error
+}
 
 type model struct {
 	devices  []client.Device
@@ -41,6 +51,7 @@ type model struct {
 	err      error
 	width    int
 	height   int
+	sshError error
 }
 
 func NewModel(devices []client.Device) model {
@@ -62,6 +73,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case sshMsg:
+		if msg.err != nil {
+			m.sshError = msg.err
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -79,6 +96,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter", " ":
 			m.selected = m.cursor
+
+		case "s":
+			// SSH to currently selected or cursor device
+			target := m.selected
+			if target < 0 {
+				target = m.cursor
+			}
+			if target >= 0 && target < len(m.devices) {
+				return m, m.sshToDevice(target)
+			}
 		}
 	}
 
@@ -150,8 +177,41 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • enter select • q quit"
+	help := "↑/k up • ↓/j down • enter select • s ssh • q quit"
 	b.WriteString(helpStyle.Render(help))
 
+	// Show SSH error if any
+	if m.sshError != nil {
+		b.WriteString("\n")
+		b.WriteString(errorStyle.Render(fmt.Sprintf("SSH Error: %v", m.sshError)))
+	}
+
 	return b.String()
+}
+
+// sshToDevice creates a command to SSH into a device
+func (m model) sshToDevice(index int) tea.Cmd {
+	device := m.devices[index]
+
+	// Get the primary IP address
+	if len(device.Addresses) == 0 {
+		return func() tea.Msg {
+			return sshMsg{err: fmt.Errorf("device has no IP addresses")}
+		}
+	}
+
+	address := device.Addresses[0]
+	name := device.Name
+	if name == "" {
+		name = device.Hostname
+	}
+
+	// Use tea.ExecProcess to suspend TUI and run SSH
+	sshCmd := exec.Command("ssh", address)
+	return tea.ExecProcess(sshCmd, func(err error) tea.Msg {
+		if err != nil {
+			return sshMsg{err: err}
+		}
+		return sshMsg{}
+	})
 }
