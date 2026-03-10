@@ -177,7 +177,7 @@ ts-cli ssh laptop
 
 ### `interactive` (or `i`, `tui`)
 
-Launch an interactive terminal UI to browse and manage devices.
+Launch an interactive terminal UI to browse and manage devices with split-screen support.
 
 ```bash
 ts-cli interactive
@@ -190,8 +190,32 @@ ts-cli tui    # Alternative alias
 - `↑/k`: Move cursor up
 - `↓/j`: Move cursor down
 - `Enter`: Select device to view details
-- `s`: SSH to selected device
+- `/`: Enter search mode (vim-style)
+- `s`: SSH to selected device (prompts for username if not configured)
+- `c`: Copy SSH command to clipboard
+- `Tab`: Toggle split-screen SSH panel
 - `q`: Quit
+
+**Features:**
+
+- **Split-Screen Layout**: View device list on the left and SSH details on the right
+- **Vim-Style Search**: Press `/` to search devices by name, hostname, OS, or IP address
+- **Device Status Icons**: 🟢 Online (active within 5 minutes) / 🔴 Offline
+- **Scrollable List**: Navigate through many devices with automatic viewport scrolling
+- **SSH Username Memory**: Configure SSH username once, use automatically for all connections
+- **Clipboard Integration**: Copy SSH commands with `c` key (works on macOS, Linux, Windows)
+
+**Split-Screen Mode:**
+
+When terminal width > 80 columns, the split-screen mode shows:
+- **Left Panel**: Device list with search and selection
+- **Right Panel**: SSH connection details including:
+  - Selected device information
+  - Formatted SSH command
+  - Connection instructions
+  - Username configuration status
+
+Press `Tab` to toggle the SSH panel visibility.
 
 **Note**: When you run `ts-cli` without any subcommand, it defaults to interactive mode.
 
