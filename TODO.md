@@ -1,5 +1,8 @@
 - [x] make interactive menu to navigate in list of machines
 - [x] add ability to open ssh connetion to machine
+- [x] list of machines put into to scrollable frame (frame like machine selected)
+- [x] once user navigate with j,k or arrows buttons - highlight the selected machine
+- [x] add stauts icon 🟢 to machines which are online
 - [ ] once run witout command - just split screen to 2 panels (left and right):
     - [ ] left - split to top and bottom.
     - [ ] Top - list of machines wiht albilites to seach in vim like style.
