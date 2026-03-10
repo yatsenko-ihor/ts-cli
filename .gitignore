@@ -35,5 +35,3 @@ ts-cli.exe
 .ts-cli/
 config
 ts-api.key
-
-.github/
