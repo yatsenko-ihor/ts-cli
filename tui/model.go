@@ -28,6 +28,11 @@ var (
 			Foreground(lipgloss.Color("#626262")).
 			MarginTop(1)
 
+	listStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7D56F4")).
+			Padding(1, 2)
+
 	detailStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#7D56F4")).
@@ -45,20 +50,22 @@ type sshMsg struct {
 }
 
 type model struct {
-	devices  []client.Device
-	cursor   int
-	selected int
-	err      error
-	width    int
-	height   int
-	sshError error
+	devices      []client.Device
+	cursor       int
+	selected     int
+	err          error
+	width        int
+	height       int
+	sshError     error
+	viewportTop  int // First visible item in the list
 }
 
 func NewModel(devices []client.Device) model {
 	return model{
-		devices:  devices,
-		cursor:   0,
-		selected: -1,
+		devices:     devices,
+		cursor:      0,
+		selected:    -1,
+		viewportTop: 0,
 	}
 }
 
@@ -87,11 +94,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				// Scroll up if cursor goes above viewport
+				if m.cursor < m.viewportTop {
+					m.viewportTop = m.cursor
+				}
 			}
 
 		case "down", "j":
 			if m.cursor < len(m.devices)-1 {
 				m.cursor++
+				// Scroll down if cursor goes below viewport
+				maxVisible := m.getMaxVisibleItems()
+				if m.cursor >= m.viewportTop+maxVisible {
+					m.viewportTop = m.cursor - maxVisible + 1
+				}
 			}
 
 		case "enter", " ":
@@ -123,8 +139,26 @@ func (m model) View() string {
 	b.WriteString(titleStyle.Render("Tailscale Devices"))
 	b.WriteString("\n")
 
-	// Device list
-	for i, device := range m.devices {
+	// Build device list content
+	var listContent strings.Builder
+	maxVisible := m.getMaxVisibleItems()
+	
+	// Calculate visible range
+	visibleStart := m.viewportTop
+	visibleEnd := m.viewportTop + maxVisible
+	if visibleEnd > len(m.devices) {
+		visibleEnd = len(m.devices)
+	}
+
+	// Show scroll indicator at top if needed
+	if m.viewportTop > 0 {
+		listContent.WriteString(normalStyle.Render("  ↑ more above ↑"))
+		listContent.WriteString("\n")
+	}
+
+	// Render visible devices
+	for i := visibleStart; i < visibleEnd; i++ {
+		device := m.devices[i]
 		cursor := "  "
 		style := normalStyle
 
@@ -144,9 +178,17 @@ func (m model) View() string {
 		}
 
 		line := fmt.Sprintf("%s%-30s %s", cursor, name, address)
-		b.WriteString(style.Render(line))
-		b.WriteString("\n")
+		listContent.WriteString(style.Render(line))
+		listContent.WriteString("\n")
 	}
+
+	// Show scroll indicator at bottom if needed
+	if visibleEnd < len(m.devices) {
+		listContent.WriteString(normalStyle.Render("  ↓ more below ↓"))
+	}
+
+	// Render the list in a frame
+	b.WriteString(listStyle.Render(listContent.String()))
 
 	// Device details if selected
 	if m.selected >= 0 && m.selected < len(m.devices) {
@@ -187,6 +229,23 @@ func (m model) View() string {
 	}
 
 	return b.String()
+}
+
+// getMaxVisibleItems calculates how many items can fit in the viewport
+func (m model) getMaxVisibleItems() int {
+	// If we don't have terminal size yet, use a default
+	if m.height == 0 {
+		return 10
+	}
+	
+	// Account for: title (2 lines), frame borders (4 lines), detail panel (~10 lines), help (2 lines), padding (4)
+	// This leaves space for the device list
+	availableHeight := m.height - 22
+	if availableHeight < 5 {
+		availableHeight = 5 // Minimum visible items
+	}
+	
+	return availableHeight
 }
 
 // sshToDevice creates a command to SSH into a device
