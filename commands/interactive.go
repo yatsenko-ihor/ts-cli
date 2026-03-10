@@ -68,8 +68,11 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 				return nil
 			}
 
+			// Load SSH username preference
+			sshUsername, _ := LoadSSHUsername()
+
 			// Launch TUI
-			m := tui.NewModel(devices, Version)
+			m := tui.NewModel(devices, Version, sshUsername)
 			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				return fmt.Errorf("TUI error: %w", err)

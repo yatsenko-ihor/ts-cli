@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -58,6 +60,10 @@ type copiedMsg struct {
 
 type clearCopiedMsg struct{}
 
+type usernameStoredMsg struct {
+	err error
+}
+
 type panelFocus int
 
 const (
@@ -81,9 +87,12 @@ type model struct {
 	activeFocus     panelFocus
 	copiedText      string
 	version         string
+	usernamePrompt  bool   // Whether we're prompting for username
+	usernameInput   string // Current username being typed
+	sshUsername     string // Stored SSH username
 }
 
-func NewModel(devices []client.Device, version string) model {
+func NewModel(devices []client.Device, version string, sshUsername string) model {
 	return model{
 		devices:         devices,
 		filteredDevices: devices, // Initially show all devices
@@ -94,6 +103,9 @@ func NewModel(devices []client.Device, version string) model {
 		searchQuery:     "",
 		activeFocus:     focusList,
 		version:         version,
+		usernamePrompt:  false,
+		usernameInput:   "",
+		sshUsername:     sshUsername,
 	}
 }
 
@@ -128,7 +140,56 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.copiedText = ""
 		return m, nil
 
+	case usernameStoredMsg:
+		if msg.err != nil {
+			m.sshError = msg.err
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		// Handle username prompt mode first
+		if m.usernamePrompt {
+			switch msg.String() {
+			case "esc", "ctrl+c":
+				// Cancel username prompt
+				m.usernamePrompt = false
+				m.usernameInput = ""
+				return m, nil
+			case "enter":
+				// Confirm username and initiate SSH
+				if m.usernameInput != "" {
+					m.sshUsername = m.usernameInput
+					m.usernamePrompt = false
+					m.usernameInput = ""
+					
+					// Store username for future use
+					cmd := m.storeUsername(m.sshUsername)
+					
+					// SSH to selected device
+					target := m.selected
+					if target < 0 {
+						target = m.cursor
+					}
+					if target >= 0 && target < len(m.filteredDevices) {
+						return m, tea.Batch(cmd, m.sshToDevice(target))
+					}
+					return m, cmd
+				}
+				return m, nil
+			case "backspace":
+				if len(m.usernameInput) > 0 {
+					m.usernameInput = m.usernameInput[:len(m.usernameInput)-1]
+				}
+				return m, nil
+			default:
+				// Add character to username input
+				if len(msg.String()) == 1 {
+					m.usernameInput += msg.String()
+				}
+				return m, nil
+			}
+		}
+
 		// Handle search mode separately
 		if m.searchMode {
 			switch msg.String() {
@@ -208,6 +269,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				target = m.cursor
 			}
 			if target >= 0 && target < len(m.filteredDevices) {
+				// Check if username is stored
+				if m.sshUsername == "" {
+					// Prompt for username
+					m.usernamePrompt = true
+					m.usernameInput = ""
+					return m, nil
+				}
+				// Username exists, SSH directly
 				return m, m.sshToDevice(target)
 			}
 		}
@@ -225,7 +294,9 @@ func (m model) View() string {
 
 	// Title
 	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
-	if m.searchMode {
+	if m.usernamePrompt {
+		title += " - SSH Username: " + m.usernameInput + "_"
+	} else if m.searchMode {
 		title += " - Search: /" + m.searchQuery + "_"
 	} else if m.searchQuery != "" {
 		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.filteredDevices), len(m.devices))
@@ -324,7 +395,9 @@ func (m model) View() string {
 
 	// Help text
 	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • q quit"
-	if m.searchMode {
+	if m.usernamePrompt {
+		help = "Enter SSH username • esc cancel • enter confirm"
+	} else if m.searchMode {
 		help = "Type to search • esc cancel • enter confirm"
 	}
 	b.WriteString(helpStyle.Render(help))
@@ -379,8 +452,16 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		name = device.Hostname
 	}
 
+	// Build SSH command with username if available
+	var sshTarget string
+	if m.sshUsername != "" {
+		sshTarget = fmt.Sprintf("%s@%s", m.sshUsername, address)
+	} else {
+		sshTarget = address
+	}
+
 	// Use tea.ExecProcess to suspend TUI and run SSH
-	sshCmd := exec.Command("ssh", address)
+	sshCmd := exec.Command("ssh", sshTarget)
 	return tea.ExecProcess(sshCmd, func(err error) tea.Msg {
 		if err != nil {
 			return sshMsg{err: err}
@@ -401,7 +482,14 @@ func (m model) copySSHCommand(index int) tea.Cmd {
 	}
 
 	address := device.Addresses[0]
-	sshCommand := fmt.Sprintf("ssh %s", address)
+	
+	// Build SSH command with username if available
+	var sshCommand string
+	if m.sshUsername != "" {
+		sshCommand = fmt.Sprintf("ssh %s@%s", m.sshUsername, address)
+	} else {
+		sshCommand = fmt.Sprintf("ssh %s", address)
+	}
 
 	// Determine clipboard command based on OS
 	var cmd *exec.Cmd
@@ -443,6 +531,55 @@ func (m model) copySSHCommand(index int) tea.Cmd {
 
 	return func() tea.Msg {
 		return copiedMsg{success: true, text: sshCommand}
+	}
+}
+
+// storeUsername stores the SSH username preference
+func (m model) storeUsername(username string) tea.Cmd {
+	return func() tea.Msg {
+		// We need to import the commands package, but that creates a cycle
+		// So we'll implement the storage directly here
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return usernameStoredMsg{err: err}
+		}
+
+		configDir := filepath.Join(homeDir, ".ts-cli")
+		if err := os.MkdirAll(configDir, 0700); err != nil {
+			return usernameStoredMsg{err: err}
+		}
+
+		// Read existing config
+		configFile := filepath.Join(configDir, "config")
+		content, err := os.ReadFile(configFile)
+		if err != nil && !os.IsNotExist(err) {
+			return usernameStoredMsg{err: err}
+		}
+
+		// Parse existing config and update SSH_USERNAME
+		lines := []string{}
+		found := false
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(line, "SSH_USERNAME=") {
+				lines = append(lines, fmt.Sprintf("SSH_USERNAME=%s", username))
+				found = true
+			} else if line != "" {
+				lines = append(lines, line)
+			}
+		}
+
+		// Add SSH_USERNAME if not found
+		if !found {
+			lines = append(lines, fmt.Sprintf("SSH_USERNAME=%s", username))
+		}
+
+		// Write back
+		newContent := strings.Join(lines, "\n") + "\n"
+		if err := os.WriteFile(configFile, []byte(newContent), 0600); err != nil {
+			return usernameStoredMsg{err: err}
+		}
+
+		return usernameStoredMsg{err: nil}
 	}
 }
 
