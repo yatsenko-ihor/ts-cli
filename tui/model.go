@@ -112,6 +112,8 @@ type model struct {
 	activeAccount         string               // Currently active Tailscale account
 	showInstallSuggestion bool                 // Whether to show PATH installation suggestion
 	installationBroken    bool                 // Whether existing PATH installation is broken
+	accountManageMode     bool                 // Whether we're in account management mode
+	manageCursor          int                  // Cursor position in account management menu
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -151,6 +153,8 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		activeAccount:         activeAccount,
 		showInstallSuggestion: showInstallSuggestion,
 		installationBroken:    installationBroken,
+		accountManageMode:     false,
+		manageCursor:          0,
 	}
 }
 
@@ -364,6 +368,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Handle account management mode
+		if m.accountManageMode {
+			numOptions := 1 // Currently just "Add Account"
+			switch msg.String() {
+			case "esc", "ctrl+c", "q":
+				// Exit account management mode
+				m.accountManageMode = false
+				return m, nil
+			case "enter":
+				// Execute selected option
+				m.accountManageMode = false
+				if m.manageCursor == 0 {
+					// Add account option
+					return m, m.runAddAccount()
+				}
+				return m, nil
+			case "up", "k":
+				if m.manageCursor > 0 {
+					m.manageCursor--
+				}
+				return m, nil
+			case "down", "j":
+				if m.manageCursor < numOptions-1 {
+					m.manageCursor++
+				}
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// Normal mode key handling
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -450,9 +484,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Run tailscale up
 			return m, m.runTailscaleUp()
 
-		case "a":
-			// Add new account
-			return m, m.runAddAccount()
+		case "m":
+			// Enter account management mode
+			m.accountManageMode = true
+			m.manageCursor = 0
+			return m, nil
 
 		case "r":
 			// Reload devices
@@ -505,6 +541,11 @@ func (m model) View() string {
 	// Show profile selection view if in profile selection mode
 	if m.profileSelectMode {
 		return m.renderProfileSelection()
+	}
+
+	// Show account management view if in account management mode
+	if m.accountManageMode {
+		return m.renderAccountManagement()
 	}
 
 	var b strings.Builder
@@ -564,7 +605,7 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • p profile • r reload • u tailscale-up • a add-account"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • p profile • r reload • u tailscale-up • m manage"
 	if m.sshUsername != "" {
 		help += " • d clear-user"
 	}
@@ -763,6 +804,42 @@ func (m model) renderProfileSelection() string {
 	}
 
 	b.WriteString(profileList.Render(listContent.String()))
+	b.WriteString("\n\n")
+
+	// Help text
+	help := "↑/k up • ↓/j down • enter select • esc/q cancel"
+	b.WriteString(helpStyle.Render(help))
+
+	return b.String()
+}
+
+// renderAccountManagement renders the account management view
+func (m model) renderAccountManagement() string {
+	var b strings.Builder
+
+	// Title
+	title := fmt.Sprintf("Account Management (ts-cli v%s)", m.version)
+	b.WriteString(titleStyle.Render(title))
+	b.WriteString("\n\n")
+
+	// Options list
+	optionsList := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7D56F4")).
+		Padding(1, 2).
+		Width(60)
+
+	var listContent strings.Builder
+
+	// Add account option
+	addLabel := "Add Account"
+	if m.manageCursor == 0 {
+		listContent.WriteString(selectedStyle.Render("▸ " + addLabel))
+	} else {
+		listContent.WriteString(normalStyle.Render("  " + addLabel))
+	}
+
+	b.WriteString(optionsList.Render(listContent.String()))
 	b.WriteString("\n\n")
 
 	// Help text

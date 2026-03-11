@@ -37,7 +37,7 @@
 - [x] if path not correct - show tip to reinstall path again because path is not correct
 - [x] hightlight Search: and search words in another color
 - [x] Remove default user(saved before) name by „d"
-- [ ] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
+- [x] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
 
 To be implemented later:
 
