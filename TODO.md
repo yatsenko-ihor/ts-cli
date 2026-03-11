@@ -39,7 +39,7 @@
 - [x] Remove default user(saved before) name by „d"
 - [x] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
 - [x] once click x - hide tip but not menu
-- [ ] print on top default username if exists other wise "Default username: <none>"
+- [x] print on top default username if exists other wise "Default username: <none>"
 - [ ] make sure all commited and make fefactoring according to common best practices
 
 To be implemented later:

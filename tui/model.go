@@ -596,6 +596,18 @@ func (m model) View() string {
 		b.WriteString("\n")
 	}
 
+	// Show default SSH username
+	defaultUsernameStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		Italic(true)
+
+	if m.sshUsername != "" {
+		b.WriteString(defaultUsernameStyle.Render(fmt.Sprintf("Default username: %s", m.sshUsername)))
+	} else {
+		b.WriteString(defaultUsernameStyle.Render("Default username: <none>"))
+	}
+	b.WriteString("\n")
+
 	// Render device list
 	b.WriteString(m.renderDeviceList())
 
