@@ -631,7 +631,7 @@ func (m model) View() string {
 	}
 
 	// Show installation suggestion if not in PATH
-	if m.showInstallSuggestion && !m.usernamePrompt && !m.searchMode && !m.profileSelectMode {
+	if m.showInstallSuggestion && !m.usernamePrompt && !m.searchMode && !m.profileSelectMode && !m.accountManageMode {
 		b.WriteString("\n")
 		infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500"))
 		var message string
