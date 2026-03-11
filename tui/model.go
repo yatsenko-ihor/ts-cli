@@ -66,6 +66,14 @@ var (
 
 	infoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFA500"))
+
+	promptLabelStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#7D56F4"))
+
+	promptInputStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#00D7FF"))
 )
 
 type sshMsg struct {
@@ -608,8 +616,10 @@ func (m model) View() string {
 		title += " - Reloading..."
 		b.WriteString(titleStyle.Render(title))
 	} else if m.usernamePrompt {
-		title += " - SSH Username: " + m.usernameInput + "_"
-		b.WriteString(titleStyle.Render(title))
+		// Highlight prompt label and input with different colors
+		b.WriteString(titleStyle.Render(title + " - "))
+		b.WriteString(promptLabelStyle.Render("SSH Username: "))
+		b.WriteString(promptInputStyle.Render(m.usernameInput + "_"))
 	} else if m.searchMode {
 		// Highlight search label and query with different colors
 		b.WriteString(titleStyle.Render(title + " - "))
