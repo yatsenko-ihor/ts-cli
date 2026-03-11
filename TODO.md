@@ -24,7 +24,7 @@
 - [x] fetch all accounts related to current email - implemented account management (list/set-active/remove) for configured accounts
 - [x] add "tailscale up" as vim like to interactive mode - press 'u' to run tailscale up
 - [x] add new account as vim like to interactive mode - press 'a' for add account instructions
-- [ ] add new account also in interactive mode
+- [x] add new account also in interactive mode (with tips and instructions if need key from account)
 
 To be implemented later:
 

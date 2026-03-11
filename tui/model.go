@@ -98,7 +98,6 @@ type model struct {
 	usernamePrompt  bool   // Whether we're prompting for username
 	usernameInput   string // Current username being typed
 	sshUsername     string // Stored SSH username
-	showAddAccount  bool   // Whether to show add account instructions
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string) model {
@@ -163,18 +162,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case addAccountMsg:
-		// Show add account instructions
-		m.showAddAccount = true
+		// Handle account addition result
+		if msg.err != nil {
+			m.sshError = fmt.Errorf("failed to add account: %w", msg.err)
+		} else {
+			// Account added successfully, could reload devices here
+			// For now, just clear any previous errors
+			m.sshError = nil
+		}
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle add account view first
-		if m.showAddAccount {
-			// Any key dismisses the add account instructions
-			m.showAddAccount = false
-			return m, nil
-		}
-
 		// Handle username prompt mode
 		if m.usernamePrompt {
 			switch msg.String() {
@@ -345,27 +343,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
-	}
-
-	// Show add account instructions if requested
-	if m.showAddAccount {
-		var b strings.Builder
-		b.WriteString(titleStyle.Render(fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)))
-		b.WriteString("\n\n")
-
-		// Instructions box
-		instructions := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#874BFD")).
-			Padding(1, 2).
-			Width(60).
-			Render("To add a new account, run:\n\n  ts-cli login --tailnet=<your-tailnet>\n\nPress any key to continue...")
-
-		b.WriteString(instructions)
-		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Render("Press any key to continue"))
-
-		return b.String()
 	}
 
 	var b strings.Builder
@@ -740,7 +717,127 @@ func (m model) runTailscaleUp() tea.Cmd {
 // runAddAccount prompts user to add a new account via login command
 func (m model) runAddAccount() tea.Cmd {
 	return func() tea.Msg {
-		// Just return a message to trigger showing the instructions in the TUI
-		return addAccountMsg{err: nil}
+		cmd := m.createAddAccountScript()
+		return tea.ExecProcess(cmd, func(err error) tea.Msg {
+			if err != nil {
+				return addAccountMsg{err: err}
+			}
+			return addAccountMsg{err: nil}
+		})()
 	}
+}
+
+// createAddAccountScript creates an interactive script for adding a new account
+func (m model) createAddAccountScript() *exec.Cmd {
+	// Get the path to the current ts-cli executable
+	execPath, err := os.Executable()
+	if err != nil {
+		// Fallback to assuming ts-cli is in PATH
+		execPath = "ts-cli"
+	}
+
+	// Create an interactive shell script that guides the user
+	script := fmt.Sprintf(`#!/bin/bash
+set -e
+
+# Colors for better UX
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+clear
+echo -e "${BLUE}============================================${NC}"
+echo -e "${BLUE}       Add New Tailscale Account${NC}"
+echo -e "${BLUE}============================================${NC}"
+echo ""
+echo -e "${YELLOW}To add a new account, you need:${NC}"
+echo "  1. Your tailnet name (e.g., example.com)"
+echo "  2. A Tailscale API key"
+echo ""
+echo -e "${YELLOW}To generate an API key:${NC}"
+echo "  1. Visit: https://login.tailscale.com/admin/settings/keys"
+echo "  2. Click 'Generate API key'"
+echo "  3. Give it a description (e.g., 'ts-cli')"
+echo "  4. Copy the key (starts with 'tskey-api-')"
+echo ""
+echo "Press Enter to continue (or Ctrl+C to cancel)..."
+read
+
+# Prompt for tailnet
+echo ""
+echo -e "${BLUE}Enter your tailnet name:${NC}"
+echo -n "Tailnet: "
+read TAILNET
+
+if [ -z "$TAILNET" ]; then
+    echo -e "${YELLOW}Tailnet name cannot be empty. Exiting.${NC}"
+    sleep 2
+    exit 1
+fi
+
+# Prompt for API key
+echo ""
+echo -e "${BLUE}Enter your Tailscale API key:${NC}"
+echo -n "API Key: "
+read -s API_KEY
+echo ""
+
+if [ -z "$API_KEY" ]; then
+    echo -e "${YELLOW}API key cannot be empty. Exiting.${NC}"
+    sleep 2
+    exit 1
+fi
+
+# Run the login command
+echo ""
+echo -e "${BLUE}Validating and saving account...${NC}"
+%s login --tailnet="$TAILNET" --api-key="$API_KEY"
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}✓ Account added successfully!${NC}"
+    echo ""
+    echo "Press Enter to return to interactive mode..."
+    read
+else
+    echo ""
+    echo -e "${YELLOW}Failed to add account. Press Enter to continue...${NC}"
+    read
+    exit 1
+fi
+`, execPath)
+
+	// Create temp script file
+	tmpFile, err := os.CreateTemp("", "ts-cli-add-account-*.sh")
+	if err != nil {
+		// Fallback to simpler approach
+		return exec.Command("sh", "-c", fmt.Sprintf("echo 'Failed to create script: %v'; sleep 2", err))
+	}
+
+	if _, err := tmpFile.WriteString(script); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return exec.Command("sh", "-c", fmt.Sprintf("echo 'Failed to write script: %v'; sleep 2", err))
+	}
+
+	if err := tmpFile.Chmod(0755); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return exec.Command("sh", "-c", fmt.Sprintf("echo 'Failed to set permissions: %v'; sleep 2", err))
+	}
+
+	scriptPath := tmpFile.Name()
+	tmpFile.Close()
+
+	// Create a command that runs the script and then deletes it
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", scriptPath)
+	} else {
+		// Use bash to run the script, then remove it
+		cmd = exec.Command("bash", "-c", fmt.Sprintf("%s; rm -f %s", scriptPath, scriptPath))
+	}
+
+	return cmd
 }
