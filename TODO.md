@@ -56,7 +56,7 @@
 - [x] still not work - if click "x" hide only Tip, not whole command panel
 - [x] always got "✗ ts-cli is not in PATH"
 - [x] once click "r" for reload show somehow visually thst reload was done
-- [ ] I see "Note: ts-cli uses the Tailscale API to query devices, but you'll need
+- [x] I see "Note: ts-cli uses the Tailscale API to query devices, but you'll need
       Tailscale running locally to actually connect to them via SSH." Start tailscale by yourself and log it to terminal
 
 ## To be implemented later:
