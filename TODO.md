@@ -48,7 +48,7 @@
 - [x] once click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
 - [x] add learnings, context, skills for ai agent to .github folder.
 - [x] Add this folder to .ignore
-- [ ] fix (still not works) click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
+- [x] fix (still not works) click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
 
 To be implemented later:
 
