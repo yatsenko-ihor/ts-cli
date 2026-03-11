@@ -44,6 +44,7 @@
 - [x] fix search placement as was before and change color "Search: " and text which user typing
 - [x] also any user typing prompt like "Default username" also should be with another color
 - [x] recently were done changes("hightlight Search: and search words in another color" and "hightlight Search: and search words in another color") in interactive mode with "Search: ", tese changes broke behavious, revert back
+- [x] make "Search" in different color scheme with search input, but don't move to anpother line, make it on same as now
 
 To be implemented later:
 
