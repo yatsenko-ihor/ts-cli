@@ -483,6 +483,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showInstallSuggestion = false
 			}
 			return m, nil
+
+		case "d":
+			// Clear default SSH username
+			if m.sshUsername != "" {
+				m.sshUsername = ""
+				return m, m.clearUsername()
+			}
+			return m, nil
 		}
 	}
 
@@ -517,7 +525,7 @@ func (m model) View() string {
 		searchQueryStyle := lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FFD700")) // Gold color for the search query
-		
+
 		b.WriteString(titleStyle.Render(title + " - "))
 		b.WriteString(searchLabelStyle.Render("Search: /"))
 		b.WriteString(searchQueryStyle.Render(m.searchQuery + "_"))
@@ -556,7 +564,11 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • p profile • r reload • u tailscale-up • a add-account • q quit"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • p profile • r reload • u tailscale-up • a add-account"
+	if m.sshUsername != "" {
+		help += " • d clear-user"
+	}
+	help += " • q quit"
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
 	} else if m.searchMode {
@@ -910,6 +922,48 @@ func (m model) storeUsername(username string) tea.Cmd {
 
 		// Write back
 		newContent := strings.Join(lines, "\n") + "\n"
+		if err := os.WriteFile(configFile, []byte(newContent), 0600); err != nil {
+			return usernameStoredMsg{err: err}
+		}
+
+		return usernameStoredMsg{err: nil}
+	}
+}
+
+// clearUsername removes the stored SSH username from config
+func (m model) clearUsername() tea.Cmd {
+	return func() tea.Msg {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return usernameStoredMsg{err: err}
+		}
+
+		configDir := filepath.Join(homeDir, ".ts-cli")
+		configFile := filepath.Join(configDir, "config")
+
+		// Read existing config
+		content, err := os.ReadFile(configFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// No config file, nothing to clear
+				return usernameStoredMsg{err: nil}
+			}
+			return usernameStoredMsg{err: err}
+		}
+
+		// Parse existing config and remove SSH_USERNAME
+		lines := []string{}
+		for _, line := range strings.Split(string(content), "\n") {
+			if !strings.HasPrefix(line, "SSH_USERNAME=") && line != "" {
+				lines = append(lines, line)
+			}
+		}
+
+		// Write back
+		newContent := strings.Join(lines, "\n")
+		if newContent != "" {
+			newContent += "\n"
+		}
 		if err := os.WriteFile(configFile, []byte(newContent), 0600); err != nil {
 			return usernameStoredMsg{err: err}
 		}
