@@ -3,8 +3,6 @@ package commands
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/ihor/ts-cli/client"
 	"github.com/spf13/cobra"
@@ -52,9 +50,50 @@ or using the --api-key flag.`,
 
 			fmt.Println("✓ API key is valid")
 
-			// Store the configuration locally
-			if err := storeConfig(apiKey, tailnet); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to store config locally: %s\n", err)
+			// Load or create config
+			config, err := LoadConfig()
+			if err != nil {
+				// If config doesn't exist, create a new one
+				config = &Config{
+					Accounts:    []Account{},
+					SSHUsername: "",
+				}
+			}
+
+			// Check if account already exists
+			accountName := tailnet
+			existingIdx := -1
+			for i, acc := range config.Accounts {
+				if acc.Name == accountName || acc.Tailnet == tailnet {
+					existingIdx = i
+					break
+				}
+			}
+
+			if existingIdx >= 0 {
+				// Update existing account
+				config.Accounts[existingIdx].APIKey = apiKey
+				config.Accounts[existingIdx].Tailnet = tailnet
+				config.Accounts[existingIdx].Active = true
+				fmt.Printf("✓ Updated account: %s\n", accountName)
+			} else {
+				// Add new account
+				newAccount := Account{
+					Name:    accountName,
+					APIKey:  apiKey,
+					Tailnet: tailnet,
+					Active:  true,
+				}
+				config.Accounts = append(config.Accounts, newAccount)
+				fmt.Printf("✓ Added new account: %s\n", accountName)
+			}
+
+			// Set this account as active
+			config.SetActiveAccount(accountName)
+
+			// Save the configuration
+			if err := SaveConfig(config); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to store config: %s\n", err)
 				fmt.Println("You can still use the API key via environment variable.")
 				return nil
 			}
@@ -72,98 +111,4 @@ or using the --api-key flag.`,
 	cmd.MarkFlagRequired("tailnet")
 
 	return cmd
-}
-
-// storeConfig stores the API configuration locally
-func storeConfig(apiKey, tailnet string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	configDir := filepath.Join(homeDir, ".ts-cli")
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	configFile := filepath.Join(configDir, "config")
-	content := fmt.Sprintf("TAILSCALE_API_KEY=%s\nTAILNET=%s\n", apiKey, tailnet)
-
-	if err := os.WriteFile(configFile, []byte(content), 0600); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	return nil
-}
-
-// StoreSSHUsername stores the SSH username preference
-func StoreSSHUsername(username string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	configDir := filepath.Join(homeDir, ".ts-cli")
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	// Read existing config
-	configFile := filepath.Join(configDir, "config")
-	content, err := os.ReadFile(configFile)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	// Parse existing config and update SSH_USERNAME
-	lines := []string{}
-	found := false
-	for _, line := range strings.Split(string(content), "\n") {
-		if strings.HasPrefix(line, "SSH_USERNAME=") {
-			lines = append(lines, fmt.Sprintf("SSH_USERNAME=%s", username))
-			found = true
-		} else if line != "" {
-			lines = append(lines, line)
-		}
-	}
-
-	// Add SSH_USERNAME if not found
-	if !found {
-		lines = append(lines, fmt.Sprintf("SSH_USERNAME=%s", username))
-	}
-
-	// Write back
-	newContent := strings.Join(lines, "\n") + "\n"
-	if err := os.WriteFile(configFile, []byte(newContent), 0600); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	return nil
-}
-
-// LoadSSHUsername loads the stored SSH username preference
-func LoadSSHUsername() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	configFile := filepath.Join(homeDir, ".ts-cli", "config")
-	content, err := os.ReadFile(configFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil // No config file means no username stored
-		}
-		return "", err
-	}
-
-	// Parse config
-	for _, line := range strings.Split(string(content), "\n") {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 && strings.TrimSpace(parts[0]) == "SSH_USERNAME" {
-			return strings.TrimSpace(parts[1]), nil
-		}
-	}
-
-	return "", nil // Not found in config
 }

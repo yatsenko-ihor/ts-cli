@@ -1,11 +1,8 @@
 package commands
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -33,41 +30,52 @@ Displays device information including name, addresses, OS, and status.`,
   # Override tailnet
   ts-cli list --tailnet=example.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load configuration from stored config if not provided
-			if apiKey == "" || tailnet == "" {
-				storedAPIKey, storedTailnet, err := loadConfig()
-				if err == nil {
-					if apiKey == "" {
-						apiKey = storedAPIKey
-					}
-					if tailnet == "" {
-						tailnet = storedTailnet
+			// Load configuration
+			config, err := LoadConfig()
+			if err != nil {
+				return fmt.Errorf("failed to load configuration: %w", err)
+			}
+
+			// Check if we have any accounts configured
+			if len(config.Accounts) == 0 {
+				return fmt.Errorf("no accounts configured.\nRun 'ts-cli login --tailnet=<name>' first to add an account")
+			}
+
+			var devices []client.Device
+
+			// Check if Tailscale is running (warning only, doesn't block)
+			WarnIfTailscaleNotRunning()
+
+			// If specific flags are provided, use them to override
+			if apiKey != "" && tailnet != "" {
+				// Use the provided credentials
+				apiClient := client.NewClient(apiKey)
+				devices, err = apiClient.ListDevices(tailnet)
+				if err != nil {
+					return fmt.Errorf("failed to list devices: %w", err)
+				}
+
+				// Tag devices with account info
+				for i := range devices {
+					devices[i].AccountName = tailnet
+					devices[i].AccountTailnet = tailnet
+				}
+			} else {
+				// Fetch devices from all configured accounts
+				accounts := make([]client.AccountInfo, len(config.Accounts))
+				for i, acc := range config.Accounts {
+					accounts[i] = client.AccountInfo{
+						Name:    acc.Name,
+						APIKey:  acc.APIKey,
+						Tailnet: acc.Tailnet,
 					}
 				}
-			}
 
-			// Try environment variable as fallback
-			if apiKey == "" {
-				apiKey = os.Getenv("TAILSCALE_API_KEY")
-			}
-
-			if apiKey == "" {
-				return fmt.Errorf("API key not provided.\nRun 'ts-cli login' first or set TAILSCALE_API_KEY environment variable")
-			}
-
-			if tailnet == "" {
-				return fmt.Errorf("tailnet name not configured.\nRun 'ts-cli login --tailnet=<name>' first or use --tailnet flag")
-			}
-
-			// Fetch devices
-			apiClient := client.NewClient(apiKey)
-			devices, err := apiClient.ListDevices(tailnet)
-			if err != nil {
-				return fmt.Errorf("failed to list devices: %w", err)
+				devices = client.ListDevicesFromAccounts(accounts)
 			}
 
 			if len(devices) == 0 {
-				fmt.Println("No devices found in your tailnet.")
+				fmt.Println("No devices found in any of your configured accounts.")
 				return nil
 			}
 
@@ -93,52 +101,18 @@ Displays device information including name, addresses, OS, and status.`,
 	return cmd
 }
 
-// loadConfig loads the stored configuration
-func loadConfig() (apiKey, tailnet string, err error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", "", err
-	}
-
-	configFile := filepath.Join(homeDir, ".ts-cli", "config")
-	file, err := os.Open(configFile)
-	if err != nil {
-		return "", "", err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		switch key {
-		case "TAILSCALE_API_KEY":
-			apiKey = value
-		case "TAILNET":
-			tailnet = value
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", "", err
-	}
-
-	return apiKey, tailnet, nil
-}
-
 // displayTable displays devices in a formatted table
 func displayTable(devices []client.Device) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tHOSTNAME\tADDRESS\tOS\tLAST SEEN\tAUTHORIZED")
-	fmt.Fprintln(w, "----\t--------\t-------\t--\t---------\t----------")
+	fmt.Fprintln(w, "ACCOUNT\tNAME\tHOSTNAME\tADDRESS\tOS\tLAST SEEN\tAUTHORIZED")
+	fmt.Fprintln(w, "-------\t----\t--------\t-------\t--\t---------\t----------")
 
 	for _, device := range devices {
+		account := device.AccountName
+		if account == "" {
+			account = "-"
+		}
+
 		name := device.Name
 		if name == "" {
 			name = device.Hostname
@@ -155,7 +129,8 @@ func displayTable(devices []client.Device) {
 			authorized = "No"
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			account,
 			name,
 			device.Hostname,
 			address,

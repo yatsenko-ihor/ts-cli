@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,10 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/creack/pty"
-	"github.com/hinshun/vt10x"
 	"github.com/ihor/ts-cli/client"
-	xterm "golang.org/x/term"
 )
 
 var (
@@ -51,17 +47,6 @@ var (
 			Foreground(lipgloss.Color("#FF0000")).
 			Bold(true).
 			MarginTop(1)
-
-	sshPanelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#00D7AF")).
-			Padding(1, 2).
-			Height(30)
-
-	sshPanelTitleStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#00D7AF")).
-				MarginBottom(1)
 )
 
 type sshMsg struct {
@@ -79,11 +64,11 @@ type usernameStoredMsg struct {
 	err error
 }
 
-type sshOutputMsg struct {
-	output string
+type tailscaleUpMsg struct {
+	err error
 }
 
-type sshSessionEndedMsg struct {
+type addAccountMsg struct {
 	err error
 }
 
@@ -110,17 +95,10 @@ type model struct {
 	activeFocus     panelFocus
 	copiedText      string
 	version         string
-	usernamePrompt  bool           // Whether we're prompting for username
-	usernameInput   string         // Current username being typed
-	sshUsername     string         // Stored SSH username
-	showSSHPanel    bool           // Whether to show the right SSH panel in split mode
-	sshSession      *os.File       // PTY file for SSH session
-	sshTerminal     vt10x.Terminal // VT100 terminal emulator
-	sshActive       bool           // Whether SSH session is active
-	sshDevice       string         // Name of device with active SSH
-	sshCmd          *exec.Cmd      // SSH command process
-	termWidth       int            // Terminal width for SSH session
-	termHeight      int            // Terminal height for SSH session
+	usernamePrompt  bool   // Whether we're prompting for username
+	usernameInput   string // Current username being typed
+	sshUsername     string // Stored SSH username
+	showAddAccount  bool   // Whether to show add account instructions
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string) model {
@@ -137,14 +115,6 @@ func NewModel(devices []client.Device, version string, sshUsername string) model
 		usernamePrompt:  false,
 		usernameInput:   "",
 		sshUsername:     sshUsername,
-		showSSHPanel:    true, // Start with SSH panel visible
-		sshSession:      nil,
-		sshTerminal:     nil,
-		sshActive:       false,
-		sshDevice:       "",
-		sshCmd:          nil,
-		termWidth:       80,
-		termHeight:      24,
 	}
 }
 
@@ -155,35 +125,8 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		oldWidth := m.width
-		oldHeight := m.height
 		m.width = msg.Width
 		m.height = msg.Height
-
-		// Resize PTY if SSH session is active and size changed
-		if m.sshActive && m.sshSession != nil && (oldWidth != m.width || oldHeight != m.height) {
-			panelWidth := m.width/2 - 8
-			panelHeight := m.height - 6
-			if panelWidth < 40 {
-				panelWidth = 40
-			}
-			if panelHeight < 10 {
-				panelHeight = 10
-			}
-
-			// Update terminal size
-			pty.Setsize(m.sshSession, &pty.Winsize{
-				Rows: uint16(panelHeight),
-				Cols: uint16(panelWidth),
-			})
-
-			m.termWidth = panelWidth
-			m.termHeight = panelHeight
-
-			// Recreate terminal emulator with new size
-			term := vt10x.New(vt10x.WithSize(panelWidth, panelHeight))
-			m.sshTerminal = term
-		}
 		return m, nil
 
 	case sshMsg:
@@ -212,60 +155,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case sshOutputMsg:
-		// Write output to terminal emulator
-		if m.sshActive && m.sshTerminal != nil {
-			m.sshTerminal.Write([]byte(msg.output))
-			// Continue reading
-			return m, m.readSSHOutput()
+	case tailscaleUpMsg:
+		// Tailscale up command completed
+		if msg.err != nil {
+			m.sshError = fmt.Errorf("tailscale up failed: %w", msg.err)
 		}
 		return m, nil
 
-	case sshSessionEndedMsg:
-		// Clean up SSH session
-		if m.sshSession != nil {
-			m.sshSession.Close()
-			m.sshSession = nil
-		}
-		if m.sshCmd != nil && m.sshCmd.Process != nil {
-			m.sshCmd.Process.Kill()
-			m.sshCmd = nil
-		}
-		m.sshTerminal = nil
-		m.sshActive = false
-		if msg.err != nil {
-			m.sshError = fmt.Errorf("SSH session ended: %v", msg.err)
-		}
+	case addAccountMsg:
+		// Show add account instructions
+		m.showAddAccount = true
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle SSH session input first (if active)
-		if m.sshActive && m.sshSession != nil {
-			// Route input to SSH session
-			switch msg.String() {
-			case "ctrl+c":
-				// Send Ctrl+C to SSH session
-				m.sshSession.Write([]byte{3})
-				return m, nil
-			case "ctrl+d":
-				// Close SSH session
-				return m, func() tea.Msg {
-					return sshSessionEndedMsg{err: nil}
-				}
-			default:
-				// Forward all other input to SSH session
-				if msg.Type == tea.KeyRunes {
-					m.sshSession.Write([]byte(string(msg.Runes)))
-				} else if msg.Type == tea.KeyEnter {
-					m.sshSession.Write([]byte{'\r'})
-				} else if msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete {
-					m.sshSession.Write([]byte{127})
-				}
-				return m, nil
-			}
+		// Handle add account view first
+		if m.showAddAccount {
+			// Any key dismisses the add account instructions
+			m.showAddAccount = false
+			return m, nil
 		}
 
-		// Handle username prompt mode first
+		// Handle username prompt mode
 		if m.usernamePrompt {
 			switch msg.String() {
 			case "esc", "ctrl+c":
@@ -289,7 +199,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						target = m.cursor
 					}
 					if target >= 0 && target < len(m.filteredDevices) {
-						return m, tea.Batch(cmd, m.startSSHSession(target))
+						return m, tea.Batch(cmd, m.sshToDevice(target))
 					}
 					return m, cmd
 				}
@@ -341,11 +251,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
-
-		case "tab":
-			// Toggle SSH panel visibility
-			m.showSSHPanel = !m.showSSHPanel
-			return m, nil
 
 		case "/":
 			// Enter search mode (vim-style)
@@ -420,9 +325,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.usernameInput = ""
 					return m, nil
 				}
-				// Username exists, start embedded SSH session
-				return m, m.startSSHSession(target)
+				// Username exists, start SSH session
+				return m, m.sshToDevice(target)
 			}
+
+		case "u":
+			// Run tailscale up
+			return m, m.runTailscaleUp()
+
+		case "a":
+			// Add new account
+			return m, m.runAddAccount()
 		}
 	}
 
@@ -434,14 +347,33 @@ func (m model) View() string {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
 
+	// Show add account instructions if requested
+	if m.showAddAccount {
+		var b strings.Builder
+		b.WriteString(titleStyle.Render(fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)))
+		b.WriteString("\n\n")
+
+		// Instructions box
+		instructions := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#874BFD")).
+			Padding(1, 2).
+			Width(60).
+			Render("To add a new account, run:\n\n  ts-cli login --tailnet=<your-tailnet>\n\nPress any key to continue...")
+
+		b.WriteString(instructions)
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Render("Press any key to continue"))
+
+		return b.String()
+	}
+
 	var b strings.Builder
 
 	// Title
 	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
 	if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"
-	} else if m.sshActive {
-		title += fmt.Sprintf(" - [SSH ACTIVE: %s - Press Ctrl+D to exit]", m.sshDevice)
 	} else if m.searchMode {
 		title += " - Search: /" + m.searchQuery + "_"
 	} else if m.searchQuery != "" {
@@ -450,27 +382,18 @@ func (m model) View() string {
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
 
-	// Render in split mode or single mode
-	if m.showSSHPanel && m.width > 80 {
-		// Split screen mode - left and right panels
-		leftPanel := m.renderLeftPanel()
-		rightPanel := m.renderSSHPanel()
+	// Render device list
+	b.WriteString(m.renderDeviceList())
 
-		// Join panels horizontally
-		panels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-		b.WriteString(panels)
-		b.WriteString("\n")
-	} else {
-		// Single panel mode (original layout)
-		b.WriteString(m.renderLeftPanel())
+	// Device details if selected
+	if m.selected >= 0 && m.selected < len(m.filteredDevices) {
+		b.WriteString(m.renderDeviceDetails())
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab panel • q quit"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • u tailscale-up • a add-account • q quit"
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
-	} else if m.sshActive {
-		help = "SSH session active - Type normally • Ctrl+D exit session • Ctrl+C interrupt"
 	} else if m.searchMode {
 		help = "Type to search • esc cancel • enter confirm"
 	}
@@ -492,11 +415,8 @@ func (m model) View() string {
 	return b.String()
 }
 
-// renderLeftPanel renders the device list and details panel
-func (m model) renderLeftPanel() string {
-	var b strings.Builder
-
-	// Build device list content
+// renderDeviceList renders the device list panel
+func (m model) renderDeviceList() string {
 	var listContent strings.Builder
 	maxVisible := m.getMaxVisibleItems()
 
@@ -537,13 +457,7 @@ func (m model) renderLeftPanel() string {
 		// Get status icon
 		statusIcon := getStatusIcon(device)
 
-		// Adjust width for split mode
-		nameWidth := 28
-		if m.showSSHPanel && m.width > 80 {
-			nameWidth = 20
-		}
-
-		line := fmt.Sprintf("%s%s %-*s %s", cursor, statusIcon, nameWidth, name, address)
+		line := fmt.Sprintf("%s%s %-28s %s", cursor, statusIcon, name, address)
 		listContent.WriteString(style.Render(line))
 		listContent.WriteString("\n")
 	}
@@ -554,168 +468,41 @@ func (m model) renderLeftPanel() string {
 	}
 
 	// Render the list in a frame
-	listPanel := listStyle.Render(listContent.String())
-
-	// Set width for split mode
-	if m.showSSHPanel && m.width > 80 {
-		listPanel = lipgloss.NewStyle().Width(m.width/2 - 4).Render(listPanel)
-	}
-
-	b.WriteString(listPanel)
-
-	// Device details if selected (only in single panel mode)
-	if !m.showSSHPanel && m.selected >= 0 && m.selected < len(m.filteredDevices) {
-		device := m.filteredDevices[m.selected]
-		name := device.Name
-		if name == "" {
-			name = device.Hostname
-		}
-
-		statusText := "🟢 Online"
-		if !isDeviceOnline(device) {
-			statusText = "🔴 Offline"
-		}
-
-		details := fmt.Sprintf(
-			"Selected Device\n\n"+
-				"Name:       %s\n"+
-				"Hostname:   %s\n"+
-				"Status:     %s\n"+
-				"OS:         %s\n"+
-				"Authorized: %t\n"+
-				"Address:    %v\n"+
-				"ID:         %s",
-			name,
-			device.Hostname,
-			statusText,
-			device.OS,
-			device.Authorized,
-			strings.Join(device.Addresses, ", "),
-			device.ID,
-		)
-
-		b.WriteString(detailStyle.Render(details))
-		b.WriteString("\n")
-	}
-
-	return b.String()
+	return listStyle.Render(listContent.String())
 }
 
-// renderSSHPanel renders the right panel with SSH session information
-func (m model) renderSSHPanel() string {
-	var content strings.Builder
-
-	// If SSH session is active, show SSH output
-	if m.sshActive && m.sshTerminal != nil {
-		content.WriteString(sshPanelTitleStyle.Render(fmt.Sprintf("SSH Session: %s", m.sshDevice)))
-		content.WriteString("\n\n")
-
-		// Render the terminal buffer - use String() method which preserves formatting
-		m.sshTerminal.Lock()
-		terminalOutput := m.sshTerminal.String()
-		m.sshTerminal.Unlock()
-
-		content.WriteString(terminalOutput)
-
-		panelWidth := m.width/2 - 4
-		if panelWidth < 40 {
-			panelWidth = 40
-		}
-
-		panelHeight := m.height - 2
-		panelStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#874BFD")).
-			Padding(1, 2).
-			Width(panelWidth).
-			Height(panelHeight)
-
-		return panelStyle.Render(content.String())
+// renderDeviceDetails renders the selected device details panel
+func (m model) renderDeviceDetails() string {
+	device := m.filteredDevices[m.selected]
+	name := device.Name
+	if name == "" {
+		name = device.Hostname
 	}
 
-	// Regular SSH panel content (when no session is active)
-	content.WriteString(sshPanelTitleStyle.Render("SSH Connection"))
-	content.WriteString("\n\n")
-
-	// Show selected device info or prompt
-	if m.selected >= 0 && m.selected < len(m.filteredDevices) {
-		device := m.filteredDevices[m.selected]
-		name := device.Name
-		if name == "" {
-			name = device.Hostname
-		}
-
-		address := "N/A"
-		if len(device.Addresses) > 0 {
-			address = device.Addresses[0]
-		}
-
-		statusText := "🟢 Online"
-		statusColor := "#00FF00"
-		if !isDeviceOnline(device) {
-			statusText = "🔴 Offline"
-			statusColor = "#FF0000"
-		}
-
-		// Device info
-		content.WriteString(lipgloss.NewStyle().Bold(true).Render("Device Details"))
-		content.WriteString("\n\n")
-		content.WriteString(fmt.Sprintf("Name:       %s\n", name))
-		content.WriteString(fmt.Sprintf("Hostname:   %s\n", device.Hostname))
-		content.WriteString(fmt.Sprintf("Status:     %s\n",
-			lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render(statusText)))
-		content.WriteString(fmt.Sprintf("OS:         %s\n", device.OS))
-		content.WriteString(fmt.Sprintf("Address:    %s\n", address))
-		content.WriteString(fmt.Sprintf("Authorized: %t\n", device.Authorized))
-		content.WriteString("\n")
-
-		// SSH command info
-		content.WriteString(lipgloss.NewStyle().Bold(true).Render("SSH Command"))
-		content.WriteString("\n\n")
-
-		var sshCommand string
-		if m.sshUsername != "" {
-			sshCommand = fmt.Sprintf("ssh %s@%s", m.sshUsername, address)
-		} else {
-			sshCommand = fmt.Sprintf("ssh %s", address)
-		}
-
-		cmdStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00D7AF")).
-			Background(lipgloss.Color("#1a1a1a")).
-			Padding(0, 1)
-		content.WriteString(cmdStyle.Render(sshCommand))
-		content.WriteString("\n\n")
-
-		// Instructions
-		content.WriteString(lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#808080")).Render(
-			"Press 's' to open SSH connection\n" +
-				"Press 'c' to copy SSH command\n" +
-				"Press 'tab' to toggle this panel"))
-
-		if m.sshUsername == "" {
-			content.WriteString("\n\n")
-			content.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500")).Render(
-				"⚠ No SSH username set\n" +
-					"Press 's' to configure"))
-		}
-	} else {
-		// No device selected
-		content.WriteString(lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#808080")).Render(
-			"No device selected\n\n" +
-				"Select a device from the list\n" +
-				"to view SSH connection details.\n\n" +
-				"Press 'tab' to toggle this panel"))
+	statusText := "🟢 Online"
+	if !isDeviceOnline(device) {
+		statusText = "🔴 Offline"
 	}
 
-	panelWidth := m.width/2 - 4
-	if panelWidth < 40 {
-		panelWidth = 40
-	}
+	details := fmt.Sprintf(
+		"Selected Device\n\n"+
+			"Name:       %s\n"+
+			"Hostname:   %s\n"+
+			"Status:     %s\n"+
+			"OS:         %s\n"+
+			"Authorized: %t\n"+
+			"Address:    %v\n"+
+			"ID:         %s",
+		name,
+		device.Hostname,
+		statusText,
+		device.OS,
+		device.Authorized,
+		strings.Join(device.Addresses, ", "),
+		device.ID,
+	)
 
-	return lipgloss.NewStyle().
-		Width(panelWidth).
-		Render(sshPanelStyle.Render(content.String()))
+	return detailStyle.Render(details) + "\n"
 }
 
 // getMaxVisibleItems calculates how many items can fit in the viewport
@@ -768,119 +555,6 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		}
 		return sshMsg{}
 	})
-}
-
-// startSSHSession initiates an embedded SSH session in the right panel
-func (m *model) startSSHSession(index int) tea.Cmd {
-	device := m.filteredDevices[index]
-
-	// Get the primary IP address
-	if len(device.Addresses) == 0 {
-		return func() tea.Msg {
-			return sshSessionEndedMsg{err: fmt.Errorf("device has no IP addresses")}
-		}
-	}
-
-	address := device.Addresses[0]
-	deviceName := device.Name
-	if deviceName == "" {
-		deviceName = device.Hostname
-	}
-
-	// Build SSH target with username
-	var sshTarget string
-	if m.sshUsername != "" {
-		sshTarget = fmt.Sprintf("%s@%s", m.sshUsername, address)
-	} else {
-		sshTarget = address
-	}
-
-	// Calculate terminal size for the right panel
-	panelWidth := m.width/2 - 8 // Account for borders and padding
-	panelHeight := m.height - 6
-	if panelWidth < 40 {
-		panelWidth = 40
-	}
-	if panelHeight < 10 {
-		panelHeight = 10
-	}
-
-	m.termWidth = panelWidth
-	m.termHeight = panelHeight
-
-	// Create VT100 terminal emulator
-	term := vt10x.New(vt10x.WithSize(panelWidth, panelHeight))
-
-	// Create SSH command
-	sshCmd := exec.Command("ssh", "-t", sshTarget)
-	sshCmd.Env = append(os.Environ(),
-		fmt.Sprintf("TERM=xterm-256color"),
-		fmt.Sprintf("COLUMNS=%d", panelWidth),
-		fmt.Sprintf("LINES=%d", panelHeight),
-	)
-
-	// Start the command with a PTY
-	ptmx, err := pty.StartWithSize(sshCmd, &pty.Winsize{
-		Rows: uint16(panelHeight),
-		Cols: uint16(panelWidth),
-	})
-	if err != nil {
-		return func() tea.Msg {
-			return sshSessionEndedMsg{err: fmt.Errorf("failed to start SSH: %w", err)}
-		}
-	}
-
-	// Set the PTY to raw mode to disable local echo
-	// This prevents double-echoing of characters
-	oldState, err := xterm.MakeRaw(int(ptmx.Fd()))
-	if err == nil {
-		// Store old state if needed for restoration (though we close PTY on exit anyway)
-		_ = oldState
-	}
-
-	// Set the SSH session state
-	m.sshSession = ptmx
-	m.sshTerminal = term
-	m.sshActive = true
-	m.sshDevice = deviceName
-	m.sshCmd = sshCmd
-
-	// Return a command that reads PTY output
-	return m.readSSHOutput()
-}
-
-// Write implements io.Writer for the terminal emulator
-func (m *model) Write(p []byte) (n int, err error) {
-	// This is called by vt10x when it needs to write to the terminal
-	// We don't need to do anything here as we're reading from PTY
-	return len(p), nil
-}
-
-// readSSHOutput reads from the SSH PTY and sends output messages
-func (m *model) readSSHOutput() tea.Cmd {
-	return func() tea.Msg {
-		if m.sshSession == nil || m.sshTerminal == nil {
-			return nil
-		}
-
-		// Read a small chunk
-		buf := make([]byte, 1024)
-		n, err := m.sshSession.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				return sshSessionEndedMsg{err: nil}
-			}
-			return sshSessionEndedMsg{err: err}
-		}
-
-		if n > 0 {
-			// Write directly to terminal for parsing
-			m.sshTerminal.Write(buf[:n])
-			return sshOutputMsg{output: string(buf[:n])}
-		}
-
-		return nil
-	}
 }
 
 // copySSHCommand copies the SSH command to the clipboard
@@ -1048,4 +722,25 @@ func (m *model) filterDevices() {
 	// Reset cursor to top of filtered list
 	m.cursor = 0
 	m.viewportTop = 0
+}
+
+// runTailscaleUp runs 'tailscale up' command
+func (m model) runTailscaleUp() tea.Cmd {
+	return func() tea.Msg {
+		tailscaleCmd := exec.Command("tailscale", "up")
+		return tea.ExecProcess(tailscaleCmd, func(err error) tea.Msg {
+			if err != nil {
+				return tailscaleUpMsg{err: err}
+			}
+			return tailscaleUpMsg{err: nil}
+		})()
+	}
+}
+
+// runAddAccount prompts user to add a new account via login command
+func (m model) runAddAccount() tea.Cmd {
+	return func() tea.Msg {
+		// Just return a message to trigger showing the instructions in the TUI
+		return addAccountMsg{err: nil}
+	}
 }

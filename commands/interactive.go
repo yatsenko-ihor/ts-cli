@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ihor/ts-cli/client"
@@ -30,49 +29,70 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
   # Short alias
   ts-cli i`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load configuration from stored config if not provided
-			if apiKey == "" || tailnet == "" {
-				storedAPIKey, storedTailnet, err := loadConfig()
-				if err == nil {
-					if apiKey == "" {
-						apiKey = storedAPIKey
-					}
-					if tailnet == "" {
-						tailnet = storedTailnet
-					}
-				}
-			}
-
-			// Try environment variable as fallback
-			if apiKey == "" {
-				apiKey = os.Getenv("TAILSCALE_API_KEY")
-			}
-
-			if apiKey == "" {
-				return fmt.Errorf("API key not provided.\nRun 'ts-cli login' first or set TAILSCALE_API_KEY environment variable")
-			}
-
-			if tailnet == "" {
-				return fmt.Errorf("tailnet name not configured.\nRun 'ts-cli login --tailnet=<name>' first or use --tailnet flag")
-			}
-
-			// Fetch devices
-			apiClient := client.NewClient(apiKey)
-			devices, err := apiClient.ListDevices(tailnet)
+			// Load configuration
+			config, err := LoadConfig()
 			if err != nil {
-				return fmt.Errorf("failed to list devices: %w", err)
+				return fmt.Errorf("failed to load configuration: %w", err)
 			}
 
-			if len(devices) == 0 {
-				fmt.Println("No devices found in your tailnet.")
+			// Check if we have any accounts configured
+			if len(config.Accounts) == 0 {
+				return fmt.Errorf("no accounts configured.\nRun 'ts-cli login --tailnet=<name>' first to add an account")
+			}
+
+			// If specific flags are provided, use them to override
+			if apiKey != "" && tailnet != "" {
+				// Use the provided credentials
+				apiClient := client.NewClient(apiKey)
+				devices, err := apiClient.ListDevices(tailnet)
+				if err != nil {
+					return fmt.Errorf("failed to list devices: %w", err)
+				}
+
+				// Tag devices with account info
+				for i := range devices {
+					devices[i].AccountName = tailnet
+					devices[i].AccountTailnet = tailnet
+				}
+
+				if len(devices) == 0 {
+					fmt.Println("No devices found in the specified tailnet.")
+					return nil
+				}
+
+				// Launch TUI
+				m := tui.NewModel(devices, Version, config.SSHUsername)
+				p := tea.NewProgram(m, tea.WithAltScreen())
+				if _, err := p.Run(); err != nil {
+					return fmt.Errorf("TUI error: %w", err)
+				}
 				return nil
 			}
 
-			// Load SSH username preference
-			sshUsername, _ := LoadSSHUsername()
+			// Check if Tailscale is running (warning only, doesn't block)
+			WarnIfTailscaleNotRunning()
+
+			// Fetch devices from all configured accounts
+			fmt.Println("Fetching devices from all configured accounts...")
+			accounts := make([]client.AccountInfo, len(config.Accounts))
+			for i, acc := range config.Accounts {
+				accounts[i] = client.AccountInfo{
+					Name:    acc.Name,
+					APIKey:  acc.APIKey,
+					Tailnet: acc.Tailnet,
+				}
+			}
+
+			devices := client.ListDevicesFromAccounts(accounts)
+			if len(devices) == 0 {
+				fmt.Println("No devices found in any of your configured accounts.")
+				return nil
+			}
+
+			fmt.Printf("Found %d device(s) from %d account(s)\n", len(devices), len(config.Accounts))
 
 			// Launch TUI
-			m := tui.NewModel(devices, Version, sshUsername)
+			m := tui.NewModel(devices, Version, config.SSHUsername)
 			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				return fmt.Errorf("TUI error: %w", err)

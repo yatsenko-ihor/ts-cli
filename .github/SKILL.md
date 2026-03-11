@@ -1,17 +1,6 @@
 ---
-name: go-cli-development
+name: .github
 description: Building production-ready CLI applications in Go using cobra framework and bubbletea TUI. Use this skill for Go CLI projects involving command-line interfaces, terminal UIs, API client integration, and SSH connectivity.
-tags:
-    - golang
-    - cli
-    - cobra
-    - bubbletea
-    - tui
-    - ssh
-applyTo:
-    - '**/*.go'
-    - '**/go.mod'
-    - '**/go.sum'
 ---
 
 # Go CLI Development Skill

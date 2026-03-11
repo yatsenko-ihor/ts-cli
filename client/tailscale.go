@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -33,6 +34,9 @@ type Device struct {
 	BlocksIncomingConnections bool      `json:"blocksIncomingConnections"`
 	Addresses                 []string  `json:"addresses"`
 	Tags                      []string  `json:"tags,omitempty"`
+	// Additional fields for multi-account support
+	AccountName    string `json:"-"` // Not from API, added locally
+	AccountTailnet string `json:"-"` // Not from API, added locally
 }
 
 // DevicesResponse represents the response from the devices API
@@ -128,4 +132,61 @@ func (c *Client) ListDevices(tailnet string) ([]Device, error) {
 	}
 
 	return devicesResp.Devices, nil
+}
+
+// AccountDevices represents devices from a specific account
+type AccountDevices struct {
+	AccountName string
+	Tailnet     string
+	Devices     []Device
+	Error       error
+}
+
+// ListDevicesFromAccounts retrieves devices from multiple accounts
+func ListDevicesFromAccounts(accounts []AccountInfo) []Device {
+	var allDevices []Device
+
+	// Use a channel to collect results
+	results := make(chan AccountDevices, len(accounts))
+
+	// Query each account in parallel
+	for _, account := range accounts {
+		go func(acc AccountInfo) {
+			client := NewClient(acc.APIKey)
+			devices, err := client.ListDevices(acc.Tailnet)
+			results <- AccountDevices{
+				AccountName: acc.Name,
+				Tailnet:     acc.Tailnet,
+				Devices:     devices,
+				Error:       err,
+			}
+		}(account)
+	}
+
+	// Collect results
+	for i := 0; i < len(accounts); i++ {
+		result := <-results
+		if result.Error != nil {
+			// Log error but continue with other accounts
+			fmt.Fprintf(os.Stderr, "Warning: Failed to fetch devices from account %s: %v\n", result.AccountName, result.Error)
+			continue
+		}
+
+		// Tag each device with its account info
+		for j := range result.Devices {
+			result.Devices[j].AccountName = result.AccountName
+			result.Devices[j].AccountTailnet = result.Tailnet
+		}
+
+		allDevices = append(allDevices, result.Devices...)
+	}
+
+	return allDevices
+}
+
+// AccountInfo represents basic account information for device querying
+type AccountInfo struct {
+	Name    string
+	APIKey  string
+	Tailnet string
 }

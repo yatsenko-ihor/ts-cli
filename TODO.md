@@ -13,9 +13,20 @@
 - [x] click to "c" to copy ssh command to buffer
 - [x] put title "Tailscale Devices" to frame also and print version like "Tailscale Devices (ts-cli v0.1)
 - [x] once I'm on machine which is offline click "s" for ssh - got msg "Machine <name>" is offline
-- [ ] once I'm on machine which is online click "s" for ssh - on right page (full height and half terminal width) open interactive ssh connection (in this window)
+- [x] once ssh established - opens full-screen SSH session (suspends TUI)
+- [x] remove catch tty (terminal emulation) - simplified to use tea.ExecProcess
+- [x] remove logic with tab - removed split panel mode
+- [x] make SSH session full screen - already implemented via tea.ExecProcess
+- [x] get all my accounts and machines
+- [x] switch to proper account(network) once ssh try to establish - devices tagged with account info, SSH uses device IP (network routing automatic).
+- [x] add ability to check if tailscale is running now - warns users in interactive/list/ssh commands with OS-specific instructions
+- [x] make ability to run "tailscale up" - new command with flags for routes, dns, exit-node, hostname
+- [x] fetch all accounts related to current email - implemented account management (list/set-active/remove) for configured accounts
+- [x] add "tailscale up" as vim like to interactive mode - press 'u' to run tailscale up
+- [x] add new account as vim like to interactive mode - press 'a' for add account instructions
+- [ ] add new account also in interactive mode
 
 To be implemented later:
-- [ ] remove logic with tab?
-- [ ] make ability to make from interactive ssh session window make full screen
+
+- [ ] try to search is it possible to open another tmux pane if app running in tmux
 - [ ] write unit test
