@@ -35,7 +35,7 @@
 - [x] make suggestion to do it in interactive mode
 - [x] check if in path ts-cli or tsc are available and path is proper then don't snow "Tip"
 - [x] if path not correct - show tip to reinstall path again because path is not correct
-- [ ] hightlight Search: and search words in another color
+- [x] hightlight Search: and search words in another color
 - [ ] Remove default user name by „d“
 - [ ] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
 
