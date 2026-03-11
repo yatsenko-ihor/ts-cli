@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -111,6 +112,9 @@ type model struct {
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
+	// Sort devices with online devices first
+	sortDevicesByStatus(devices)
+	
 	return model{
 		devices:           devices,
 		filteredDevices:   devices, // Initially show all devices
@@ -213,12 +217,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.sshError = fmt.Errorf("failed to reload devices: %w", msg.err)
 		} else {
+			// Sort devices before storing
+			sortDevicesByStatus(msg.devices)
 			m.devices = msg.devices
-			m.filteredDevices = msg.devices
-			// Reset search if active
-			if m.searchQuery != "" {
+			
+			// Re-apply filters if any are active
+			if m.searchQuery != "" || m.selectedProfile != "" {
 				m.filterDevices()
+			} else {
+				m.filteredDevices = msg.devices
 			}
+			
 			// Reset cursor if out of bounds
 			if m.cursor >= len(m.filteredDevices) {
 				m.cursor = 0
@@ -837,6 +846,25 @@ func isDeviceOnline(device client.Device) bool {
 	return time.Since(device.LastSeen) < 5*time.Minute
 }
 
+// sortDevicesByStatus sorts devices with online devices first
+func sortDevicesByStatus(devices []client.Device) {
+	sort.SliceStable(devices, func(i, j int) bool {
+		onlineI := isDeviceOnline(devices[i])
+		onlineJ := isDeviceOnline(devices[j])
+		
+		// Online devices come first
+		if onlineI && !onlineJ {
+			return true
+		}
+		if !onlineI && onlineJ {
+			return false
+		}
+		
+		// If both have same online status, maintain original order (stable sort)
+		return false
+	})
+}
+
 // getStatusIcon returns the appropriate status icon for a device
 func getStatusIcon(device client.Device) string {
 	if isDeviceOnline(device) {
@@ -889,6 +917,9 @@ func (m *model) filterDevices() {
 		}
 		filtered = searchFiltered
 	}
+
+	// Sort devices with online devices first
+	sortDevicesByStatus(filtered)
 
 	m.filteredDevices = filtered
 	// Reset cursor to top of filtered list
