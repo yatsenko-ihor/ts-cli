@@ -87,30 +87,30 @@ const (
 )
 
 type model struct {
-	devices           []client.Device
-	filteredDevices   []client.Device
-	cursor            int
-	selected          int
-	err               error
-	width             int
-	height            int
-	sshError          error
-	viewportTop       int // First visible item in the list
-	searchMode        bool
-	searchQuery       string
-	activeFocus       panelFocus
-	copiedText        string
-	version           string
-	usernamePrompt    bool                 // Whether we're prompting for username
-	usernameInput     string               // Current username being typed
-	sshUsername       string               // Stored SSH username
-	accounts          []client.AccountInfo // Store accounts for reload functionality
-	reloading         bool                 // Whether we're currently reloading
-	profileSelectMode bool                 // Whether we're in profile selection mode
-	profileCursor     int                  // Cursor position in profile list
-	selectedProfile   string               // Currently selected profile (empty = all)
-	activeAccount     string               // Currently active Tailscale account
-	showInstallSuggestion bool             // Whether to show PATH installation suggestion
+	devices               []client.Device
+	filteredDevices       []client.Device
+	cursor                int
+	selected              int
+	err                   error
+	width                 int
+	height                int
+	sshError              error
+	viewportTop           int // First visible item in the list
+	searchMode            bool
+	searchQuery           string
+	activeFocus           panelFocus
+	copiedText            string
+	version               string
+	usernamePrompt        bool                 // Whether we're prompting for username
+	usernameInput         string               // Current username being typed
+	sshUsername           string               // Stored SSH username
+	accounts              []client.AccountInfo // Store accounts for reload functionality
+	reloading             bool                 // Whether we're currently reloading
+	profileSelectMode     bool                 // Whether we're in profile selection mode
+	profileCursor         int                  // Cursor position in profile list
+	selectedProfile       string               // Currently selected profile (empty = all)
+	activeAccount         string               // Currently active Tailscale account
+	showInstallSuggestion bool                 // Whether to show PATH installation suggestion
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -126,29 +126,28 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		}
 	}
 
-	// Check if ts-cli is in PATH
-	_, err := exec.LookPath("ts-cli")
-	showInstallSuggestion := err != nil
+	// Check if ts-cli is properly installed in PATH
+	showInstallSuggestion := checkIfInstallNeeded()
 
 	return model{
-		devices:           devices,
-		filteredDevices:   devices, // Initially show all devices
-		cursor:            0,
-		selected:          -1,
-		viewportTop:       0,
-		searchMode:        false,
-		searchQuery:       "",
-		activeFocus:       focusList,
-		version:           version,
-		usernamePrompt:    false,
-		usernameInput:     "",
-		accounts:          accounts,
-		reloading:         false,
-		sshUsername:       sshUsername,
-		profileSelectMode: false,
-		profileCursor:     0,
-		selectedProfile:   "", // Empty means show all
-		activeAccount:     activeAccount,
+		devices:               devices,
+		filteredDevices:       devices, // Initially show all devices
+		cursor:                0,
+		selected:              -1,
+		viewportTop:           0,
+		searchMode:            false,
+		searchQuery:           "",
+		activeFocus:           focusList,
+		version:               version,
+		usernamePrompt:        false,
+		usernameInput:         "",
+		accounts:              accounts,
+		reloading:             false,
+		sshUsername:           sshUsername,
+		profileSelectMode:     false,
+		profileCursor:         0,
+		selectedProfile:       "", // Empty means show all
+		activeAccount:         activeAccount,
 		showInstallSuggestion: showInstallSuggestion,
 	}
 }
@@ -894,6 +893,42 @@ func (m model) storeUsername(username string) tea.Cmd {
 
 		return usernameStoredMsg{err: nil}
 	}
+}
+
+// checkIfInstallNeeded checks if ts-cli needs to be installed or is improperly installed
+func checkIfInstallNeeded() bool {
+	// Check if ts-cli is in PATH
+	tsCliPath, err := exec.LookPath("ts-cli")
+	if err != nil {
+		// ts-cli not found in PATH, suggest installation
+		return true
+	}
+
+	// ts-cli found, verify it's a valid binary
+	// Resolve any symlinks to get the actual binary path
+	resolvedPath, err := filepath.EvalSymlinks(tsCliPath)
+	if err != nil {
+		// Can't resolve symlink, might be broken installation
+		return true
+	}
+
+	// Check if the resolved path is a valid executable file
+	fileInfo, err := os.Stat(resolvedPath)
+	if err != nil || fileInfo.IsDir() {
+		// File doesn't exist or is a directory
+		return true
+	}
+
+	// Check if it's executable (on Unix-like systems)
+	if runtime.GOOS != "windows" {
+		if fileInfo.Mode()&0111 == 0 {
+			// Not executable
+			return true
+		}
+	}
+
+	// ts-cli is properly installed
+	return false
 }
 
 // isDeviceOnline checks if a device is considered online based on LastSeen time

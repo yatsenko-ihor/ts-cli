@@ -33,6 +33,10 @@
 - [x] once ptofile selected to "All" show "Active account: all"
 - [x] make option to write (if not yet there) ts-cli and tsc to path
 - [x] make suggestion to do it in interactive mode
+- [x] check if in path ts-cli or tsc are available and path is proper then don't snow "Tip"
+- [ ] if path not correct - show tip to reinstall path again because path is not correct
+- [ ] hightlight Search: and search words in another color
+- [ ]
 
 To be implemented later:
 
