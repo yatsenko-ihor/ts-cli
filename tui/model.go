@@ -110,6 +110,7 @@ type model struct {
 	profileCursor     int                  // Cursor position in profile list
 	selectedProfile   string               // Currently selected profile (empty = all)
 	activeAccount     string               // Currently active Tailscale account
+	showInstallSuggestion bool             // Whether to show PATH installation suggestion
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -124,6 +125,10 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 			break
 		}
 	}
+
+	// Check if ts-cli is in PATH
+	_, err := exec.LookPath("ts-cli")
+	showInstallSuggestion := err != nil
 
 	return model{
 		devices:           devices,
@@ -144,6 +149,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		profileCursor:     0,
 		selectedProfile:   "", // Empty means show all
 		activeAccount:     activeAccount,
+		showInstallSuggestion: showInstallSuggestion,
 	}
 }
 
@@ -469,6 +475,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+
+		case "x":
+			// Dismiss installation suggestion
+			if m.showInstallSuggestion {
+				m.showInstallSuggestion = false
+			}
+			return m, nil
 		}
 	}
 
@@ -507,7 +520,7 @@ func (m model) View() string {
 	activeAccountStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#626262")).
 		Italic(true)
-	
+
 	if m.selectedProfile == "" {
 		// When no profile filter is set, show "all"
 		b.WriteString(activeAccountStyle.Render("Active account: all"))
@@ -546,6 +559,13 @@ func (m model) View() string {
 	if m.sshError != nil {
 		b.WriteString("\n")
 		b.WriteString(errorStyle.Render(fmt.Sprintf("SSH Error: %v", m.sshError)))
+	}
+
+	// Show installation suggestion if not in PATH
+	if m.showInstallSuggestion && !m.usernamePrompt && !m.searchMode && !m.profileSelectMode {
+		b.WriteString("\n")
+		infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500"))
+		b.WriteString(infoStyle.Render("💡 Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."))
 	}
 
 	return b.String()

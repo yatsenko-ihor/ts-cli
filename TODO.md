@@ -32,7 +32,7 @@
 - [x] if click to "s" and machine under another account (not active in current tailscal) - switch taiscale to proper
 - [x] once ptofile selected to "All" show "Active account: all"
 - [x] make option to write (if not yet there) ts-cli and tsc to path
-- [ ] make suggestion to do it in interactive mode
+- [x] make suggestion to do it in interactive mode
 
 To be implemented later:
 
