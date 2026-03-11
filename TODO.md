@@ -52,8 +52,8 @@
 - [x] Add this folder to .ignore
 - [x] fix (still not works) click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
 - [x] once clikc to "s" log to terminal what you are doint (switch accout if needed, connect to <name of machine> from <account name> and ssh command)
-- [ ] still not work. Check util in path. if available - do not show ti[ "Hide Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
-- [ ] still not work - if click "x" hide only Tip, not whole command panel
+- [x] still not work. Check util in path. if available - do not show ti[ "Hide Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
+- [x] still not work - if click "x" hide only Tip, not whole command panel
 
 ## To be implemented later:
 - [ ] write unit test
