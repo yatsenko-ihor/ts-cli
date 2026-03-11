@@ -54,7 +54,7 @@
 - [x] once clikc to "s" log to terminal what you are doint (switch accout if needed, connect to <name of machine> from <account name> and ssh command)
 - [x] still not work. Check util in path. if available - do not show ti[ "Hide Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
 - [x] still not work - if click "x" hide only Tip, not whole command panel
-- [ ] always got "✗ ts-cli is not in PATH"
+- [x] always got "✗ ts-cli is not in PATH"
 
 ## To be implemented later:
 
