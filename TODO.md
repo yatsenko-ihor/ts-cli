@@ -1,3 +1,5 @@
+## TODO's:
+
 - [x] make interactive menu to navigate in list of machines
 - [x] add ability to open ssh connetion to machine
 - [x] list of machines put into to scrollable frame (frame like machine selected)
@@ -50,9 +52,11 @@
 - [x] Add this folder to .ignore
 - [x] fix (still not works) click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
 - [x] once clikc to "s" log to terminal what you are doint (switch accout if needed, connect to <name of machine> from <account name> and ssh command)
+- [ ] still not work. Check util in path. if available - do not show ti[ "Hide Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
+- [ ] still not work - if click "x" hide only Tip, not whole command panel
 
-To be implemented later:
-
+## To be implemented later:
 - [ ] write unit test
+- [ ] make git tag v0.1.0 and rc branch "release/v0.1.0"
 - [ ] make security ausit as security expert and apply notes
 - [ ] try to search is it possible to open another tmux pane if app running in tmux

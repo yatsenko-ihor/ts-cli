@@ -1150,16 +1150,24 @@ func (m model) clearUsername() tea.Cmd {
 // checkIfInstallNeeded checks if ts-cli needs to be installed or is improperly installed
 // Returns (needsInstall, isBroken)
 func checkIfInstallNeeded() (bool, bool) {
-	// Check if ts-cli is in PATH
-	tsCliPath, err := exec.LookPath("ts-cli")
-	if err != nil {
-		// ts-cli not found in PATH, suggest installation
+	// Check if either ts-cli or tsc is in PATH
+	tsCliPath, tsCliErr := exec.LookPath("ts-cli")
+	tscPath, tscErr := exec.LookPath("tsc")
+	
+	// If both are not found, suggest installation
+	if tsCliErr != nil && tscErr != nil {
 		return true, false
 	}
+	
+	// Try to verify the found binary (prefer ts-cli)
+	pathToCheck := tsCliPath
+	if tsCliErr != nil {
+		pathToCheck = tscPath
+	}
 
-	// ts-cli found, verify it's a valid binary
+	// Verify it's a valid binary
 	// Resolve any symlinks to get the actual binary path
-	resolvedPath, err := filepath.EvalSymlinks(tsCliPath)
+	resolvedPath, err := filepath.EvalSymlinks(pathToCheck)
 	if err != nil {
 		// Can't resolve symlink, broken installation
 		return true, true
@@ -1180,7 +1188,7 @@ func checkIfInstallNeeded() (bool, bool) {
 		}
 	}
 
-	// ts-cli is properly installed
+	// ts-cli or tsc is properly installed
 	return false, false
 }
 
