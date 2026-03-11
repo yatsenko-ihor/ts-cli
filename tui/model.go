@@ -614,16 +614,25 @@ func (m model) View() string {
 	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
 	if m.reloading {
 		title += " - Reloading..."
+		b.WriteString(titleStyle.Render(title))
 	} else if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"
+		b.WriteString(titleStyle.Render(title))
 	} else if m.searchMode {
-		title += " - Search: /" + m.searchQuery + "_"
+		// Render search with different colors on the same line
+		baseTitle := titleStyle.Render(title + " > ")
+		searchLabel := searchLabelStyle.Render("Search: ")
+		searchInput := searchQueryStyle.Render(m.searchQuery + "_")
+		b.WriteString(baseTitle + searchLabel + searchInput)
 	} else if m.searchQuery != "" {
 		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.filteredDevices), len(m.devices))
+		b.WriteString(titleStyle.Render(title))
 	} else if m.selectedProfile != "" {
 		title += fmt.Sprintf(" - Profile: %s", m.selectedProfile)
+		b.WriteString(titleStyle.Render(title))
+	} else {
+		b.WriteString(titleStyle.Render(title))
 	}
-	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
 
 	// Show active account or "all" when viewing all profiles
