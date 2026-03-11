@@ -99,6 +99,13 @@ type addAccountMsg struct {
 	err error
 }
 
+type accountSwitchedMsg struct {
+	accountName    string
+	deviceIndex    int
+	err            error
+	proceedWithSSH bool
+}
+
 type reloadMsg struct {
 	devices []client.Device
 	err     error
@@ -256,6 +263,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Account added successfully, could reload devices here
 			// For now, just clear any previous errors
 			m.sshError = nil
+		}
+		return m, nil
+
+	case accountSwitchedMsg:
+		// Handle account switch result
+		if msg.err != nil {
+			m.sshError = fmt.Errorf("failed to switch to account %s: %w", msg.accountName, msg.err)
+			return m, nil
+		}
+		// Account switched successfully, update active account
+		m.activeAccount = msg.accountName
+		// If we should proceed with SSH, do it now
+		if msg.proceedWithSSH {
+			// Check if username is stored
+			if m.sshUsername == "" {
+				// Prompt for username
+				m.usernamePrompt = true
+				m.usernameInput = ""
+				return m, nil
+			}
+			// Username exists, start SSH session
+			return m, m.sshToDevice(msg.deviceIndex)
 		}
 		return m, nil
 
@@ -581,6 +610,12 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 	// Clear any previous SSH errors
 	m.sshError = nil
+
+	// Check if we need to switch accounts first
+	if device.AccountName != "" && m.activeAccount != "" && device.AccountName != m.activeAccount {
+		// Need to switch Tailscale account before SSH
+		return m, m.switchAccountForSSH(target, device.AccountName)
+	}
 
 	// Check if username is stored
 	if m.sshUsername == "" {
@@ -911,15 +946,7 @@ func (m model) renderAccountManagement() string {
 func (m model) sshToDevice(index int) tea.Cmd {
 	device := m.filteredDevices[index]
 
-	// Check if device belongs to a different account and switch if needed
-	if device.AccountName != "" && m.activeAccount != "" && device.AccountName != m.activeAccount {
-		// Need to switch Tailscale account
-		if err := switchTailscaleAccount(device.AccountName); err != nil {
-			return func() tea.Msg {
-				return sshMsg{err: fmt.Errorf("failed to switch to account %s: %w", device.AccountName, err)}
-			}
-		}
-	}
+	// Note: Account switching is handled by handleSSHRequest before calling this function
 
 	// Get the primary IP address
 	if len(device.Addresses) == 0 {
@@ -1177,6 +1204,19 @@ func switchTailscaleAccount(accountName string) error {
 		return fmt.Errorf("failed to switch account: %w (output: %s)", err, string(output))
 	}
 	return nil
+}
+
+// switchAccountForSSH returns a command that switches Tailscale account and prepares for SSH
+func (m model) switchAccountForSSH(deviceIndex int, accountName string) tea.Cmd {
+	return func() tea.Msg {
+		err := switchTailscaleAccount(accountName)
+		return accountSwitchedMsg{
+			accountName:    accountName,
+			err:            err,
+			proceedWithSSH: true,
+			deviceIndex:    deviceIndex,
+		}
+	}
 }
 
 // getStatusIcon returns the appropriate status icon for a device

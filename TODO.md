@@ -48,8 +48,10 @@
 - [x] once click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
 - [x] add learnings, context, skills for ai agent to .github folder.
 - [x] Add this folder to .ignore
+- [ ] fix (still not works) click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
 
 To be implemented later:
 
-- [ ] try to search is it possible to open another tmux pane if app running in tmux
 - [ ] write unit test
+- [ ] make security ausit as security expert and apply notes
+- [ ] try to search is it possible to open another tmux pane if app running in tmux
