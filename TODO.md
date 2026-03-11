@@ -41,6 +41,7 @@
 - [x] once click x - hide tip but not menu
 - [x] print on top default username if exists other wise "Default username: <none>"
 - [ ] make sure all commited and make fefactoring according to common best practices
+- [ ] fix search placement as was before and cha
 
 To be implemented later:
 
