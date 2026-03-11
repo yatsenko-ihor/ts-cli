@@ -69,6 +69,6 @@ func WarnIfTailscaleNotRunning() {
 	if !isRunning {
 		fmt.Printf("\n⚠️  Warning: %s\n\n", message)
 		fmt.Println("Note: ts-cli uses the Tailscale API to query devices, but you'll need")
-		fmt.Println("Tailscale running locally to actually connect to them via SSH.\n")
+		fmt.Println("Tailscale running locally to actually connect to them via SSH.")
 	}
 }
