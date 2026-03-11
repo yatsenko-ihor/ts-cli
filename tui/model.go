@@ -86,43 +86,49 @@ const (
 )
 
 type model struct {
-	devices         []client.Device
-	filteredDevices []client.Device
-	cursor          int
-	selected        int
-	err             error
-	width           int
-	height          int
-	sshError        error
-	viewportTop     int // First visible item in the list
-	searchMode      bool
-	searchQuery     string
-	activeFocus     panelFocus
-	copiedText      string
-	version         string
-	usernamePrompt  bool   // Whether we're prompting for username
-	usernameInput   string // Current username being typed
-	sshUsername     string // Stored SSH username
-	accounts        []client.AccountInfo // Store accounts for reload functionality
-	reloading       bool   // Whether we're currently reloading
+	devices           []client.Device
+	filteredDevices   []client.Device
+	cursor            int
+	selected          int
+	err               error
+	width             int
+	height            int
+	sshError          error
+	viewportTop       int // First visible item in the list
+	searchMode        bool
+	searchQuery       string
+	activeFocus       panelFocus
+	copiedText        string
+	version           string
+	usernamePrompt    bool                 // Whether we're prompting for username
+	usernameInput     string               // Current username being typed
+	sshUsername       string               // Stored SSH username
+	accounts          []client.AccountInfo // Store accounts for reload functionality
+	reloading         bool                 // Whether we're currently reloading
+	profileSelectMode bool                 // Whether we're in profile selection mode
+	profileCursor     int                  // Cursor position in profile list
+	selectedProfile   string               // Currently selected profile (empty = all)
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
 	return model{
-		devices:         devices,
-		filteredDevices: devices, // Initially show all devices
-		cursor:          0,
-		selected:        -1,
-		viewportTop:     0,
-		searchMode:      false,
-		searchQuery:     "",
-		activeFocus:     focusList,
-		version:         version,
-		usernamePrompt:  false,
-		usernameInput:   "",
-		accounts:        accounts,
-		reloading:       false,
-		sshUsername:     sshUsername,
+		devices:           devices,
+		filteredDevices:   devices, // Initially show all devices
+		cursor:            0,
+		selected:          -1,
+		viewportTop:       0,
+		searchMode:        false,
+		searchQuery:       "",
+		activeFocus:       focusList,
+		version:           version,
+		usernamePrompt:    false,
+		usernameInput:     "",
+		accounts:          accounts,
+		reloading:         false,
+		sshUsername:       sshUsername,
+		profileSelectMode: false,
+		profileCursor:     0,
+		selectedProfile:   "", // Empty means show all
 	}
 }
 
@@ -297,6 +303,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Handle profile selection mode
+		if m.profileSelectMode {
+			numProfiles := len(m.accounts) + 1 // +1 for "All Accounts" option
+			switch msg.String() {
+			case "esc", "ctrl+c", "q":
+				// Exit profile selection mode without changing selection
+				m.profileSelectMode = false
+				return m, nil
+			case "enter":
+				// Confirm profile selection
+				if m.profileCursor == 0 {
+					// "All Accounts" selected
+					m.selectedProfile = ""
+				} else if m.profileCursor <= len(m.accounts) {
+					// Specific account selected
+					m.selectedProfile = m.accounts[m.profileCursor-1].Name
+				}
+				m.profileSelectMode = false
+				m.filterDevices()
+				return m, nil
+			case "up", "k":
+				if m.profileCursor > 0 {
+					m.profileCursor--
+				}
+				return m, nil
+			case "down", "j":
+				if m.profileCursor < numProfiles-1 {
+					m.profileCursor++
+				}
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// Normal mode key handling
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -394,6 +434,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.sshError = nil // Clear previous errors
 				return m, m.reloadDevices()
 			}
+
+		case "p":
+			// Enter profile selection mode
+			m.profileSelectMode = true
+			m.profileCursor = 0
+			// If a profile is already selected, position cursor there
+			if m.selectedProfile != "" {
+				for i, acc := range m.accounts {
+					if acc.Name == m.selectedProfile {
+						m.profileCursor = i + 1 // +1 because index 0 is "All Accounts"
+						break
+					}
+				}
+			}
+			return m, nil
 		}
 	}
 
@@ -403,6 +458,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
+	}
+
+	// Show profile selection view if in profile selection mode
+	if m.profileSelectMode {
+		return m.renderProfileSelection()
 	}
 
 	var b strings.Builder
@@ -417,6 +477,8 @@ func (m model) View() string {
 		title += " - Search: /" + m.searchQuery + "_"
 	} else if m.searchQuery != "" {
 		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.filteredDevices), len(m.devices))
+	} else if m.selectedProfile != "" {
+		title += fmt.Sprintf(" - Profile: %s", m.selectedProfile)
 	}
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
@@ -430,7 +492,7 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • r reload • u tailscale-up • a add-account • q quit"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • p profile • r reload • u tailscale-up • a add-account • q quit"
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
 	} else if m.searchMode {
@@ -559,6 +621,66 @@ func (m model) getMaxVisibleItems() int {
 	}
 
 	return availableHeight
+}
+
+// renderProfileSelection renders the profile selection view
+func (m model) renderProfileSelection() string {
+	var b strings.Builder
+
+	// Title
+	title := fmt.Sprintf("Select Profile (ts-cli v%s)", m.version)
+	b.WriteString(titleStyle.Render(title))
+	b.WriteString("\n\n")
+
+	// Account list
+	profileList := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7D56F4")).
+		Padding(1, 2).
+		Width(60)
+
+	var listContent strings.Builder
+	
+	// Add "All Accounts" option
+	allAccountsLabel := "All Accounts"
+	if m.selectedProfile == "" {
+		allAccountsLabel += " ✓"
+	}
+	if m.profileCursor == 0 {
+		listContent.WriteString(selectedStyle.Render("▸ " + allAccountsLabel))
+	} else {
+		listContent.WriteString(normalStyle.Render("  " + allAccountsLabel))
+	}
+	listContent.WriteString("\n")
+
+	// Add individual accounts
+	for i, acc := range m.accounts {
+		label := acc.Name
+		if acc.Tailnet != acc.Name {
+			label += fmt.Sprintf(" (%s)", acc.Tailnet)
+		}
+		if m.selectedProfile == acc.Name {
+			label += " ✓"
+		}
+		
+		if m.profileCursor == i+1 {
+			listContent.WriteString(selectedStyle.Render("▸ " + label))
+		} else {
+			listContent.WriteString(normalStyle.Render("  " + label))
+		}
+		if i < len(m.accounts)-1 {
+			listContent.WriteString("\n")
+		}
+	}
+
+	b.WriteString(profileList.Render(listContent.String()))
+	b.WriteString("\n\n")
+
+	// Help text
+	help := "↑/k up • ↓/j down • enter select • esc/q cancel"
+	b.WriteString(helpStyle.Render(help))
+
+	return b.String()
 }
 
 // sshToDevice creates a command to SSH into a device
@@ -725,36 +847,47 @@ func getStatusIcon(device client.Device) string {
 
 // filterDevices filters the device list based on the search query
 func (m *model) filterDevices() {
-	if m.searchQuery == "" {
-		m.filteredDevices = m.devices
-		m.cursor = 0
-		m.viewportTop = 0
-		return
-	}
+	// Start with all devices
+	filtered := m.devices
 
-	query := strings.ToLower(m.searchQuery)
-	filtered := []client.Device{}
-
-	for _, device := range m.devices {
-		name := strings.ToLower(device.Name)
-		hostname := strings.ToLower(device.Hostname)
-		os := strings.ToLower(device.OS)
-
-		// Search in name, hostname, OS, and addresses
-		if strings.Contains(name, query) ||
-			strings.Contains(hostname, query) ||
-			strings.Contains(os, query) {
-			filtered = append(filtered, device)
-			continue
-		}
-
-		// Search in addresses
-		for _, addr := range device.Addresses {
-			if strings.Contains(strings.ToLower(addr), query) {
-				filtered = append(filtered, device)
-				break
+	// Apply profile filter first
+	if m.selectedProfile != "" {
+		profileFiltered := []client.Device{}
+		for _, device := range filtered {
+			if device.AccountName == m.selectedProfile {
+				profileFiltered = append(profileFiltered, device)
 			}
 		}
+		filtered = profileFiltered
+	}
+
+	// Apply search filter if query exists
+	if m.searchQuery != "" {
+		query := strings.ToLower(m.searchQuery)
+		searchFiltered := []client.Device{}
+
+		for _, device := range filtered {
+			name := strings.ToLower(device.Name)
+			hostname := strings.ToLower(device.Hostname)
+			os := strings.ToLower(device.OS)
+
+			// Search in name, hostname, OS, and addresses
+			if strings.Contains(name, query) ||
+				strings.Contains(hostname, query) ||
+				strings.Contains(os, query) {
+				searchFiltered = append(searchFiltered, device)
+				continue
+			}
+
+			// Search in addresses
+			for _, addr := range device.Addresses {
+				if strings.Contains(strings.ToLower(addr), query) {
+					searchFiltered = append(searchFiltered, device)
+					break
+				}
+			}
+		}
+		filtered = searchFiltered
 	}
 
 	m.filteredDevices = filtered
