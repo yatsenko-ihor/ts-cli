@@ -43,11 +43,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Current executable: %s\n\n", execPath)
 
-	// Check if already installed
-	if isInPath("ts-cli") {
-		fmt.Println("✓ ts-cli is already in PATH")
+	// Check current installation status
+	tsCliAlreadyInstalled := isInPath("ts-cli")
+	tscAlreadyInstalled := false
+
+	fmt.Println("Current status:")
+	if tsCliAlreadyInstalled {
+		fmt.Println("  ✓ ts-cli is already in PATH")
 	} else {
-		fmt.Println("✗ ts-cli is not in PATH")
+		fmt.Println("  ✗ ts-cli is not in PATH")
 	}
 
 	if isInPath("tsc") {
@@ -57,16 +61,24 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			// Try to determine if it's TypeScript's tsc
 			output, _ := exec.Command("tsc", "--version").CombinedOutput()
 			if strings.Contains(string(output), "Version") {
-				fmt.Println("✗ tsc alias not available (TypeScript compiler found)")
+				fmt.Println("  ✗ tsc alias not available (TypeScript compiler found)")
 			} else {
-				fmt.Println("✓ tsc alias is already in PATH")
+				fmt.Println("  ✓ tsc alias is already in PATH")
+				tscAlreadyInstalled = true
 			}
 		}
 	} else {
-		fmt.Println("✗ tsc alias is not in PATH")
+		fmt.Println("  ✗ tsc alias is not in PATH")
 	}
 
 	fmt.Println()
+
+	// If both are already installed, ask if user wants to reinstall
+	if tsCliAlreadyInstalled && tscAlreadyInstalled {
+		fmt.Println("Both ts-cli and tsc are already installed.")
+	} else if tsCliAlreadyInstalled {
+		fmt.Println("ts-cli is already installed, but tsc alias is missing.")
+	}
 
 	// Determine installation directory based on OS
 	var installDir string
@@ -78,7 +90,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Installation directory: %s\n", installDir)
-	fmt.Println("\nDo you want to proceed with installation? (y/n): ")
+
+	// Ask for confirmation
+	if tsCliAlreadyInstalled && tscAlreadyInstalled {
+		fmt.Print("Do you want to reinstall? (y/n): ")
+	} else {
+		fmt.Print("Do you want to proceed with installation? (y/n): ")
+	}
 
 	var response string
 	fmt.Scanln(&response)
@@ -95,6 +113,50 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\n✓ Installation completed successfully!")
+
+	// Verify installation
+	fmt.Println("\nVerifying installation...")
+	tsCliInPath := isInPath("ts-cli")
+	tscInPath := isInPath("tsc")
+
+	if tsCliInPath {
+		fmt.Println("✓ ts-cli is now available in PATH")
+	} else {
+		fmt.Println("⚠ ts-cli not yet in PATH (may require new terminal session)")
+	}
+
+	if tscInPath {
+		// Check if it's our tsc or TypeScript compiler
+		tscPath, _ := exec.LookPath("tsc")
+		if tscPath != "" {
+			output, _ := exec.Command("tsc", "--version").CombinedOutput()
+			if strings.Contains(string(output), "Version") {
+				fmt.Println("⚠ tsc alias conflicts with TypeScript compiler")
+			} else {
+				fmt.Println("✓ tsc alias is now available in PATH")
+			}
+		}
+	} else {
+		fmt.Println("⚠ tsc alias not yet in PATH (may require new terminal session)")
+	}
+
+	// Provide instructions if not in PATH
+	if !tsCliInPath || !tscInPath {
+		fmt.Println("\n📝 Note: You may need to:")
+		fmt.Println("   1. Open a new terminal session, or")
+		fmt.Printf("   2. Add %s to your PATH\n", installDir)
+
+		// Provide shell-specific instructions
+		if runtime.GOOS != "windows" {
+			shell := os.Getenv("SHELL")
+			if strings.Contains(shell, "zsh") {
+				fmt.Println("   3. Run: echo 'export PATH=\"$PATH:" + installDir + "\"' >> ~/.zshrc && source ~/.zshrc")
+			} else if strings.Contains(shell, "bash") {
+				fmt.Println("   3. Run: echo 'export PATH=\"$PATH:" + installDir + "\"' >> ~/.bashrc && source ~/.bashrc")
+			}
+		}
+	}
+
 	fmt.Println("\nYou can now use:")
 	fmt.Println("  ts-cli [command]")
 	fmt.Println("  tsc [command]")
