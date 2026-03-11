@@ -87,6 +87,8 @@ type copiedMsg struct {
 
 type clearCopiedMsg struct{}
 
+type clearReloadMsg struct{}
+
 type usernameStoredMsg struct {
 	err error
 }
@@ -133,6 +135,7 @@ type model struct {
 	searchQuery           string
 	activeFocus           panelFocus
 	copiedText            string
+	reloadSuccess         string               // Success message for reload
 	version               string
 	usernamePrompt        bool                 // Whether we're prompting for username
 	usernameInput         string               // Current username being typed
@@ -242,6 +245,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.copiedText = ""
 		return m, nil
 
+	case clearReloadMsg:
+		m.reloadSuccess = ""
+		return m, nil
+
 	case usernameStoredMsg:
 		if msg.err != nil {
 			m.sshError = msg.err
@@ -293,28 +300,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reloading = false
 		if msg.err != nil {
 			m.sshError = fmt.Errorf("failed to reload devices: %w", msg.err)
-		} else {
-			// Sort devices before storing
-			sortDevicesByStatus(msg.devices)
-			m.devices = msg.devices
-
-			// Re-apply filters if any are active
-			if m.searchQuery != "" || m.selectedProfile != "" {
-				m.filterDevices()
-			} else {
-				m.filteredDevices = msg.devices
-			}
-
-			// Reset cursor if out of bounds
-			if m.cursor >= len(m.filteredDevices) {
-				m.cursor = 0
-			}
-			if m.selected >= len(m.filteredDevices) {
-				m.selected = -1
-			}
-			m.sshError = nil
+			return m, nil
 		}
-		return m, nil
+		
+		// Sort devices before storing
+		sortDevicesByStatus(msg.devices)
+		m.devices = msg.devices
+
+		// Re-apply filters if any are active
+		if m.searchQuery != "" || m.selectedProfile != "" {
+			m.filterDevices()
+		} else {
+			m.filteredDevices = msg.devices
+		}
+
+		// Reset cursor if out of bounds
+		if m.cursor >= len(m.filteredDevices) {
+			m.cursor = 0
+		}
+		if m.selected >= len(m.filteredDevices) {
+			m.selected = -1
+		}
+		
+		// Clear any previous SSH error
+		m.sshError = nil
+		
+		// Show reload success message
+		m.reloadSuccess = fmt.Sprintf("Reloaded %d device(s) from %d account(s)", len(msg.devices), len(m.accounts))
+		
+		// Clear the success message after 3 seconds
+		return m, tea.Tick(time.Second*3, func(time.Time) tea.Msg {
+			return clearReloadMsg{}
+		})
 
 	case tea.KeyMsg:
 		// Dispatch to appropriate mode handler
@@ -716,6 +733,12 @@ func (m model) View() string {
 	if m.copiedText != "" {
 		b.WriteString("\n")
 		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.copiedText)))
+	}
+
+	// Show reload success message if any
+	if m.reloadSuccess != "" {
+		b.WriteString("\n")
+		b.WriteString(successStyle.Render(fmt.Sprintf("✓ %s", m.reloadSuccess)))
 	}
 
 	// Show SSH error if any
