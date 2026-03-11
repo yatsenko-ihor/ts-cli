@@ -48,6 +48,24 @@ var (
 			Foreground(lipgloss.Color("#FF0000")).
 			Bold(true).
 			MarginTop(1)
+
+	searchLabelStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7D56F4"))
+
+	searchQueryStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FFD700"))
+
+	grayItalicStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#626262")).
+			Italic(true)
+
+	successStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#00FF00"))
+
+	infoStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFA500"))
 )
 
 type sshMsg struct {
@@ -560,13 +578,6 @@ func (m model) View() string {
 		b.WriteString(titleStyle.Render(title))
 	} else if m.searchMode {
 		// Highlight search label and query with different colors
-		searchLabelStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#7D56F4"))
-		searchQueryStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FFD700")) // Gold color for the search query
-
 		b.WriteString(titleStyle.Render(title + " - "))
 		b.WriteString(searchLabelStyle.Render("Search: /"))
 		b.WriteString(searchQueryStyle.Render(m.searchQuery + "_"))
@@ -582,29 +593,21 @@ func (m model) View() string {
 	b.WriteString("\n")
 
 	// Show active account or "all" when viewing all profiles
-	activeAccountStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#626262")).
-		Italic(true)
-
 	if m.selectedProfile == "" {
 		// When no profile filter is set, show "all"
-		b.WriteString(activeAccountStyle.Render("Active account: all"))
+		b.WriteString(grayItalicStyle.Render("Active account: all"))
 		b.WriteString("\n")
 	} else if m.activeAccount != "" {
 		// When a profile is selected, show the active account
-		b.WriteString(activeAccountStyle.Render(fmt.Sprintf("Active account: %s", m.activeAccount)))
+		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Active account: %s", m.activeAccount)))
 		b.WriteString("\n")
 	}
 
 	// Show default SSH username
-	defaultUsernameStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#626262")).
-		Italic(true)
-
 	if m.sshUsername != "" {
-		b.WriteString(defaultUsernameStyle.Render(fmt.Sprintf("Default username: %s", m.sshUsername)))
+		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Default username: %s", m.sshUsername)))
 	} else {
-		b.WriteString(defaultUsernameStyle.Render("Default username: <none>"))
+		b.WriteString(grayItalicStyle.Render("Default username: <none>"))
 	}
 	b.WriteString("\n")
 
@@ -632,7 +635,6 @@ func (m model) View() string {
 	// Show copy success message if any
 	if m.copiedText != "" {
 		b.WriteString("\n")
-		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00"))
 		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.copiedText)))
 	}
 
@@ -645,7 +647,6 @@ func (m model) View() string {
 	// Show installation suggestion if not in PATH
 	if m.showInstallSuggestion && !m.usernamePrompt && !m.searchMode && !m.profileSelectMode && !m.accountManageMode {
 		b.WriteString("\n")
-		infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500"))
 		var message string
 		if m.installationBroken {
 			message = "💡 Tip: Run 'ts-cli install' to reinstall ts-cli (current PATH installation is broken). Press 'x' to dismiss."
