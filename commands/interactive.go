@@ -60,8 +60,17 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 					return nil
 				}
 
+				// Create accounts slice for reload functionality
+				accounts := []client.AccountInfo{
+					{
+						Name:    tailnet,
+						APIKey:  apiKey,
+						Tailnet: tailnet,
+					},
+				}
+
 				// Launch TUI
-				m := tui.NewModel(devices, Version, config.SSHUsername)
+				m := tui.NewModel(devices, Version, config.SSHUsername, accounts)
 				p := tea.NewProgram(m, tea.WithAltScreen())
 				if _, err := p.Run(); err != nil {
 					return fmt.Errorf("TUI error: %w", err)
@@ -92,7 +101,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 			fmt.Printf("Found %d device(s) from %d account(s)\n", len(devices), len(config.Accounts))
 
 			// Launch TUI
-			m := tui.NewModel(devices, Version, config.SSHUsername)
+			m := tui.NewModel(devices, Version, config.SSHUsername, accounts)
 			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				return fmt.Errorf("TUI error: %w", err)

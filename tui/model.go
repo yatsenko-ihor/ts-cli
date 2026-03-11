@@ -72,6 +72,11 @@ type addAccountMsg struct {
 	err error
 }
 
+type reloadMsg struct {
+	devices []client.Device
+	err     error
+}
+
 type panelFocus int
 
 const (
@@ -98,9 +103,11 @@ type model struct {
 	usernamePrompt  bool   // Whether we're prompting for username
 	usernameInput   string // Current username being typed
 	sshUsername     string // Stored SSH username
+	accounts        []client.AccountInfo // Store accounts for reload functionality
+	reloading       bool   // Whether we're currently reloading
 }
 
-func NewModel(devices []client.Device, version string, sshUsername string) model {
+func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
 	return model{
 		devices:         devices,
 		filteredDevices: devices, // Initially show all devices
@@ -113,12 +120,34 @@ func NewModel(devices []client.Device, version string, sshUsername string) model
 		version:         version,
 		usernamePrompt:  false,
 		usernameInput:   "",
+		accounts:        accounts,
+		reloading:       false,
 		sshUsername:     sshUsername,
 	}
 }
 
 func (m model) Init() tea.Cmd {
 	return nil
+}
+
+// reloadDevices fetches fresh device list from all accounts
+func (m model) reloadDevices() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.accounts) == 0 {
+			return reloadMsg{
+				devices: nil,
+				err:     fmt.Errorf("no accounts configured for reload"),
+			}
+		}
+
+		// Fetch devices from all accounts
+		devices := client.ListDevicesFromAccounts(m.accounts)
+
+		return reloadMsg{
+			devices: devices,
+			err:     nil,
+		}
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -168,6 +197,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Account added successfully, could reload devices here
 			// For now, just clear any previous errors
+			m.sshError = nil
+		}
+		return m, nil
+
+	case reloadMsg:
+		// Handle reload result
+		m.reloading = false
+		if msg.err != nil {
+			m.sshError = fmt.Errorf("failed to reload devices: %w", msg.err)
+		} else {
+			m.devices = msg.devices
+			m.filteredDevices = msg.devices
+			// Reset search if active
+			if m.searchQuery != "" {
+				m.filterDevices()
+			}
+			// Reset cursor if out of bounds
+			if m.cursor >= len(m.filteredDevices) {
+				m.cursor = 0
+			}
+			if m.selected >= len(m.filteredDevices) {
+				m.selected = -1
+			}
 			m.sshError = nil
 		}
 		return m, nil
@@ -334,6 +386,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			// Add new account
 			return m, m.runAddAccount()
+
+		case "r":
+			// Reload devices
+			if !m.reloading {
+				m.reloading = true
+				m.sshError = nil // Clear previous errors
+				return m, m.reloadDevices()
+			}
 		}
 	}
 
@@ -349,7 +409,9 @@ func (m model) View() string {
 
 	// Title
 	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
-	if m.usernamePrompt {
+	if m.reloading {
+		title += " - Reloading..."
+	} else if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"
 	} else if m.searchMode {
 		title += " - Search: /" + m.searchQuery + "_"
@@ -368,7 +430,7 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • u tailscale-up • a add-account • q quit"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • r reload • u tailscale-up • a add-account • q quit"
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
 	} else if m.searchMode {
