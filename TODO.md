@@ -55,7 +55,7 @@
 - [x] still not work. Check util in path. if available - do not show ti[ "Hide Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
 - [x] still not work - if click "x" hide only Tip, not whole command panel
 - [x] always got "✗ ts-cli is not in PATH"
-- [ ] once click "r" for reload show somehow visually thst reload was done
+- [x] once click "r" for reload show somehow visually thst reload was done
 - [ ] I see "Note: ts-cli uses the Tailscale API to query devices, but you'll need
       Tailscale running locally to actually connect to them via SSH." Start tailscale by yourself and log it to terminal
 
