@@ -503,11 +503,17 @@ func (m model) View() string {
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
 
-	// Show active account if available
-	if m.activeAccount != "" {
-		activeAccountStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#626262")).
-			Italic(true)
+	// Show active account or "all" when viewing all profiles
+	activeAccountStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		Italic(true)
+	
+	if m.selectedProfile == "" {
+		// When no profile filter is set, show "all"
+		b.WriteString(activeAccountStyle.Render("Active account: all"))
+		b.WriteString("\n")
+	} else if m.activeAccount != "" {
+		// When a profile is selected, show the active account
 		b.WriteString(activeAccountStyle.Render(fmt.Sprintf("Active account: %s", m.activeAccount)))
 		b.WriteString("\n")
 	}
