@@ -50,12 +50,12 @@ var (
 			MarginTop(1)
 
 	searchLabelStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#7D56F4"))
+				Bold(true).
+				Foreground(lipgloss.Color("#7D56F4"))
 
 	searchQueryStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FFD700"))
+				Bold(true).
+				Foreground(lipgloss.Color("#FFD700"))
 
 	grayItalicStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#626262")).
@@ -280,275 +280,309 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle username prompt mode
+		// Dispatch to appropriate mode handler
 		if m.usernamePrompt {
-			switch msg.String() {
-			case "esc", "ctrl+c":
-				// Cancel username prompt
-				m.usernamePrompt = false
-				m.usernameInput = ""
-				return m, nil
-			case "enter":
-				// Confirm username and initiate SSH
-				if m.usernameInput != "" {
-					m.sshUsername = m.usernameInput
-					m.usernamePrompt = false
-					m.usernameInput = ""
-
-					// Store username for future use
-					cmd := m.storeUsername(m.sshUsername)
-
-					// SSH to selected device
-					target := m.selected
-					if target < 0 {
-						target = m.cursor
-					}
-					if target >= 0 && target < len(m.filteredDevices) {
-						return m, tea.Batch(cmd, m.sshToDevice(target))
-					}
-					return m, cmd
-				}
-				return m, nil
-			case "backspace":
-				if len(m.usernameInput) > 0 {
-					m.usernameInput = m.usernameInput[:len(m.usernameInput)-1]
-				}
-				return m, nil
-			default:
-				// Add character to username input
-				if len(msg.String()) == 1 {
-					m.usernameInput += msg.String()
-				}
-				return m, nil
-			}
+			return m.handleUsernamePrompt(msg)
 		}
-
-		// Handle search mode separately
 		if m.searchMode {
-			switch msg.String() {
-			case "esc", "ctrl+c":
-				// Exit search mode
-				m.searchMode = false
-				m.searchQuery = ""
-				m.filterDevices()
-				return m, nil
-			case "enter":
-				// Confirm search and exit search mode
-				m.searchMode = false
-				return m, nil
-			case "backspace":
-				if len(m.searchQuery) > 0 {
-					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
-					m.filterDevices()
-				}
-				return m, nil
-			default:
-				// Add character to search query
-				if len(msg.String()) == 1 {
-					m.searchQuery += msg.String()
-					m.filterDevices()
-				}
-				return m, nil
-			}
+			return m.handleSearchMode(msg)
 		}
-
-		// Handle profile selection mode
 		if m.profileSelectMode {
-			numProfiles := len(m.accounts) + 1 // +1 for "All Accounts" option
-			switch msg.String() {
-			case "esc", "ctrl+c", "q":
-				// Exit profile selection mode without changing selection
-				m.profileSelectMode = false
-				return m, nil
-			case "enter":
-				// Confirm profile selection
-				if m.profileCursor == 0 {
-					// "All Accounts" selected
-					m.selectedProfile = ""
-				} else if m.profileCursor <= len(m.accounts) {
-					// Specific account selected
-					m.selectedProfile = m.accounts[m.profileCursor-1].Name
-				}
-				m.profileSelectMode = false
-				m.filterDevices()
-				return m, nil
-			case "up", "k":
-				if m.profileCursor > 0 {
-					m.profileCursor--
-				}
-				return m, nil
-			case "down", "j":
-				if m.profileCursor < numProfiles-1 {
-					m.profileCursor++
-				}
-				return m, nil
-			}
-			return m, nil
+			return m.handleProfileSelection(msg)
 		}
-
-		// Handle account management mode
 		if m.accountManageMode {
-			numOptions := 1 // Currently just "Add Account"
-			switch msg.String() {
-			case "esc", "ctrl+c", "q":
-				// Exit account management mode
-				m.accountManageMode = false
-				return m, nil
-			case "enter":
-				// Execute selected option
-				m.accountManageMode = false
-				if m.manageCursor == 0 {
-					// Add account option
-					return m, m.runAddAccount()
-				}
-				return m, nil
-			case "up", "k":
-				if m.manageCursor > 0 {
-					m.manageCursor--
-				}
-				return m, nil
-			case "down", "j":
-				if m.manageCursor < numOptions-1 {
-					m.manageCursor++
-				}
-				return m, nil
-			}
-			return m, nil
+			return m.handleAccountManagement(msg)
 		}
-
-		// Normal mode key handling
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-		case "/":
-			// Enter search mode (vim-style)
-			m.searchMode = true
-			m.searchQuery = ""
-			return m, nil
-
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-				// Scroll up if cursor goes above viewport
-				if m.cursor < m.viewportTop {
-					m.viewportTop = m.cursor
-				}
-				// Clear SSH error when moving cursor
-				m.sshError = nil
-			}
-
-		case "down", "j":
-			if m.cursor < len(m.filteredDevices)-1 {
-				m.cursor++
-				// Scroll down if cursor goes below viewport
-				maxVisible := m.getMaxVisibleItems()
-				if m.cursor >= m.viewportTop+maxVisible {
-					m.viewportTop = m.cursor - maxVisible + 1
-				}
-				// Clear SSH error when moving cursor
-				m.sshError = nil
-			}
-
-		case "enter", " ":
-			m.selected = m.cursor
-			// Clear SSH error when selecting
-			m.sshError = nil
-
-		case "c":
-			// Copy SSH command to clipboard
-			target := m.selected
-			if target < 0 {
-				target = m.cursor
-			}
-			if target >= 0 && target < len(m.filteredDevices) {
-				return m, m.copySSHCommand(target)
-			}
-
-		case "s":
-			// SSH to currently selected or cursor device
-			target := m.selected
-			if target < 0 {
-				target = m.cursor
-			}
-			if target >= 0 && target < len(m.filteredDevices) {
-				device := m.filteredDevices[target]
-
-				// Check if device is offline
-				if !isDeviceOnline(device) {
-					deviceName := device.Name
-					if deviceName == "" {
-						deviceName = device.Hostname
-					}
-					m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
-					return m, nil
-				}
-
-				// Clear any previous SSH errors
-				m.sshError = nil
-
-				// Check if username is stored
-				if m.sshUsername == "" {
-					// Prompt for username
-					m.usernamePrompt = true
-					m.usernameInput = ""
-					return m, nil
-				}
-				// Username exists, start SSH session
-				return m, m.sshToDevice(target)
-			}
-
-		case "u":
-			// Run tailscale up
-			return m, m.runTailscaleUp()
-
-		case "m":
-			// Enter account management mode
-			m.accountManageMode = true
-			m.manageCursor = 0
-			return m, nil
-
-		case "r":
-			// Reload devices
-			if !m.reloading {
-				m.reloading = true
-				m.sshError = nil // Clear previous errors
-				return m, m.reloadDevices()
-			}
-
-		case "p":
-			// Enter profile selection mode
-			m.profileSelectMode = true
-			m.profileCursor = 0
-			// If a profile is already selected, position cursor there
-			if m.selectedProfile != "" {
-				for i, acc := range m.accounts {
-					if acc.Name == m.selectedProfile {
-						m.profileCursor = i + 1 // +1 because index 0 is "All Accounts"
-						break
-					}
-				}
-			}
-			return m, nil
-
-		case "x":
-			// Dismiss installation suggestion
-			if m.showInstallSuggestion {
-				m.showInstallSuggestion = false
-			}
-			return m, nil
-
-		case "d":
-			// Clear default SSH username
-			if m.sshUsername != "" {
-				m.sshUsername = ""
-				return m, m.clearUsername()
-			}
-			return m, nil
-		}
+		return m.handleNormalMode(msg)
 	}
 
 	return m, nil
+}
+
+// handleUsernamePrompt handles key presses in username prompt mode
+func (m model) handleUsernamePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+c":
+		// Cancel username prompt
+		m.usernamePrompt = false
+		m.usernameInput = ""
+		return m, nil
+	case "enter":
+		// Confirm username and initiate SSH
+		if m.usernameInput != "" {
+			m.sshUsername = m.usernameInput
+			m.usernamePrompt = false
+			m.usernameInput = ""
+
+			// Store username for future use
+			cmd := m.storeUsername(m.sshUsername)
+
+			// SSH to selected device
+			target := m.getTargetDevice()
+			if target >= 0 && target < len(m.filteredDevices) {
+				return m, tea.Batch(cmd, m.sshToDevice(target))
+			}
+			return m, cmd
+		}
+		return m, nil
+	case "backspace":
+		if len(m.usernameInput) > 0 {
+			m.usernameInput = m.usernameInput[:len(m.usernameInput)-1]
+		}
+		return m, nil
+	default:
+		// Add character to username input
+		if len(msg.String()) == 1 {
+			m.usernameInput += msg.String()
+		}
+		return m, nil
+	}
+}
+
+// handleSearchMode handles key presses in search mode
+func (m model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+c":
+		// Exit search mode
+		m.searchMode = false
+		m.searchQuery = ""
+		m.filterDevices()
+		return m, nil
+	case "enter":
+		// Confirm search and exit search mode
+		m.searchMode = false
+		return m, nil
+	case "backspace":
+		if len(m.searchQuery) > 0 {
+			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+			m.filterDevices()
+		}
+		return m, nil
+	default:
+		// Add character to search query
+		if len(msg.String()) == 1 {
+			m.searchQuery += msg.String()
+			m.filterDevices()
+		}
+		return m, nil
+	}
+}
+
+// handleProfileSelection handles key presses in profile selection mode
+func (m model) handleProfileSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	numProfiles := len(m.accounts) + 1 // +1 for "All Accounts" option
+	switch msg.String() {
+	case "esc", "ctrl+c", "q":
+		// Exit profile selection mode without changing selection
+		m.profileSelectMode = false
+		return m, nil
+	case "enter":
+		// Confirm profile selection
+		if m.profileCursor == 0 {
+			// "All Accounts" selected
+			m.selectedProfile = ""
+		} else if m.profileCursor <= len(m.accounts) {
+			// Specific account selected
+			m.selectedProfile = m.accounts[m.profileCursor-1].Name
+		}
+		m.profileSelectMode = false
+		m.filterDevices()
+		return m, nil
+	case "up", "k":
+		if m.profileCursor > 0 {
+			m.profileCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.profileCursor < numProfiles-1 {
+			m.profileCursor++
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleAccountManagement handles key presses in account management mode
+func (m model) handleAccountManagement(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	numOptions := 1 // Currently just "Add Account"
+	switch msg.String() {
+	case "esc", "ctrl+c", "q":
+		// Exit account management mode
+		m.accountManageMode = false
+		return m, nil
+	case "enter":
+		// Execute selected option
+		m.accountManageMode = false
+		if m.manageCursor == 0 {
+			// Add account option
+			return m, m.runAddAccount()
+		}
+		return m, nil
+	case "up", "k":
+		if m.manageCursor > 0 {
+			m.manageCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.manageCursor < numOptions-1 {
+			m.manageCursor++
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleNormalMode handles key presses in normal (default) mode
+func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	case "/":
+		// Enter search mode (vim-style)
+		m.searchMode = true
+		m.searchQuery = ""
+		return m, nil
+
+	case "up", "k":
+		m.moveCursorUp()
+
+	case "down", "j":
+		m.moveCursorDown()
+
+	case "enter", " ":
+		m.selected = m.cursor
+		// Clear SSH error when selecting
+		m.sshError = nil
+
+	case "c":
+		// Copy SSH command to clipboard
+		target := m.getTargetDevice()
+		if target >= 0 && target < len(m.filteredDevices) {
+			return m, m.copySSHCommand(target)
+		}
+
+	case "s":
+		return m.handleSSHRequest()
+
+	case "u":
+		// Run tailscale up
+		return m, m.runTailscaleUp()
+
+	case "m":
+		// Enter account management mode
+		m.accountManageMode = true
+		m.manageCursor = 0
+		return m, nil
+
+	case "r":
+		// Reload devices
+		if !m.reloading {
+			m.reloading = true
+			m.sshError = nil // Clear previous errors
+			return m, m.reloadDevices()
+		}
+
+	case "p":
+		// Enter profile selection mode
+		m.profileSelectMode = true
+		m.profileCursor = 0
+		// If a profile is already selected, position cursor there
+		if m.selectedProfile != "" {
+			for i, acc := range m.accounts {
+				if acc.Name == m.selectedProfile {
+					m.profileCursor = i + 1 // +1 because index 0 is "All Accounts"
+					break
+				}
+			}
+		}
+		return m, nil
+
+	case "x":
+		// Dismiss installation suggestion
+		if m.showInstallSuggestion {
+			m.showInstallSuggestion = false
+		}
+		return m, nil
+
+	case "d":
+		// Clear default SSH username
+		if m.sshUsername != "" {
+			m.sshUsername = ""
+			return m, m.clearUsername()
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// getTargetDevice returns the index of the target device (selected or cursor)
+func (m model) getTargetDevice() int {
+	target := m.selected
+	if target < 0 {
+		target = m.cursor
+	}
+	return target
+}
+
+// moveCursorUp moves the cursor up and adjusts viewport if needed
+func (m *model) moveCursorUp() {
+	if m.cursor > 0 {
+		m.cursor--
+		// Scroll up if cursor goes above viewport
+		if m.cursor < m.viewportTop {
+			m.viewportTop = m.cursor
+		}
+		// Clear SSH error when moving cursor
+		m.sshError = nil
+	}
+}
+
+// moveCursorDown moves the cursor down and adjusts viewport if needed
+func (m *model) moveCursorDown() {
+	if m.cursor < len(m.filteredDevices)-1 {
+		m.cursor++
+		// Scroll down if cursor goes below viewport
+		maxVisible := m.getMaxVisibleItems()
+		if m.cursor >= m.viewportTop+maxVisible {
+			m.viewportTop = m.cursor - maxVisible + 1
+		}
+		// Clear SSH error when moving cursor
+		m.sshError = nil
+	}
+}
+
+// handleSSHRequest handles the SSH request logic
+func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
+	target := m.getTargetDevice()
+	if target < 0 || target >= len(m.filteredDevices) {
+		return m, nil
+	}
+
+	device := m.filteredDevices[target]
+
+	// Check if device is offline
+	if !isDeviceOnline(device) {
+		deviceName := device.Name
+		if deviceName == "" {
+			deviceName = device.Hostname
+		}
+		m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+		return m, nil
+	}
+
+	// Clear any previous SSH errors
+	m.sshError = nil
+
+	// Check if username is stored
+	if m.sshUsername == "" {
+		// Prompt for username
+		m.usernamePrompt = true
+		m.usernameInput = ""
+		return m, nil
+	}
+	// Username exists, start SSH session
+	return m, m.sshToDevice(target)
 }
 
 func (m model) View() string {
