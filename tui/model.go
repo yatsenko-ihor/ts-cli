@@ -974,17 +974,22 @@ func (m model) sshToDevice(index int) tea.Cmd {
 	if device.AccountName != "" {
 		accountInfo = fmt.Sprintf(" from account: %s", device.AccountName)
 	}
-	fmt.Fprintf(os.Stderr, "\n🔌 Connecting to: %s%s\n", name, accountInfo)
-	fmt.Fprintf(os.Stderr, "📡 SSH command: ssh %s\n\n", sshTarget)
-
-	// Use tea.ExecProcess to suspend TUI and run SSH
-	sshCmd := exec.Command("ssh", sshTarget)
-	return tea.ExecProcess(sshCmd, func(err error) tea.Msg {
-		if err != nil {
-			return sshMsg{err: err}
-		}
-		return sshMsg{}
-	})
+	
+	// Use tea.Sequence to print logs then execute SSH
+	return tea.Sequence(
+		tea.Println(fmt.Sprintf("\n🔌 Connecting to: %s%s", name, accountInfo)),
+		tea.Println(fmt.Sprintf("📡 SSH command: ssh %s\n", sshTarget)),
+		func() tea.Msg {
+			// Use tea.ExecProcess to suspend TUI and run SSH
+			sshCmd := exec.Command("ssh", sshTarget)
+			return tea.ExecProcess(sshCmd, func(err error) tea.Msg {
+				if err != nil {
+					return sshMsg{err: err}
+				}
+				return sshMsg{}
+			})()
+		},
+	)
 }
 
 // copySSHCommand copies the SSH command to the clipboard
@@ -1216,20 +1221,21 @@ func switchTailscaleAccount(accountName string) error {
 
 // switchAccountForSSH returns a command that switches Tailscale account and prepares for SSH
 func (m model) switchAccountForSSH(deviceIndex int, accountName string) tea.Cmd {
-	return func() tea.Msg {
-		// Log account switching
-		fmt.Fprintf(os.Stderr, "\n🔄 Switching to account: %s\n", accountName)
-		err := switchTailscaleAccount(accountName)
-		if err == nil {
-			fmt.Fprintf(os.Stderr, "✓ Switched to account: %s\n", accountName)
-		}
-		return accountSwitchedMsg{
-			accountName:    accountName,
-			err:            err,
-			proceedWithSSH: true,
-			deviceIndex:    deviceIndex,
-		}
-	}
+	return tea.Sequence(
+		tea.Println(fmt.Sprintf("\n🔄 Switching to account: %s", accountName)),
+		func() tea.Msg {
+			err := switchTailscaleAccount(accountName)
+			if err == nil {
+				tea.Println(fmt.Sprintf("✓ Switched to account: %s", accountName))
+			}
+			return accountSwitchedMsg{
+				accountName:    accountName,
+				err:            err,
+				proceedWithSSH: true,
+				deviceIndex:    deviceIndex,
+			}
+		},
+	)
 }
 
 // getStatusIcon returns the appropriate status icon for a device
