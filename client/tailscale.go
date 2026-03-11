@@ -189,4 +189,5 @@ type AccountInfo struct {
 	Name    string
 	APIKey  string
 	Tailnet string
+	Active  bool
 }

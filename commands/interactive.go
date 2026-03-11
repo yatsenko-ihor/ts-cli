@@ -66,6 +66,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 						Name:    tailnet,
 						APIKey:  apiKey,
 						Tailnet: tailnet,
+						Active:  true,
 					},
 				}
 
@@ -89,6 +90,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 					Name:    acc.Name,
 					APIKey:  acc.APIKey,
 					Tailnet: acc.Tailnet,
+					Active:  acc.Active,
 				}
 			}
 

@@ -109,12 +109,22 @@ type model struct {
 	profileSelectMode bool                 // Whether we're in profile selection mode
 	profileCursor     int                  // Cursor position in profile list
 	selectedProfile   string               // Currently selected profile (empty = all)
+	activeAccount     string               // Currently active Tailscale account
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
-	
+
+	// Find active account
+	activeAccount := ""
+	for _, acc := range accounts {
+		if acc.Active {
+			activeAccount = acc.Name
+			break
+		}
+	}
+
 	return model{
 		devices:           devices,
 		filteredDevices:   devices, // Initially show all devices
@@ -133,6 +143,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		profileSelectMode: false,
 		profileCursor:     0,
 		selectedProfile:   "", // Empty means show all
+		activeAccount:     activeAccount,
 	}
 }
 
@@ -220,14 +231,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Sort devices before storing
 			sortDevicesByStatus(msg.devices)
 			m.devices = msg.devices
-			
+
 			// Re-apply filters if any are active
 			if m.searchQuery != "" || m.selectedProfile != "" {
 				m.filterDevices()
 			} else {
 				m.filteredDevices = msg.devices
 			}
-			
+
 			// Reset cursor if out of bounds
 			if m.cursor >= len(m.filteredDevices) {
 				m.cursor = 0
@@ -492,6 +503,15 @@ func (m model) View() string {
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n")
 
+	// Show active account if available
+	if m.activeAccount != "" {
+		activeAccountStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#626262")).
+			Italic(true)
+		b.WriteString(activeAccountStyle.Render(fmt.Sprintf("Active account: %s", m.activeAccount)))
+		b.WriteString("\n")
+	}
+
 	// Render device list
 	b.WriteString(m.renderDeviceList())
 
@@ -649,7 +669,7 @@ func (m model) renderProfileSelection() string {
 		Width(60)
 
 	var listContent strings.Builder
-	
+
 	// Add "All Accounts" option
 	allAccountsLabel := "All Accounts"
 	if m.selectedProfile == "" {
@@ -671,7 +691,7 @@ func (m model) renderProfileSelection() string {
 		if m.selectedProfile == acc.Name {
 			label += " ✓"
 		}
-		
+
 		if m.profileCursor == i+1 {
 			listContent.WriteString(selectedStyle.Render("▸ " + label))
 		} else {
@@ -851,7 +871,7 @@ func sortDevicesByStatus(devices []client.Device) {
 	sort.SliceStable(devices, func(i, j int) bool {
 		onlineI := isDeviceOnline(devices[i])
 		onlineJ := isDeviceOnline(devices[j])
-		
+
 		// Online devices come first
 		if onlineI && !onlineJ {
 			return true
@@ -859,7 +879,7 @@ func sortDevicesByStatus(devices []client.Device) {
 		if !onlineI && onlineJ {
 			return false
 		}
-		
+
 		// If both have same online status, maintain original order (stable sort)
 		return false
 	})
