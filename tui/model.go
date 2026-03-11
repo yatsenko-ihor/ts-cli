@@ -716,6 +716,16 @@ func (m model) renderProfileSelection() string {
 func (m model) sshToDevice(index int) tea.Cmd {
 	device := m.filteredDevices[index]
 
+	// Check if device belongs to a different account and switch if needed
+	if device.AccountName != "" && m.activeAccount != "" && device.AccountName != m.activeAccount {
+		// Need to switch Tailscale account
+		if err := switchTailscaleAccount(device.AccountName); err != nil {
+			return func() tea.Msg {
+				return sshMsg{err: fmt.Errorf("failed to switch to account %s: %w", device.AccountName, err)}
+			}
+		}
+	}
+
 	// Get the primary IP address
 	if len(device.Addresses) == 0 {
 		return func() tea.Msg {
@@ -883,6 +893,16 @@ func sortDevicesByStatus(devices []client.Device) {
 		// If both have same online status, maintain original order (stable sort)
 		return false
 	})
+}
+
+// switchTailscaleAccount switches the active Tailscale account
+func switchTailscaleAccount(accountName string) error {
+	cmd := exec.Command("tailscale", "switch", accountName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to switch account: %w (output: %s)", err, string(output))
+	}
+	return nil
 }
 
 // getStatusIcon returns the appropriate status icon for a device

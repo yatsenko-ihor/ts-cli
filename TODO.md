@@ -29,7 +29,7 @@
 - [x] add in app and into interactive menu separate accounts and their machines. Also option p - to select profile(account) in this mode shows machines only for that account
 - [x] sort machines, firstly "in network"
 - [x] on interactive mode add "Active account: <email>" and show on top
-- [ ] if click to "s" and machine under another account (not active in current tailscal) - switch taiscale to proper
+- [x] if click to "s" and machine under another account (not active in current tailscal) - switch taiscale to proper
 
 To be implemented later:
 
