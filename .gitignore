@@ -34,4 +34,4 @@ ts-cli.exe
 # Config files (contains sensitive data)
 .ts-cli/
 config
-ts-api.key
+ts-api*.key
