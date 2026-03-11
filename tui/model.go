@@ -51,11 +51,11 @@ var (
 
 	searchLabelStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#7D56F4"))
+				Foreground(lipgloss.Color("#8d8405"))
 
 	searchQueryStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#FFD700"))
+				Foreground(lipgloss.Color("#8d8405"))
 
 	grayItalicStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#626262")).
@@ -620,10 +620,12 @@ func (m model) View() string {
 		b.WriteString(titleStyle.Render(title))
 	} else if m.searchMode {
 		// Render search with different colors on the same line
-		baseTitle := titleStyle.Render(title + " > ")
-		searchLabel := searchLabelStyle.Render("Search: ")
+		baseTitle := titleStyle.Render(title)
+		searchLabel := searchLabelStyle.Render("> Search: ")
 		searchInput := searchQueryStyle.Render(m.searchQuery + "_")
-		b.WriteString(baseTitle + searchLabel + searchInput)
+		b.WriteString(baseTitle)
+		b.WriteString("\n")
+		b.WriteString(searchLabel + searchInput)
 	} else if m.searchQuery != "" {
 		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.filteredDevices), len(m.devices))
 		b.WriteString(titleStyle.Render(title))
