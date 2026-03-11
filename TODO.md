@@ -49,7 +49,7 @@
 - [x] add learnings, context, skills for ai agent to .github folder.
 - [x] Add this folder to .ignore
 - [x] fix (still not works) click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
-- [ ] once clikc to "s" log to terminal what you are doint (switch accout if needed, connect to <name of machine> from <account name> and ssh command)
+- [x] once clikc to "s" log to terminal what you are doint (switch accout if needed, connect to <name of machine> from <account name> and ssh command)
 
 To be implemented later:
 
