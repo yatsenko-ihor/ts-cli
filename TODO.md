@@ -34,9 +34,10 @@
 - [x] make option to write (if not yet there) ts-cli and tsc to path
 - [x] make suggestion to do it in interactive mode
 - [x] check if in path ts-cli or tsc are available and path is proper then don't snow "Tip"
-- [ ] if path not correct - show tip to reinstall path again because path is not correct
+- [x] if path not correct - show tip to reinstall path again because path is not correct
 - [ ] hightlight Search: and search words in another color
-- [ ]
+- [ ] Remove default user name by „d“
+- [ ] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
 
 To be implemented later:
 

@@ -111,6 +111,7 @@ type model struct {
 	selectedProfile       string               // Currently selected profile (empty = all)
 	activeAccount         string               // Currently active Tailscale account
 	showInstallSuggestion bool                 // Whether to show PATH installation suggestion
+	installationBroken    bool                 // Whether existing PATH installation is broken
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -127,7 +128,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	}
 
 	// Check if ts-cli is properly installed in PATH
-	showInstallSuggestion := checkIfInstallNeeded()
+	showInstallSuggestion, installationBroken := checkIfInstallNeeded()
 
 	return model{
 		devices:               devices,
@@ -149,6 +150,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		selectedProfile:       "", // Empty means show all
 		activeAccount:         activeAccount,
 		showInstallSuggestion: showInstallSuggestion,
+		installationBroken:    installationBroken,
 	}
 }
 
@@ -564,7 +566,13 @@ func (m model) View() string {
 	if m.showInstallSuggestion && !m.usernamePrompt && !m.searchMode && !m.profileSelectMode {
 		b.WriteString("\n")
 		infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500"))
-		b.WriteString(infoStyle.Render("💡 Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."))
+		var message string
+		if m.installationBroken {
+			message = "💡 Tip: Run 'ts-cli install' to reinstall ts-cli (current PATH installation is broken). Press 'x' to dismiss."
+		} else {
+			message = "💡 Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
+		}
+		b.WriteString(infoStyle.Render(message))
 	}
 
 	return b.String()
@@ -896,39 +904,40 @@ func (m model) storeUsername(username string) tea.Cmd {
 }
 
 // checkIfInstallNeeded checks if ts-cli needs to be installed or is improperly installed
-func checkIfInstallNeeded() bool {
+// Returns (needsInstall, isBroken)
+func checkIfInstallNeeded() (bool, bool) {
 	// Check if ts-cli is in PATH
 	tsCliPath, err := exec.LookPath("ts-cli")
 	if err != nil {
 		// ts-cli not found in PATH, suggest installation
-		return true
+		return true, false
 	}
 
 	// ts-cli found, verify it's a valid binary
 	// Resolve any symlinks to get the actual binary path
 	resolvedPath, err := filepath.EvalSymlinks(tsCliPath)
 	if err != nil {
-		// Can't resolve symlink, might be broken installation
-		return true
+		// Can't resolve symlink, broken installation
+		return true, true
 	}
 
 	// Check if the resolved path is a valid executable file
 	fileInfo, err := os.Stat(resolvedPath)
 	if err != nil || fileInfo.IsDir() {
-		// File doesn't exist or is a directory
-		return true
+		// File doesn't exist or is a directory, broken installation
+		return true, true
 	}
 
 	// Check if it's executable (on Unix-like systems)
 	if runtime.GOOS != "windows" {
 		if fileInfo.Mode()&0111 == 0 {
-			// Not executable
-			return true
+			// Not executable, broken installation
+			return true, true
 		}
 	}
 
 	// ts-cli is properly installed
-	return false
+	return false, false
 }
 
 // isDeviceOnline checks if a device is considered online based on LastSeen time
