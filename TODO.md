@@ -40,10 +40,11 @@
 - [x] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
 - [x] once click x - hide tip but not menu
 - [x] print on top default username if exists other wise "Default username: <none>"
-- [ ] make sure all commited and make fefactoring according to common best practices
-- [ ] fix search placement as was before and cha
 
-To be implemented later:
+- [ ] make sure all commited and make fefactoring according to common best practices
+- [ ] fix search placement as was before and change color "Search: " and text which user typing
+- [ ] also any user typing prompt like "Default username" also should be with another color
+      To be implemented later:
 
 - [ ] try to search is it possible to open another tmux pane if app running in tmux
 - [ ] write unit test
