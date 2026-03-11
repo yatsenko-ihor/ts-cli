@@ -969,6 +969,14 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		sshTarget = address
 	}
 
+	// Log SSH connection details
+	accountInfo := ""
+	if device.AccountName != "" {
+		accountInfo = fmt.Sprintf(" from account: %s", device.AccountName)
+	}
+	fmt.Fprintf(os.Stderr, "\n🔌 Connecting to: %s%s\n", name, accountInfo)
+	fmt.Fprintf(os.Stderr, "📡 SSH command: ssh %s\n\n", sshTarget)
+
 	// Use tea.ExecProcess to suspend TUI and run SSH
 	sshCmd := exec.Command("ssh", sshTarget)
 	return tea.ExecProcess(sshCmd, func(err error) tea.Msg {
@@ -1209,7 +1217,12 @@ func switchTailscaleAccount(accountName string) error {
 // switchAccountForSSH returns a command that switches Tailscale account and prepares for SSH
 func (m model) switchAccountForSSH(deviceIndex int, accountName string) tea.Cmd {
 	return func() tea.Msg {
+		// Log account switching
+		fmt.Fprintf(os.Stderr, "\n🔄 Switching to account: %s\n", accountName)
 		err := switchTailscaleAccount(accountName)
+		if err == nil {
+			fmt.Fprintf(os.Stderr, "✓ Switched to account: %s\n", accountName)
+		}
 		return accountSwitchedMsg{
 			accountName:    accountName,
 			err:            err,
