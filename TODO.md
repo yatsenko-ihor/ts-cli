@@ -40,11 +40,12 @@
 - [x] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
 - [x] once click x - hide tip but not menu
 - [x] print on top default username if exists other wise "Default username: <none>"
-
 - [x] make sure all commited and make fefactoring according to common best practices
 - [x] fix search placement as was before and change color "Search: " and text which user typing
 - [x] also any user typing prompt like "Default username" also should be with another color
-      To be implemented later:
+- [x] recently were done changes("hightlight Search: and search words in another color" and "hightlight Search: and search words in another color") in interactive mode with "Search: ", tese changes broke behavious, revert back
+
+To be implemented later:
 
 - [ ] try to search is it possible to open another tmux pane if app running in tmux
 - [ ] write unit test
