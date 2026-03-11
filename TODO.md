@@ -47,7 +47,7 @@
 - [x] make "Search" in different color scheme with search input, but don't move to anpother line, make it on same as now
 - [x] once click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
 - [x] add learnings, context, skills for ai agent to .github folder.
-- [ ] Add this folder to .ignore
+- [x] Add this folder to .ignore
 
 To be implemented later:
 
