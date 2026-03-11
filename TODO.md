@@ -41,7 +41,7 @@
 - [x] once click x - hide tip but not menu
 - [x] print on top default username if exists other wise "Default username: <none>"
 
-- [ ] make sure all commited and make fefactoring according to common best practices
+- [x] make sure all commited and make fefactoring according to common best practices
 - [ ] fix search placement as was before and change color "Search: " and text which user typing
 - [ ] also any user typing prompt like "Default username" also should be with another color
       To be implemented later:
