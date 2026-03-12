@@ -85,7 +85,10 @@
 - [x] once on frame "Command Output:" appears " ↓ more below" app make height of frame bigger. Avoid it. Frame should to change size only during window / terminal resize.
 - [x] on start move "↑/k up • ↓/j down • / search • enter select • s ssh • c copy •" under "List machines"
 - [x] make Shift+Tab navigate ro prev frame
+- [x] move command panel with "↑/k up • ↓/j down...." to frame topdown under "List Machines"
 
 ## To be implemented later:
 
-- [x] try to search is it possible to open another tmux pane if app running in tmux
+- [ ] remove dead code
+- [ ] update unit tests
+- [ ] try to search is it possible to open another tmux pane if app running in tmux
