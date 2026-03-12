@@ -61,7 +61,7 @@
 - [x] rename "Active account:" to "Search in: "
 - [x] add to top of interactive mode "Active account: " to real active in tailscale
 - [x] once click to "s" log to terminal account and text "Connecting to <machine> : <account>"
-- [ ] write unit test
+- [x] write unit test
 - [ ] make security ausit as security expert and apply notes
 - [ ] make git tag v0.1.0 and rc branch "release/v0.1.0"
 
