@@ -1526,11 +1526,24 @@ func getRealTailscaleAccount() string {
 	outputStr := string(output)
 	
 	// Look for "LoginName" field in JSON
-	if idx := strings.Index(outputStr, `"LoginName":"`); idx != -1 {
-		start := idx + len(`"LoginName":"`)
-		end := strings.Index(outputStr[start:], `"`)
-		if end != -1 {
-			return outputStr[start : start+end]
+	// Note: JSON is formatted with whitespace, so we need flexible parsing
+	loginNamePattern := `"LoginName"`
+	if idx := strings.Index(outputStr, loginNamePattern); idx != -1 {
+		// Find the colon after "LoginName"
+		afterKey := outputStr[idx+len(loginNamePattern):]
+		colonIdx := strings.Index(afterKey, ":")
+		if colonIdx != -1 {
+			// Find the opening quote
+			afterColon := afterKey[colonIdx+1:]
+			quoteIdx := strings.Index(afterColon, `"`)
+			if quoteIdx != -1 {
+				// Find the closing quote
+				afterQuote := afterColon[quoteIdx+1:]
+				endQuoteIdx := strings.Index(afterQuote, `"`)
+				if endQuoteIdx != -1 {
+					return afterQuote[:endQuoteIdx]
+				}
+			}
 		}
 	}
 	
@@ -1543,13 +1556,17 @@ func getRealTailscaleAccount() string {
 	
 	// The status output typically shows the account email
 	// Parse the first line to extract the account
+	// Format is: "IP  hostname  account@domain  OS  status"
 	lines := strings.Split(string(output), "\n")
 	if len(lines) > 0 && len(lines[0]) > 0 {
-		// Format is typically: "hostname  ip  account@example.com"
 		fields := strings.Fields(lines[0])
+		// The account is in the 3rd field (index 2)
 		if len(fields) >= 3 {
-			// The last field is usually the account email
-			return fields[len(fields)-1]
+			account := fields[2]
+			// Verify it looks like an account (contains @)
+			if strings.Contains(account, "@") {
+				return account
+			}
 		}
 	}
 	
