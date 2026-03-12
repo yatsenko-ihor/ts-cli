@@ -84,7 +84,7 @@
 - [x] move "↑/k up • ↓/j down • / search •...." under "List machines" as was before
 - [x] once on frame "Command Output:" appears " ↓ more below" app make height of frame bigger. Avoid it. Frame should to change size only during window / terminal resize.
 - [x] on start move "↑/k up • ↓/j down • / search • enter select • s ssh • c copy •" under "List machines"
-- [ ] make Shift+Tab navigate ro prev frame
+- [x] make Shift+Tab navigate ro prev frame
 
 ## To be implemented later:
 
