@@ -1026,40 +1026,10 @@ func (m model) View() string {
 	}
 	b.WriteString("\n")
 
-	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
-	if m.showHistoryPanel {
-		if m.activeFocus == focusHistory {
-			help = "↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
-		} else if m.activeFocus == focusOutput {
-			help = "↑/k up • ↓/j down • tab/shift+tab switch • esc close"
-		} else {
-			help = "↑/k up • ↓/j down • enter select • tab/shift+tab switch • esc close"
-		}
-	}
-	if m.sshUsername != "" && !m.showHistoryPanel {
-		help += " • d clear-user"
-	}
-	if !m.showHistoryPanel {
-		help += " • q quit"
-	}
-	if m.usernamePrompt {
-		help = "Enter SSH username • esc cancel • enter confirm"
-	} else if m.commandMode {
-		help = "Type command to execute • esc cancel • enter execute"
-	} else if m.searchMode {
-		help = "Type to search • esc cancel • enter confirm"
-	}
-
 	// Render split view if history panel is shown
 	if m.showHistoryPanel {
-		// Split view: device list on left (with help under it), history + output on right
+		// Split view: device list on left, history + output on right
 		deviceList := m.renderDeviceList()
-		leftPanel := lipgloss.JoinVertical(
-			lipgloss.Left,
-			deviceList,
-			helpStyle.Render(help),
-		)
 		historyPanel := m.renderHistoryPanel()
 		outputPanel := m.renderOutputPanel()
 
@@ -1073,19 +1043,14 @@ func (m model) View() string {
 		// Join left and right columns horizontally
 		splitView := lipgloss.JoinHorizontal(
 			lipgloss.Top,
-			leftPanel,
+			deviceList,
 			rightPanel,
 		)
 		b.WriteString(splitView)
 	} else {
-		// Normal view: keep controls directly under list frame
+		// Normal view
 		deviceList := m.renderDeviceList()
-		leftPanel := lipgloss.JoinVertical(
-			lipgloss.Left,
-			deviceList,
-			helpStyle.Render(help),
-		)
-		b.WriteString(leftPanel)
+		b.WriteString(deviceList)
 
 		// Device details if selected
 		if m.selected >= 0 && m.selected < len(m.filteredDevices) {
@@ -1156,6 +1121,34 @@ func (m model) View() string {
 	return b.String()
 }
 
+func (m model) getHelpText() string {
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
+	if m.showHistoryPanel {
+		if m.activeFocus == focusHistory {
+			help = "↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
+		} else if m.activeFocus == focusOutput {
+			help = "↑/k up • ↓/j down • tab/shift+tab switch • esc close"
+		} else {
+			help = "↑/k up • ↓/j down • enter select • tab/shift+tab switch • esc close"
+		}
+	}
+	if m.sshUsername != "" && !m.showHistoryPanel {
+		help += " • d clear-user"
+	}
+	if !m.showHistoryPanel {
+		help += " • q quit"
+	}
+	if m.usernamePrompt {
+		help = "Enter SSH username • esc cancel • enter confirm"
+	} else if m.commandMode {
+		help = "Type command to execute • esc cancel • enter execute"
+	} else if m.searchMode {
+		help = "Type to search • esc cancel • enter confirm"
+	}
+
+	return help
+}
+
 // renderDeviceList renders the device list panel
 func (m model) renderDeviceList() string {
 	var listContent strings.Builder
@@ -1176,11 +1169,12 @@ func (m model) renderDeviceList() string {
 		// Match stacked right panel height (including border compensation)
 		splitTargetHeight = (panelHeight * 2) + 2
 
-		// Reserve lines for in-frame header and search scope/input so device rows fill remaining space.
+		// Reserve lines for in-frame header/search/help so device rows fill remaining space.
 		headerLines := 3 // title + "Search in" + spacer line
 		if m.searchMode || m.searchQuery != "" {
 			headerLines++
 		}
+		headerLines += 2 // help line + spacer line
 		maxVisible = splitTargetHeight - headerLines
 		if m.viewportTop > 0 {
 			maxVisible-- // top "more above" indicator
@@ -1212,6 +1206,9 @@ func (m model) renderDeviceList() string {
 		listContent.WriteString(searchLabelStyle.Render("Search: ") + searchQueryStyle.Render(m.searchQuery))
 		listContent.WriteString("\n")
 	}
+
+	listContent.WriteString(helpStyle.Render(m.getHelpText()))
+	listContent.WriteString("\n")
 
 	listContent.WriteString("\n")
 
