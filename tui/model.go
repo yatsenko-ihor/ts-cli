@@ -510,6 +510,28 @@ func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleHistoryNavigation handles key presses when history panel is focused
 func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle frame-level navigation keys first (works even without a selected device).
+	if msg.Type == tea.KeyShiftTab {
+		m.activeFocus = focusList
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "tab":
+		m.activeFocus = focusOutput
+		m.outputScroll = 0
+		return m, nil
+	case "shift+tab", "backtab":
+		m.activeFocus = focusList
+		return m, nil
+	case "esc":
+		m.showHistoryPanel = false
+		m.activeFocus = focusList
+		return m, nil
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	}
+
 	// Get history for current device
 	target := m.getTargetDevice()
 	if target < 0 || target >= len(m.filteredDevices) {
@@ -528,26 +550,6 @@ func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "tab":
-		// Cycle to output frame from history frame
-		m.activeFocus = focusOutput
-		m.outputScroll = 0
-		return m, nil
-
-	case "shift+tab", "backtab":
-		// Cycle to previous frame from history frame
-		m.activeFocus = focusList
-		return m, nil
-
-	case "esc":
-		// Hide history panel
-		m.showHistoryPanel = false
-		m.activeFocus = focusList
-		return m, nil
-
-	case "ctrl+c", "q":
-		return m, tea.Quit
-
 	case "up", "k":
 		if m.historyCursor > 0 {
 			m.historyCursor--
@@ -677,6 +679,31 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// If history panel is shown and focused, handle history navigation
 	if m.showHistoryPanel && m.activeFocus == focusHistory {
 		return m.handleHistoryNavigation(msg)
+	}
+
+	if msg.Type == tea.KeyShiftTab {
+		// Reverse cycle focus: list <- history <- output <- list
+		if !m.showHistoryPanel {
+			// Open split view and jump to previous frame from list => output
+			m.showHistoryPanel = true
+			m.activeFocus = focusOutput
+			m.historyCursor = 0
+			m.outputScroll = 0
+		} else {
+			switch m.activeFocus {
+			case focusList:
+				m.activeFocus = focusOutput
+				m.outputScroll = 0
+			case focusHistory:
+				m.activeFocus = focusList
+			case focusOutput:
+				m.activeFocus = focusHistory
+				m.historyCursor = 0
+			default:
+				m.activeFocus = focusList
+			}
+		}
+		return m, nil
 	}
 
 	switch msg.String() {

@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ihor/ts-cli/client"
 )
 
@@ -212,5 +214,96 @@ func TestFilterDevices(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGetHelpText(t *testing.T) {
+	tests := []struct {
+		name           string
+		m              model
+		mustContain    string
+		mustNotContain string
+	}{
+		{
+			name: "normal mode includes search and ssh controls",
+			m: model{
+				showHistoryPanel: false,
+			},
+			mustContain: "s ssh",
+		},
+		{
+			name: "history focus includes delete and reverse tab",
+			m: model{
+				showHistoryPanel: true,
+				activeFocus:      focusHistory,
+			},
+			mustContain: "tab/shift+tab switch",
+		},
+		{
+			name: "search mode shows dedicated prompt",
+			m: model{
+				searchMode: true,
+			},
+			mustContain:    "Type to search",
+			mustNotContain: "s ssh",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			help := tt.m.getHelpText()
+			if tt.mustContain != "" && !strings.Contains(help, tt.mustContain) {
+				t.Fatalf("expected help text to contain %q, got %q", tt.mustContain, help)
+			}
+			if tt.mustNotContain != "" && strings.Contains(help, tt.mustNotContain) {
+				t.Fatalf("expected help text to not contain %q, got %q", tt.mustNotContain, help)
+			}
+		})
+	}
+}
+
+func TestHandleNormalModeShiftTabReverseNavigation(t *testing.T) {
+	m := model{
+		showHistoryPanel: false,
+		activeFocus:      focusList,
+	}
+
+	updated, _ := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m2 := updated.(model)
+
+	if !m2.showHistoryPanel {
+		t.Fatalf("expected history panel to open on shift+tab")
+	}
+	if m2.activeFocus != focusOutput {
+		t.Fatalf("expected focusOutput on initial shift+tab, got %v", m2.activeFocus)
+	}
+
+	updated, _ = m2.handleNormalMode(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m3 := updated.(model)
+	if m3.activeFocus != focusHistory {
+		t.Fatalf("expected reverse cycle to focusHistory, got %v", m3.activeFocus)
+	}
+
+	updated, _ = m3.handleNormalMode(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m4 := updated.(model)
+	if m4.activeFocus != focusList {
+		t.Fatalf("expected reverse cycle to focusList, got %v", m4.activeFocus)
+	}
+}
+
+func TestHandleHistoryNavigationShiftTabToList(t *testing.T) {
+	m := model{
+		showHistoryPanel: true,
+		activeFocus:      focusHistory,
+		devices:          []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
+		filteredDevices:  []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
+		selected:         0,
+	}
+
+	updated, _ := m.handleHistoryNavigation(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m2 := updated.(model)
+
+	if m2.activeFocus != focusList {
+		t.Fatalf("expected shift+tab in history panel to move focus to list, got %v", m2.activeFocus)
 	}
 }
