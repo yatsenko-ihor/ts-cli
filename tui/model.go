@@ -1169,17 +1169,16 @@ func (m model) renderDeviceList() string {
 	deviceListStyle := listStyle
 
 	if m.showHistoryPanel {
-		// Combined height of history + output panels
-		targetHeight := 52
-		// Adjust based on available terminal height
+		// Keep list height equal to history+output combined height
+		targetHeight := 50 // 25 + 25 default
 		if m.height > 0 {
-			availHeight := m.height - 12 // Account for title, help, warnings
-			if availHeight < targetHeight {
-				targetHeight = availHeight
+			panelHeight := (m.height - 12) / 2
+			if panelHeight < 15 {
+				panelHeight = 15
+			} else if panelHeight > 25 {
+				panelHeight = 25
 			}
-			if targetHeight < 20 {
-				targetHeight = 20 // Minimum height
-			}
+			targetHeight = panelHeight * 2
 		}
 		deviceListStyle = deviceListStyle.Height(targetHeight)
 
