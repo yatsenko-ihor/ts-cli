@@ -928,15 +928,23 @@ func (m model) View() string {
 
 	// Render split view if history panel is shown
 	if m.showHistoryPanel {
-		// Split view: device list on left, history on right
+		// Split view: device list on left, history + output stacked on right
 		deviceList := m.renderDeviceList()
 		historyPanel := m.renderHistoryPanel()
+		outputPanel := m.renderOutputPanel()
 
-		// Use lipgloss to join them horizontally
+		// Stack history and output vertically
+		rightPanel := lipgloss.JoinVertical(
+			lipgloss.Left,
+			historyPanel,
+			outputPanel,
+		)
+
+		// Join device list and stacked panels horizontally
 		splitView := lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			deviceList,
-			historyPanel,
+			rightPanel,
 		)
 		b.WriteString(splitView)
 	} else {
@@ -973,8 +981,8 @@ func (m model) View() string {
 	}
 	b.WriteString(helpStyle.Render(help))
 
-	// Show command output if any
-	if m.commandOutput != "" {
+	// Show command output if any (when history panel is not shown)
+	if m.commandOutput != "" && !m.showHistoryPanel {
 		b.WriteString("\n\n")
 		outputStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -1070,7 +1078,13 @@ func (m model) renderDeviceList() string {
 	}
 
 	// Render the list in a frame
-	return listStyle.Render(listContent.String())
+	// If history panel is shown, set fixed height to match history + output panels
+	deviceListStyle := listStyle
+	if m.showHistoryPanel {
+		// Combined height of history (25) + output (25) + borders/spacing ≈ 52
+		deviceListStyle = deviceListStyle.Height(52)
+	}
+	return deviceListStyle.Render(listContent.String())
 }
 
 // renderDeviceDetails renders the selected device details panel
@@ -1241,6 +1255,46 @@ func (m model) renderHistoryPanel() string {
 	}
 
 	return historyStyle.Render(historyContent.String())
+}
+
+// renderOutputPanel renders the command output panel
+func (m model) renderOutputPanel() string {
+	var outputContent strings.Builder
+
+	// Header
+	outputHeader := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#00FF00")).
+		Render("Command Output:")
+	outputContent.WriteString(outputHeader)
+	outputContent.WriteString("\n\n")
+
+	// Output text or placeholder
+	if m.commandOutput != "" {
+		// Limit output display to prevent overwhelming the UI
+		output := m.commandOutput
+		maxLines := 20
+		lines := strings.Split(output, "\n")
+		if len(lines) > maxLines {
+			lines = lines[:maxLines]
+			lines = append(lines, "... (output truncated)")
+		}
+		outputContent.WriteString(strings.Join(lines, "\n"))
+	} else {
+		outputContent.WriteString(grayItalicStyle.Render("No output yet"))
+		outputContent.WriteString("\n")
+		outputContent.WriteString(grayItalicStyle.Render("Execute a command to see output here"))
+	}
+
+	// Apply border style - same height as history panel
+	outputStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#00FF00")).
+		Padding(1, 2).
+		Width(45).
+		Height(25)
+
+	return outputStyle.Render(outputContent.String())
 }
 
 // renderProfileSelection renders the profile selection view
