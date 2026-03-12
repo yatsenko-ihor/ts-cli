@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ihor/ts-cli/client"
+	"github.com/ihor/ts-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -38,6 +39,19 @@ or using the --api-key flag.`,
 			// If tailnet not provided, return error
 			if tailnet == "" {
 				return fmt.Errorf("tailnet name is required.\nUse --tailnet flag to specify your tailnet name")
+			}
+
+			// Sanitize inputs
+			apiKey = util.SanitizeInput(apiKey)
+			tailnet = util.SanitizeInput(tailnet)
+
+			// Validate inputs
+			if err := util.ValidateAPIKey(apiKey); err != nil {
+				return fmt.Errorf("invalid API key: %w", err)
+			}
+
+			if err := util.ValidateTailnet(tailnet); err != nil {
+				return fmt.Errorf("invalid tailnet: %w", err)
 			}
 
 			// Validate the API key

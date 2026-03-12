@@ -219,14 +219,14 @@ func (c *Config) SetActiveAccount(tailnet string) bool {
 			break
 		}
 	}
-	
+
 	// Only modify account states if the tailnet was found
 	if found {
 		for i := range c.Accounts {
 			c.Accounts[i].Active = c.Accounts[i].Tailnet == tailnet
 		}
 	}
-	
+
 	return found
 }
 

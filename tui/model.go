@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ihor/ts-cli/client"
+	"github.com/ihor/ts-cli/util"
 )
 
 var (
@@ -371,7 +372,15 @@ func (m model) handleUsernamePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// Confirm username and initiate SSH
 		if m.usernameInput != "" {
-			m.sshUsername = m.usernameInput
+			// Sanitize and validate username
+			sanitized := util.SanitizeInput(m.usernameInput)
+			if err := util.ValidateSSHUsername(sanitized); err != nil {
+				// Ignore invalid input - user needs to re-enter
+				m.usernameInput = ""
+				return m, nil
+			}
+
+			m.sshUsername = sanitized
 			m.usernamePrompt = false
 			m.usernameInput = ""
 
@@ -1482,7 +1491,8 @@ fi
 		return exec.Command("sh", "-c", fmt.Sprintf("echo 'Failed to write script: %v'; sleep 2", err))
 	}
 
-	if err := tmpFile.Chmod(0755); err != nil {
+	// Use 0700 (user execute only) for better security
+	if err := tmpFile.Chmod(0700); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpFile.Name())
 		return exec.Command("sh", "-c", fmt.Sprintf("echo 'Failed to set permissions: %v'; sleep 2", err))

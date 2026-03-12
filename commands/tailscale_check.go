@@ -76,9 +76,12 @@ func attemptToStartTailscale() bool {
 		cmd = exec.Command("open", "-a", "Tailscale")
 		description = "Opening Tailscale app on macOS"
 	case "linux":
-		// On Linux, try to start the systemd service
-		cmd = exec.Command("sudo", "systemctl", "start", "tailscaled")
-		description = "Starting Tailscale daemon via systemd"
+		// On Linux, provide instructions instead of executing sudo
+		fmt.Println("   To start Tailscale on Linux, run:")
+		fmt.Println("   sudo systemctl start tailscaled")
+		fmt.Println("\n   Or if using a different init system:")
+		fmt.Println("   sudo service tailscaled start")
+		return false
 	default:
 		fmt.Println("⚠️  Automatic Tailscale start not supported on this OS")
 		return false
