@@ -91,4 +91,4 @@
 
 - [x] remove dead code
 - [x] update unit tests
-- [ ] try to search is it possible to open another tmux pane if app running in tmux
+- [x] try to search is it possible to open another tmux pane if app running in tmux
