@@ -1011,15 +1011,15 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		sshTarget = address
 	}
 
-	// Log SSH connection details
-	accountInfo := ""
+	// Log SSH connection details with account information
+	accountLabel := "default"
 	if device.AccountName != "" {
-		accountInfo = fmt.Sprintf(" from account: %s", device.AccountName)
+		accountLabel = device.AccountName
 	}
 
 	// Use tea.Sequence to print logs then execute SSH
 	return tea.Sequence(
-		tea.Println(fmt.Sprintf("\n🔌 Connecting to: %s%s", name, accountInfo)),
+		tea.Println(fmt.Sprintf("\n🔌 Connecting to %s : %s", name, accountLabel)),
 		tea.Println(fmt.Sprintf("📡 SSH command: ssh %s\n", sshTarget)),
 		func() tea.Msg {
 			// Use tea.ExecProcess to suspend TUI and run SSH
