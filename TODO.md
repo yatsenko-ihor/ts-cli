@@ -92,5 +92,7 @@
 - [x] Move control/help panel out of "Machine list" panel to own panel at the bottom. But make it independed of frames. Changing length of panel should not change any frame size
 - [x] write md doc how to use with tmux
 - [x] make widther "Machine list" frame and make not futther changes of frame except when temrinal window resize
+- [x] extend "History command" width frame to end of terminal
+- [ ] extend "Command Output" width frame to end of terminal
 
 ## To be implemented later:
