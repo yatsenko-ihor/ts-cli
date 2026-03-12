@@ -126,6 +126,7 @@ const (
 	focusList panelFocus = iota
 	focusSearch
 	focusSSH
+	focusHistory // Focus on history panel
 )
 
 type model struct {
@@ -162,6 +163,8 @@ type model struct {
 	commandInput           string               // Current command being typed
 	commandOutput          string               // Output from last command execution
 	history                *util.HistoryStore   // Command history store
+	historyCursor          int                  // Cursor position in history list
+	showHistoryPanel       bool                 // Whether to show the history panel
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -218,6 +221,8 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		commandInput:           "",
 		commandOutput:          "",
 		history:                history,
+		historyCursor:          0,
+		showHistoryPanel:       false,
 	}
 }
 
@@ -504,6 +509,64 @@ func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// handleHistoryNavigation handles key presses when history panel is focused
+func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Get history for current device
+	target := m.getTargetDevice()
+	if target < 0 || target >= len(m.filteredDevices) {
+		return m, nil
+	}
+
+	device := m.filteredDevices[target]
+	machineID := device.ID
+	if machineID == "" {
+		machineID = device.Hostname
+	}
+
+	var historyCommands []string
+	if m.history != nil {
+		historyCommands = m.history.GetUniqueCommands(machineID)
+	}
+
+	switch msg.String() {
+	case "tab":
+		// Switch back to device list focus
+		m.activeFocus = focusList
+		return m, nil
+
+	case "esc":
+		// Hide history panel
+		m.showHistoryPanel = false
+		m.activeFocus = focusList
+		return m, nil
+
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	case "up", "k":
+		if m.historyCursor > 0 {
+			m.historyCursor--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.historyCursor < len(historyCommands)-1 {
+			m.historyCursor++
+		}
+		return m, nil
+
+	case "enter":
+		// Execute selected command from history
+		if len(historyCommands) > 0 && m.historyCursor < len(historyCommands) {
+			command := historyCommands[m.historyCursor]
+			return m, m.executeRemoteCommand(command)
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
 // handleProfileSelection handles key presses in profile selection mode
 func (m model) handleProfileSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	numProfiles := len(m.accounts) + 1 // +1 for "All Accounts" option
@@ -570,7 +633,30 @@ func (m model) handleAccountManagement(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleNormalMode handles key presses in normal (default) mode
 func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// If history panel is shown and focused, handle history navigation
+	if m.showHistoryPanel && m.activeFocus == focusHistory {
+		return m.handleHistoryNavigation(msg)
+	}
+
 	switch msg.String() {
+	case "tab":
+		// Toggle history panel and switch focus
+		if !m.showHistoryPanel {
+			// Show history panel
+			m.showHistoryPanel = true
+			m.activeFocus = focusHistory
+			m.historyCursor = 0
+		} else {
+			// Toggle focus between device list and history
+			if m.activeFocus == focusList {
+				m.activeFocus = focusHistory
+				m.historyCursor = 0
+			} else {
+				m.activeFocus = focusList
+			}
+		}
+		return m, nil
+
 	case "ctrl+c", "q":
 		return m, tea.Quit
 
@@ -840,20 +926,44 @@ func (m model) View() string {
 	}
 	b.WriteString("\n")
 
-	// Render device list
-	b.WriteString(m.renderDeviceList())
+	// Render split view if history panel is shown
+	if m.showHistoryPanel {
+		// Split view: device list on left, history on right
+		deviceList := m.renderDeviceList()
+		historyPanel := m.renderHistoryPanel()
 
-	// Device details if selected
-	if m.selected >= 0 && m.selected < len(m.filteredDevices) {
-		b.WriteString(m.renderDeviceDetails())
+		// Use lipgloss to join them horizontally
+		splitView := lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			deviceList,
+			historyPanel,
+		)
+		b.WriteString(splitView)
+	} else {
+		// Normal view: device list and details
+		b.WriteString(m.renderDeviceList())
+
+		// Device details if selected
+		if m.selected >= 0 && m.selected < len(m.filteredDevices) {
+			b.WriteString(m.renderDeviceDetails())
+		}
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • e cmd • p profile • r reload • u tailscale-up • m manage"
-	if m.sshUsername != "" {
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • e cmd • tab history • p profile • r reload • u tailscale-up • m manage"
+	if m.showHistoryPanel {
+		if m.activeFocus == focusHistory {
+			help = "↑/k up • ↓/j down • enter execute • tab switch • esc close"
+		} else {
+			help = "↑/k up • ↓/j down • enter select • tab history • esc close"
+		}
+	}
+	if m.sshUsername != "" && !m.showHistoryPanel {
 		help += " • d clear-user"
 	}
-	help += " • q quit"
+	if !m.showHistoryPanel {
+		help += " • q quit"
+	}
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
 	} else if m.commandMode {
@@ -1012,6 +1122,115 @@ func (m model) getMaxVisibleItems() int {
 	}
 
 	return availableHeight
+}
+
+// renderHistoryPanel renders the command history panel
+func (m model) renderHistoryPanel() string {
+	var historyContent strings.Builder
+
+	// Get history for current device
+	target := m.getTargetDevice()
+	if target < 0 || target >= len(m.filteredDevices) {
+		return ""
+	}
+
+	device := m.filteredDevices[target]
+	machineID := device.ID
+	if machineID == "" {
+		machineID = device.Hostname
+	}
+
+	machineName := device.Name
+	if machineName == "" {
+		machineName = device.Hostname
+	}
+
+	// Check if device is online
+	online := isDeviceOnline(device)
+	statusIcon := "🔴"
+	statusText := "Offline"
+	if online {
+		statusIcon = "🟢"
+		statusText = "Online"
+	}
+
+	// Header
+	historyContent.WriteString(lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#7D56F4")).
+		Render(fmt.Sprintf("Command History - %s %s %s", machineName, statusIcon, statusText)))
+	historyContent.WriteString("\n\n")
+
+	// Get unique commands from history
+	var historyCommands []string
+	if m.history != nil {
+		historyCommands = m.history.GetUniqueCommands(machineID)
+	}
+
+	if len(historyCommands) == 0 {
+		historyContent.WriteString(grayItalicStyle.Render("No command history for this device"))
+		historyContent.WriteString("\n")
+		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to execute a command"))
+	} else {
+		// Render command list
+		maxVisible := 15 // Show up to 15 commands
+		startIdx := 0
+		if len(historyCommands) > maxVisible && m.historyCursor >= maxVisible {
+			startIdx = m.historyCursor - maxVisible + 1
+		}
+
+		endIdx := startIdx + maxVisible
+		if endIdx > len(historyCommands) {
+			endIdx = len(historyCommands)
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			cmd := historyCommands[i]
+			cursor := "  "
+			style := normalStyle
+
+			if i == m.historyCursor && m.activeFocus == focusHistory {
+				cursor = "▸ "
+				style = selectedStyle
+			}
+
+			// Truncate long commands
+			displayCmd := cmd
+			if len(displayCmd) > 50 {
+				displayCmd = displayCmd[:47] + "..."
+			}
+
+			historyContent.WriteString(style.Render(cursor + displayCmd))
+			historyContent.WriteString("\n")
+		}
+
+		// Show scroll indicators
+		if startIdx > 0 {
+			historyContent.WriteString("\n")
+			historyContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
+		}
+		if endIdx < len(historyCommands) {
+			historyContent.WriteString("\n")
+			historyContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
+		}
+
+		historyContent.WriteString("\n\n")
+		historyContent.WriteString(grayItalicStyle.Render(fmt.Sprintf("Total: %d commands", len(historyCommands))))
+	}
+
+	// Apply border style
+	historyStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#00D7FF")).
+		Padding(1, 2).
+		Width(60).
+		Height(25)
+
+	if m.activeFocus == focusHistory {
+		historyStyle = historyStyle.BorderForeground(lipgloss.Color("#FF06B7"))
+	}
+
+	return historyStyle.Render(historyContent.String())
 }
 
 // renderProfileSelection renders the profile selection view
