@@ -1,0 +1,86 @@
+## TODO's:
+
+- [x] make interactive menu to navigate in list of machines
+- [x] add ability to open ssh connetion to machine
+- [x] list of machines put into to scrollable frame (frame like machine selected)
+- [x] once user navigate with j,k or arrows buttons - highlight the selected machine
+- [x] add stauts icon 🟢 to machines which are online
+- [x] add vim-style search functionality (press / to search)
+- [x] once run witout command - just split screen to 2 panels (left and right):
+    - [x] left - split to top and bottom.
+    - [x] Top - list of machines wiht albilites to seach in vim like style.
+    - [x] bottom - details of selected machine
+    - [x] right part of window - ssh connection (once on the left top machine selected and ssh connection is established by user)
+- [x] once click s for eastablish ssh connection - prompt username for it (and remember it as default for future)
+- [x] click to "c" to copy ssh command to buffer
+- [x] put title "Tailscale Devices" to frame also and print version like "Tailscale Devices (ts-cli v0.1)
+- [x] once I'm on machine which is offline click "s" for ssh - got msg "Machine <name>" is offline
+- [x] once ssh established - opens full-screen SSH session (suspends TUI)
+- [x] remove catch tty (terminal emulation) - simplified to use tea.ExecProcess
+- [x] remove logic with tab - removed split panel mode
+- [x] make SSH session full screen - already implemented via tea.ExecProcess
+- [x] get all my accounts and machines
+- [x] switch to proper account(network) once ssh try to establish - devices tagged with account info, SSH uses device IP (network routing automatic).
+- [x] add ability to check if tailscale is running now - warns users in interactive/list/ssh commands with OS-specific instructions
+- [x] make ability to run "tailscale up" - new command with flags for routes, dns, exit-node, hostname
+- [x] fetch all accounts related to current email - implemented account management (list/set-active/remove) for configured accounts
+- [x] add "tailscale up" as vim like to interactive mode - press 'u' to run tailscale up
+- [x] add new account as vim like to interactive mode - press 'a' for add account instructions
+- [x] add new account also in interactive mode (with tips and instructions if need key from account)
+- [x] add r (vim like) to reload available machines and status
+- [x] add in app and into interactive menu separate accounts and their machines. Also option p - to select profile(account) in this mode shows machines only for that account
+- [x] sort machines, firstly "in network"
+- [x] on interactive mode add "Active account: <email>" and show on top
+- [x] if click to "s" and machine under another account (not active in current tailscal) - switch taiscale to proper
+- [x] once ptofile selected to "All" show "Active account: all"
+- [x] make option to write (if not yet there) ts-cli and tsc to path
+- [x] make suggestion to do it in interactive mode
+- [x] check if in path ts-cli or tsc are available and path is proper then don't snow "Tip"
+- [x] if path not correct - show tip to reinstall path again because path is not correct
+- [x] hightlight Search: and search words in another color
+- [x] Remove default user(saved before) name by „d"
+- [x] add m - to manage account (in this mode copy - "a" Add user behaviour) and remove "a - Add user" from main screen
+- [x] once click x - hide tip but not menu
+- [x] print on top default username if exists other wise "Default username: <none>"
+- [x] make sure all commited and make fefactoring according to common best practices
+- [x] fix search placement as was before and change color "Search: " and text which user typing
+- [x] also any user typing prompt like "Default username" also should be with another color
+- [x] recently were done changes("hightlight Search: and search words in another color" and "hightlight Search: and search words in another color") in interactive mode with "Search: ", tese changes broke behavious, revert back
+- [x] make "Search" in different color scheme with search input, but don't move to anpother line, make it on same as now
+- [x] once click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
+- [x] add learnings, context, skills for ai agent to .github folder.
+- [x] Add this folder to .ignore
+- [x] fix (still not works) click "s" for establish ssh connection, check if machine related to another account(not active now) then change current tailscale account to proper to be able to make ssh connection
+- [x] once clikc to "s" log to terminal what you are doint (switch accout if needed, connect to <name of machine> from <account name> and ssh command)
+- [x] still not work. Check util in path. if available - do not show ti[ "Hide Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
+- [x] still not work - if click "x" hide only Tip, not whole command panel
+- [x] always got "✗ ts-cli is not in PATH"
+- [x] once click "r" for reload show somehow visually thst reload was done
+- [x] I see "Note: ts-cli uses the Tailscale API to query devices, but you'll need
+      Tailscale running locally to actually connect to them via SSH." Start tailscale by yourself and log it to terminal
+- [x] rename "Active account:" to "Search in: "
+- [x] add to top of interactive mode "Active account: " to real active in tailscale
+- [x] once click to "s" log to terminal account and text "Connecting to <machine> : <account>"
+- [x] write unit test
+- [x] make security ausit as security expert and apply notes
+- [x] make git tag v0.1.0 and rc branch "release/v0.1.0"
+- [x] add information how to run tets to README.md
+- [x] add ability to send command over ssh to the machine (remember it is history file)
+- [x] separate frame(right side of terminal), once tab click on machine(check if it's online or not) - on that frame show commands fom history. Navigation in frame also vim like and over enter - command send to remote machine. Output of command should be printed in seprate frame.
+- [x] make "Command History - pi......net 🟢 Online" in 2 lines like:
+      "🖥️ pi-1.tailcccccc.ts.net
+      "Command history:"
+- [x] make "Command history" frame a bit narrower
+- [x] make Output frame same height as "Command history" and if enough space - put right after "Command history". If space not enought - put exactly under "Command history" with same width. And height of listm machines frame should be same as "Command history" + "Output" frames
+- [x] make sure all app is fit to terminal width and height. Do not create frames too tall or too wide. Once terminal is really small and even list of machines is not proper fix - give at bottom (like to "Top") a "⚠️Warning" that size of windows is not enought for comfort work
+- [x] add scroll to "Output frame", do not extend height more then reminal provide
+- [x] move "Execute Command" and logic into frame "Command history" and rename to "Commands over SSH History:"
+- [x] move "Search in: <>" and Search user input into "List machines" frame
+- [x] add with "Tab" navigation between frames
+- [x] still not proper height of frames. height of "Commands over SSH History:" + "Output" bigger then of "List machines"
+- [x] Add to frame "Commands over SSH History:" button "d" to delete command from history
+- [ ] same some vertical space if possible (remove not necessary spaces)
+
+## To be implemented later:
+
+- [x] try to search is it possible to open another tmux pane if app running in tmux
