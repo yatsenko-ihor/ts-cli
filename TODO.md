@@ -86,9 +86,9 @@
 - [x] on start move "↑/k up • ↓/j down • / search • enter select • s ssh • c copy •" under "List machines"
 - [x] make Shift+Tab navigate ro prev frame
 - [x] move command panel with "↑/k up • ↓/j down...." to frame topdown under "List Machines"
-
-## To be implemented later:
-
 - [x] remove dead code
 - [x] update unit tests
 - [x] try to search is it possible to open another tmux pane if app running in tmux
+- [x] Move control/help panel out of "Machine list" panel to own panel at the bottom. But make it independed of frames. Changing length of panel should not change any frame size
+## To be implemented later:
+- [ ] write md doc how to use with tmux
