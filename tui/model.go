@@ -1022,6 +1022,25 @@ func (m model) View() string {
 		b.WriteString(infoStyle.Render(message))
 	}
 
+	// Show terminal size warning if too small
+	minWidth := 80
+	minHeight := 24
+	if m.showHistoryPanel {
+		minWidth = 110 // Need extra width for split view
+		minHeight = 30 // Need extra height for stacked panels
+	}
+
+	if m.width > 0 && m.height > 0 && (m.width < minWidth || m.height < minHeight) {
+		b.WriteString("\n")
+		warningStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFA500")).
+			Bold(true)
+		
+		warningMsg := fmt.Sprintf("⚠️  Warning: Terminal size (%dx%d) is too small. Minimum recommended: %dx%d for optimal display.",
+			m.width, m.height, minWidth, minHeight)
+		b.WriteString(warningStyle.Render(warningMsg))
+	}
+
 	return b.String()
 }
 
@@ -1078,12 +1097,40 @@ func (m model) renderDeviceList() string {
 	}
 
 	// Render the list in a frame
-	// If history panel is shown, set fixed height to match history + output panels
+	// Make responsive to terminal size
 	deviceListStyle := listStyle
+	
 	if m.showHistoryPanel {
-		// Combined height of history (25) + output (25) + borders/spacing ≈ 52
-		deviceListStyle = deviceListStyle.Height(52)
+		// Combined height of history + output panels
+		targetHeight := 52
+		// Adjust based on available terminal height
+		if m.height > 0 {
+			availHeight := m.height - 12 // Account for title, help, warnings
+			if availHeight < targetHeight {
+				targetHeight = availHeight
+			}
+			if targetHeight < 20 {
+				targetHeight = 20 // Minimum height
+			}
+		}
+		deviceListStyle = deviceListStyle.Height(targetHeight)
+		
+		// Adjust width if terminal is narrow
+		if m.width > 0 && m.width < 110 {
+			listWidth := m.width - 50 // Leave room for panels
+			if listWidth < 40 {
+				listWidth = 40
+			}
+			deviceListStyle = deviceListStyle.Width(listWidth)
+		}
+	} else if m.height > 0 {
+		// Normal view - use available height
+		availHeight := m.height - 25 // Account for title, details, help
+		if availHeight > 10 {
+			deviceListStyle = deviceListStyle.Height(availHeight)
+		}
 	}
+	
 	return deviceListStyle.Render(listContent.String())
 }
 
@@ -1176,7 +1223,7 @@ func (m model) renderHistoryPanel() string {
 		Render(fmt.Sprintf("🖥️  %s %s %s", machineName, statusIcon, statusText))
 	historyContent.WriteString(machineHeader)
 	historyContent.WriteString("\n")
-	
+
 	// Line 2: "Command history:"
 	historyTitle := lipgloss.NewStyle().
 		Bold(true).
@@ -1242,13 +1289,37 @@ func (m model) renderHistoryPanel() string {
 		historyContent.WriteString(grayItalicStyle.Render(fmt.Sprintf("Total: %d commands", len(historyCommands))))
 	}
 
-	// Apply border style
+	// Apply border style - make responsive to terminal size
+	historyWidth := 45
+	historyHeight := 25
+	
+	// Adjust based on terminal size
+	if m.width > 0 {
+		// Calculate available width for right panel
+		availWidth := (m.width - 50) / 2 // Roughly half of remaining space
+		if availWidth < 40 {
+			historyWidth = 40
+		} else if availWidth < historyWidth {
+			historyWidth = availWidth
+		}
+	}
+	
+	if m.height > 0 {
+		// Each panel gets roughly half of available height
+		availHeight := (m.height - 12) / 2 // Split between history and output
+		if availHeight < 15 {
+			historyHeight = 15
+		} else if availHeight < historyHeight {
+			historyHeight = availHeight
+		}
+	}
+	
 	historyStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#00D7FF")).
 		Padding(1, 2).
-		Width(45).
-		Height(25)
+		Width(historyWidth).
+		Height(historyHeight)
 
 	if m.activeFocus == focusHistory {
 		historyStyle = historyStyle.BorderForeground(lipgloss.Color("#FF06B7"))
@@ -1286,13 +1357,35 @@ func (m model) renderOutputPanel() string {
 		outputContent.WriteString(grayItalicStyle.Render("Execute a command to see output here"))
 	}
 
-	// Apply border style - same height as history panel
+	// Apply border style - make responsive to match history panel
+	outputWidth := 45
+	outputHeight := 25
+	
+	// Adjust based on terminal size (same as history panel)
+	if m.width > 0 {
+		availWidth := (m.width - 50) / 2
+		if availWidth < 40 {
+			outputWidth = 40
+		} else if availWidth < outputWidth {
+			outputWidth = availWidth
+		}
+	}
+	
+	if m.height > 0 {
+		availHeight := (m.height - 12) / 2
+		if availHeight < 15 {
+			outputHeight = 15
+		} else if availHeight < outputHeight {
+			outputHeight = availHeight
+		}
+	}
+	
 	outputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#00FF00")).
 		Padding(1, 2).
-		Width(45).
-		Height(25)
+		Width(outputWidth).
+		Height(outputHeight)
 
 	return outputStyle.Render(outputContent.String())
 }
@@ -1306,12 +1399,20 @@ func (m model) renderProfileSelection() string {
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n\n")
 
-	// Account list
+	// Account list - make responsive to terminal width
+	listWidth := 60
+	if m.width > 0 && m.width < 80 {
+		listWidth = m.width - 10
+		if listWidth < 40 {
+			listWidth = 40
+		}
+	}
+	
 	profileList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#7D56F4")).
 		Padding(1, 2).
-		Width(60)
+		Width(listWidth)
 
 	var listContent strings.Builder
 
@@ -1366,12 +1467,20 @@ func (m model) renderAccountManagement() string {
 	b.WriteString(titleStyle.Render(title))
 	b.WriteString("\n\n")
 
-	// Options list
+	// Options list - make responsive to terminal width
+	listWidth := 60
+	if m.width > 0 && m.width < 80 {
+		listWidth = m.width - 10
+		if listWidth < 40 {
+			listWidth = 40
+		}
+	}
+	
 	optionsList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#7D56F4")).
 		Padding(1, 2).
-		Width(60)
+		Width(listWidth)
 
 	var listContent strings.Builder
 
