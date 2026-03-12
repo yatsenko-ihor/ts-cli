@@ -536,6 +536,11 @@ func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.outputScroll = 0
 		return m, nil
 
+	case "shift+tab", "backtab":
+		// Cycle to previous frame from history frame
+		m.activeFocus = focusList
+		return m, nil
+
 	case "esc":
 		// Hide history panel
 		m.showHistoryPanel = false
@@ -696,6 +701,30 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.outputScroll = 0
 			case focusOutput:
 				m.activeFocus = focusList
+			default:
+				m.activeFocus = focusList
+			}
+		}
+		return m, nil
+
+	case "shift+tab", "backtab":
+		// Reverse cycle focus: list <- history <- output <- list
+		if !m.showHistoryPanel {
+			// Open split view and jump to previous frame from list => output
+			m.showHistoryPanel = true
+			m.activeFocus = focusOutput
+			m.historyCursor = 0
+			m.outputScroll = 0
+		} else {
+			switch m.activeFocus {
+			case focusList:
+				m.activeFocus = focusOutput
+				m.outputScroll = 0
+			case focusHistory:
+				m.activeFocus = focusList
+			case focusOutput:
+				m.activeFocus = focusHistory
+				m.historyCursor = 0
 			default:
 				m.activeFocus = focusList
 			}
@@ -1001,11 +1030,11 @@ func (m model) View() string {
 	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
 	if m.showHistoryPanel {
 		if m.activeFocus == focusHistory {
-			help = "↑/k up • ↓/j down • e new-command • d delete • enter execute • tab switch • esc close"
+			help = "↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
 		} else if m.activeFocus == focusOutput {
-			help = "↑/k up • ↓/j down • tab switch • esc close"
+			help = "↑/k up • ↓/j down • tab/shift+tab switch • esc close"
 		} else {
-			help = "↑/k up • ↓/j down • enter select • tab history • esc close"
+			help = "↑/k up • ↓/j down • enter select • tab/shift+tab switch • esc close"
 		}
 	}
 	if m.sshUsername != "" && !m.showHistoryPanel {
