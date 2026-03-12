@@ -122,35 +122,35 @@ const (
 )
 
 type model struct {
-	devices               []client.Device
-	filteredDevices       []client.Device
-	cursor                int
-	selected              int
-	err                   error
-	width                 int
-	height                int
-	sshError              error
-	viewportTop           int // First visible item in the list
-	searchMode            bool
-	searchQuery           string
-	activeFocus           panelFocus
-	copiedText            string
-	reloadSuccess         string // Success message for reload
-	version               string
-	usernamePrompt        bool                 // Whether we're prompting for username
-	usernameInput         string               // Current username being typed
-	sshUsername           string               // Stored SSH username
-	accounts              []client.AccountInfo // Store accounts for reload functionality
-	reloading             bool                 // Whether we're currently reloading
-	profileSelectMode     bool                 // Whether we're in profile selection mode
-	profileCursor         int                  // Cursor position in profile list
-	selectedProfile       string               // Currently selected profile (empty = all)
-	activeAccount         string               // Currently active Tailscale account from config
-	tailscaleActiveAccount string              // Real active account from Tailscale daemon
-	showInstallSuggestion bool                 // Whether to show PATH installation suggestion
-	installationBroken    bool                 // Whether existing PATH installation is broken
-	accountManageMode     bool                 // Whether we're in account management mode
-	manageCursor          int                  // Cursor position in account management menu
+	devices                []client.Device
+	filteredDevices        []client.Device
+	cursor                 int
+	selected               int
+	err                    error
+	width                  int
+	height                 int
+	sshError               error
+	viewportTop            int // First visible item in the list
+	searchMode             bool
+	searchQuery            string
+	activeFocus            panelFocus
+	copiedText             string
+	reloadSuccess          string // Success message for reload
+	version                string
+	usernamePrompt         bool                 // Whether we're prompting for username
+	usernameInput          string               // Current username being typed
+	sshUsername            string               // Stored SSH username
+	accounts               []client.AccountInfo // Store accounts for reload functionality
+	reloading              bool                 // Whether we're currently reloading
+	profileSelectMode      bool                 // Whether we're in profile selection mode
+	profileCursor          int                  // Cursor position in profile list
+	selectedProfile        string               // Currently selected profile (empty = all)
+	activeAccount          string               // Currently active Tailscale account from config
+	tailscaleActiveAccount string               // Real active account from Tailscale daemon
+	showInstallSuggestion  bool                 // Whether to show PATH installation suggestion
+	installationBroken     bool                 // Whether existing PATH installation is broken
+	accountManageMode      bool                 // Whether we're in account management mode
+	manageCursor           int                  // Cursor position in account management menu
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -173,29 +173,29 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	tailscaleActiveAccount := getRealTailscaleAccount()
 
 	return model{
-		devices:               devices,
-		filteredDevices:       devices, // Initially show all devices
-		cursor:                0,
-		selected:              -1,
-		viewportTop:           0,
-		searchMode:            false,
-		searchQuery:           "",
-		activeFocus:           focusList,
-		version:               version,
-		usernamePrompt:        false,
-		usernameInput:         "",
-		accounts:              accounts,
-		reloading:             false,
-		sshUsername:           sshUsername,
-		profileSelectMode:     false,
-		profileCursor:         0,
-		selectedProfile:       "", // Empty means show all
-		activeAccount:         activeAccount,
+		devices:                devices,
+		filteredDevices:        devices, // Initially show all devices
+		cursor:                 0,
+		selected:               -1,
+		viewportTop:            0,
+		searchMode:             false,
+		searchQuery:            "",
+		activeFocus:            focusList,
+		version:                version,
+		usernamePrompt:         false,
+		usernameInput:          "",
+		accounts:               accounts,
+		reloading:              false,
+		sshUsername:            sshUsername,
+		profileSelectMode:      false,
+		profileCursor:          0,
+		selectedProfile:        "", // Empty means show all
+		activeAccount:          activeAccount,
 		tailscaleActiveAccount: tailscaleActiveAccount,
-		showInstallSuggestion: showInstallSuggestion,
-		installationBroken:    installationBroken,
-		accountManageMode:     false,
-		manageCursor:          0,
+		showInstallSuggestion:  showInstallSuggestion,
+		installationBroken:     installationBroken,
+		accountManageMode:      false,
+		manageCursor:           0,
 	}
 }
 
@@ -642,9 +642,21 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	m.sshError = nil
 
 	// Check if we need to switch accounts first
-	if device.AccountName != "" && m.activeAccount != "" && device.AccountName != m.activeAccount {
-		// Need to switch Tailscale account before SSH
-		return m, m.switchAccountForSSH(target, device.AccountName)
+	// Compare device's account tailnet against the real Tailscale active account
+	if device.AccountTailnet != "" && m.tailscaleActiveAccount != "" {
+		// Normalize both for comparison (handle truncated accounts like "user@" vs "user@domain.com")
+		deviceAccount := strings.ToLower(device.AccountTailnet)
+		activeAccount := strings.ToLower(m.tailscaleActiveAccount)
+
+		// Check if they're different accounts
+		// Account in status might be truncated, so check if one starts with the other
+		needsSwitch := !strings.HasPrefix(deviceAccount, strings.TrimSuffix(activeAccount, "@")) &&
+			!strings.HasPrefix(activeAccount, strings.TrimSuffix(deviceAccount, "@"))
+
+		if needsSwitch {
+			// Need to switch Tailscale account before SSH
+			return m, m.switchAccountForSSH(target, device.AccountTailnet)
+		}
 	}
 
 	// Check if username is stored
@@ -1510,21 +1522,22 @@ func checkLocalTailscaleStatus() (bool, string) {
 	// Tailscale is running and connected
 	return true, ""
 }
+
 // getRealTailscaleAccount gets the currently active account from Tailscale daemon
 func getRealTailscaleAccount() string {
 	cmd := exec.Command("tailscale", "status", "--json")
 	output, err := cmd.CombinedOutput()
-	
+
 	if err != nil {
 		// If tailscale is not running or not installed, return unknown
 		return "<not connected>"
 	}
-	
+
 	// Parse JSON to get the account email
 	// The status JSON contains a "Self" object with "UserProfile" that has "LoginName"
 	// For simplicity, let's extract it using string parsing
 	outputStr := string(output)
-	
+
 	// Look for "LoginName" field in JSON
 	// Note: JSON is formatted with whitespace, so we need flexible parsing
 	loginNamePattern := `"LoginName"`
@@ -1546,14 +1559,14 @@ func getRealTailscaleAccount() string {
 			}
 		}
 	}
-	
+
 	// Fallback: try to get it from regular status output
 	cmd = exec.Command("tailscale", "status")
 	output, err = cmd.CombinedOutput()
 	if err != nil {
 		return "<not connected>"
 	}
-	
+
 	// The status output typically shows the account email
 	// Parse the first line to extract the account
 	// Format is: "IP  hostname  account@domain  OS  status"
@@ -1569,6 +1582,6 @@ func getRealTailscaleAccount() string {
 			}
 		}
 	}
-	
+
 	return "<not connected>"
 }
