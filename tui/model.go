@@ -135,7 +135,7 @@ type model struct {
 	searchQuery           string
 	activeFocus           panelFocus
 	copiedText            string
-	reloadSuccess         string               // Success message for reload
+	reloadSuccess         string // Success message for reload
 	version               string
 	usernamePrompt        bool                 // Whether we're prompting for username
 	usernameInput         string               // Current username being typed
@@ -145,7 +145,8 @@ type model struct {
 	profileSelectMode     bool                 // Whether we're in profile selection mode
 	profileCursor         int                  // Cursor position in profile list
 	selectedProfile       string               // Currently selected profile (empty = all)
-	activeAccount         string               // Currently active Tailscale account
+	activeAccount         string               // Currently active Tailscale account from config
+	tailscaleActiveAccount string              // Real active account from Tailscale daemon
 	showInstallSuggestion bool                 // Whether to show PATH installation suggestion
 	installationBroken    bool                 // Whether existing PATH installation is broken
 	accountManageMode     bool                 // Whether we're in account management mode
@@ -168,6 +169,9 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	// Check if ts-cli is properly installed in PATH
 	showInstallSuggestion, installationBroken := checkIfInstallNeeded()
 
+	// Get real active Tailscale account
+	tailscaleActiveAccount := getRealTailscaleAccount()
+
 	return model{
 		devices:               devices,
 		filteredDevices:       devices, // Initially show all devices
@@ -187,6 +191,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		profileCursor:         0,
 		selectedProfile:       "", // Empty means show all
 		activeAccount:         activeAccount,
+		tailscaleActiveAccount: tailscaleActiveAccount,
 		showInstallSuggestion: showInstallSuggestion,
 		installationBroken:    installationBroken,
 		accountManageMode:     false,
@@ -281,6 +286,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Account switched successfully, update active account
 		m.activeAccount = msg.accountName
+		// Update the real Tailscale active account
+		m.tailscaleActiveAccount = getRealTailscaleAccount()
 		// If we should proceed with SSH, do it now
 		if msg.proceedWithSSH {
 			// Check if username is stored
@@ -302,7 +309,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sshError = fmt.Errorf("failed to reload devices: %w", msg.err)
 			return m, nil
 		}
-		
+
 		// Sort devices before storing
 		sortDevicesByStatus(msg.devices)
 		m.devices = msg.devices
@@ -321,13 +328,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.selected >= len(m.filteredDevices) {
 			m.selected = -1
 		}
-		
+
 		// Clear any previous SSH error
 		m.sshError = nil
-		
+
 		// Show reload success message
 		m.reloadSuccess = fmt.Sprintf("Reloaded %d device(s) from %d account(s)", len(msg.devices), len(m.accounts))
-		
+
 		// Clear the success message after 3 seconds
 		return m, tea.Tick(time.Second*3, func(time.Time) tea.Msg {
 			return clearReloadMsg{}
@@ -695,6 +702,12 @@ func (m model) View() string {
 	}
 	b.WriteString("\n")
 
+	// Show real active Tailscale account at the top
+	if m.tailscaleActiveAccount != "" {
+		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Active account: %s", m.tailscaleActiveAccount)))
+		b.WriteString("\n")
+	}
+
 	// Show search scope or "all" when viewing all profiles
 	if m.selectedProfile == "" {
 		// When no profile filter is set, show "all"
@@ -1003,7 +1016,7 @@ func (m model) sshToDevice(index int) tea.Cmd {
 	if device.AccountName != "" {
 		accountInfo = fmt.Sprintf(" from account: %s", device.AccountName)
 	}
-	
+
 	// Use tea.Sequence to print logs then execute SSH
 	return tea.Sequence(
 		tea.Println(fmt.Sprintf("\n🔌 Connecting to: %s%s", name, accountInfo)),
@@ -1182,12 +1195,12 @@ func checkIfInstallNeeded() (bool, bool) {
 	// Check if either ts-cli or tsc is in PATH
 	tsCliPath, tsCliErr := exec.LookPath("ts-cli")
 	tscPath, tscErr := exec.LookPath("tsc")
-	
+
 	// If both are not found, suggest installation
 	if tsCliErr != nil && tscErr != nil {
 		return true, false
 	}
-	
+
 	// Try to verify the found binary (prefer ts-cli)
 	pathToCheck := tsCliPath
 	if tsCliErr != nil {
@@ -1482,18 +1495,63 @@ fi
 func checkLocalTailscaleStatus() (bool, string) {
 	cmd := exec.Command("tailscale", "status")
 	output, err := cmd.CombinedOutput()
-	
+
 	if err != nil {
 		// Tailscale command failed - daemon might not be running or not installed
 		return false, "Tailscale daemon is not running"
 	}
-	
+
 	// Check if output indicates we're not connected
 	outputStr := string(output)
 	if strings.Contains(strings.ToLower(outputStr), "logged out") {
 		return false, "You are logged out from Tailscale"
 	}
-	
+
 	// Tailscale is running and connected
 	return true, ""
+}
+// getRealTailscaleAccount gets the currently active account from Tailscale daemon
+func getRealTailscaleAccount() string {
+	cmd := exec.Command("tailscale", "status", "--json")
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		// If tailscale is not running or not installed, return unknown
+		return "<not connected>"
+	}
+	
+	// Parse JSON to get the account email
+	// The status JSON contains a "Self" object with "UserProfile" that has "LoginName"
+	// For simplicity, let's extract it using string parsing
+	outputStr := string(output)
+	
+	// Look for "LoginName" field in JSON
+	if idx := strings.Index(outputStr, `"LoginName":"`); idx != -1 {
+		start := idx + len(`"LoginName":"`)
+		end := strings.Index(outputStr[start:], `"`)
+		if end != -1 {
+			return outputStr[start : start+end]
+		}
+	}
+	
+	// Fallback: try to get it from regular status output
+	cmd = exec.Command("tailscale", "status")
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return "<not connected>"
+	}
+	
+	// The status output typically shows the account email
+	// Parse the first line to extract the account
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 0 && len(lines[0]) > 0 {
+		// Format is typically: "hostname  ip  account@example.com"
+		fields := strings.Fields(lines[0])
+		if len(fields) >= 3 {
+			// The last field is usually the account email
+			return fields[len(fields)-1]
+		}
+	}
+	
+	return "<not connected>"
 }
