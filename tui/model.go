@@ -1258,16 +1258,34 @@ func truncateForWidth(s string, max int) string {
 		return ""
 	}
 
-	runes := []rune(s)
-	if len(runes) <= max {
+	if lipgloss.Width(s) <= max {
 		return s
 	}
 
-	if max <= 3 {
-		return string(runes[:max])
+	ellipsis := "..."
+	if max <= lipgloss.Width(ellipsis) {
+		out := make([]rune, 0, len(s))
+		for _, r := range s {
+			candidate := append(out, r)
+			if lipgloss.Width(string(candidate)) > max {
+				break
+			}
+			out = candidate
+		}
+		return string(out)
 	}
 
-	return string(runes[:max-3]) + "..."
+	targetWidth := max - lipgloss.Width(ellipsis)
+	out := make([]rune, 0, len(s))
+	for _, r := range s {
+		candidate := append(out, r)
+		if lipgloss.Width(string(candidate)) > targetWidth {
+			break
+		}
+		out = candidate
+	}
+
+	return string(out) + ellipsis
 }
 
 // renderDeviceList renders the device list panel
