@@ -1194,6 +1194,37 @@ func (m model) renderHelpPanel() string {
 	return helpPanelStyle.Render(helpStyle.Render(m.getHelpText()))
 }
 
+func (m model) getMachineListWidth() int {
+	// Width should depend only on terminal width/mode, not content length.
+	if m.showHistoryPanel {
+		if m.width <= 0 {
+			return 62
+		}
+
+		w := int(float64(m.width) * 0.45)
+		if w < 48 {
+			w = 48
+		} else if w > 70 {
+			w = 70
+		}
+		return w
+	}
+
+	if m.width <= 0 {
+		return 70
+	}
+
+	// In non-split view keep list comfortably wide and stable.
+	w := m.width - 4
+	if w < 48 {
+		w = 48
+	} else if w > 90 {
+		w = 90
+	}
+
+	return w
+}
+
 // renderDeviceList renders the device list panel
 func (m model) renderDeviceList() string {
 	var listContent strings.Builder
@@ -1312,21 +1343,6 @@ func (m model) renderDeviceList() string {
 		if splitTargetHeight > 0 {
 			deviceListStyle = deviceListStyle.Height(splitTargetHeight)
 		}
-
-		// Device list takes ~40% of width (min 40, max 55 chars)
-		if m.width > 0 {
-			listWidth := 55 // Default width
-			if m.width < 130 {
-				// Scale down proportionally for narrower terminals
-				listWidth = int(float64(m.width) * 0.40)
-				if listWidth < 40 {
-					listWidth = 40
-				} else if listWidth > 55 {
-					listWidth = 55
-				}
-			}
-			deviceListStyle = deviceListStyle.Width(listWidth)
-		}
 	} else if m.height > 0 {
 		// Normal view - use available height
 		availHeight := m.height - 25 // Account for title, details, help
@@ -1334,6 +1350,8 @@ func (m model) renderDeviceList() string {
 			deviceListStyle = deviceListStyle.Height(availHeight)
 		}
 	}
+
+	deviceListStyle = deviceListStyle.Width(m.getMachineListWidth())
 
 	return deviceListStyle.Render(listContent.String())
 }
@@ -1517,14 +1535,7 @@ func (m model) renderHistoryPanel() string {
 	// Adjust based on terminal size
 	if m.width > 0 {
 		// Right panels share remaining width (~60% of terminal)
-		// Device list takes ~40%, so remaining is ~60%
-		deviceListWidth := 55
-		if m.width < 130 {
-			deviceListWidth = int(float64(m.width) * 0.40)
-			if deviceListWidth < 40 {
-				deviceListWidth = 40
-			}
-		}
+		deviceListWidth := m.getMachineListWidth()
 		// History gets remaining space minus some margin
 		remainingWidth := m.width - deviceListWidth - 5 // 5 char margin
 		if remainingWidth > 45 {
@@ -1569,13 +1580,7 @@ func (m model) renderOutputPanel() string {
 	// Adjust width based on terminal size (same as history panel)
 	if m.width > 0 {
 		// Match history panel width calculation
-		deviceListWidth := 55
-		if m.width < 130 {
-			deviceListWidth = int(float64(m.width) * 0.40)
-			if deviceListWidth < 40 {
-				deviceListWidth = 40
-			}
-		}
+		deviceListWidth := m.getMachineListWidth()
 		remainingWidth := m.width - deviceListWidth - 5
 		if remainingWidth > 45 {
 			outputWidth = 45
