@@ -1253,6 +1253,32 @@ func (m model) getRightPanelSize() (int, int) {
 	return panelWidth, panelHeight
 }
 
+func (m model) getHistoryPanelSize() (int, int) {
+	panelWidth := 45
+	panelHeight := 25
+
+	if m.width > 0 {
+		deviceListWidth := m.getMachineListWidth()
+		remainingWidth := m.width - deviceListWidth - 5
+		if remainingWidth > 35 {
+			panelWidth = remainingWidth
+		} else {
+			panelWidth = 35
+		}
+	}
+
+	if m.height > 0 {
+		availHeight := (m.height - 12) / 2
+		if availHeight < 15 {
+			panelHeight = 15
+		} else if availHeight < panelHeight {
+			panelHeight = availHeight
+		}
+	}
+
+	return panelWidth, panelHeight
+}
+
 func truncateForWidth(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -1481,7 +1507,7 @@ func (m model) getMaxVisibleItems() int {
 // renderHistoryPanel renders the command history panel
 func (m model) renderHistoryPanel() string {
 	var historyContent strings.Builder
-	historyWidth, historyHeight := m.getRightPanelSize()
+	historyWidth, historyHeight := m.getHistoryPanelSize()
 
 	// Get history for current device
 	target := m.getTargetDevice()
@@ -1503,15 +1529,13 @@ func (m model) renderHistoryPanel() string {
 	// Check if device is online
 	online := isDeviceOnline(device)
 	statusIcon := "🔴"
-	statusText := "Offline"
 	if online {
 		statusIcon = "🟢"
-		statusText = "Online"
 	}
 
 	// Header - 2 lines format
 	// Line 1: Device name with status
-	headerText := truncateForWidth(fmt.Sprintf("🖥️  %s %s %s", machineName, statusIcon, statusText), historyWidth)
+	headerText := truncateForWidth(fmt.Sprintf("🖥️  %s %s", machineName, statusIcon), historyWidth)
 	machineHeader := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#7D56F4")).
@@ -1539,6 +1563,7 @@ func (m model) renderHistoryPanel() string {
 		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command in this panel", historyWidth)))
 	} else {
 		// Render command list
+		//TODO: make maxVisible dynamic based on panel height and reserve lines for header and indicators
 		maxVisible := 15 // Show up to 15 commands
 		startIdx := 0
 		if len(historyCommands) > maxVisible && m.historyCursor >= maxVisible {
