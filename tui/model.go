@@ -533,8 +533,9 @@ func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "tab":
-		// Switch back to device list focus
-		m.activeFocus = focusList
+		// Cycle to output frame from history frame
+		m.activeFocus = focusOutput
+		m.outputScroll = 0
 		return m, nil
 
 	case "esc":
