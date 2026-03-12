@@ -89,6 +89,6 @@
 
 ## To be implemented later:
 
-- [ ] remove dead code
+- [x] remove dead code
 - [ ] update unit tests
 - [ ] try to search is it possible to open another tmux pane if app running in tmux
