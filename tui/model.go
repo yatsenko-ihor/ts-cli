@@ -558,6 +558,21 @@ func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "e":
+		// Enter command mode from history panel
+		if !isDeviceOnline(device) {
+			deviceName := device.Name
+			if deviceName == "" {
+				deviceName = device.Hostname
+			}
+			m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+			return m, nil
+		}
+		m.commandMode = true
+		m.commandInput = ""
+		m.sshError = nil
+		return m, nil
+
 	case "enter":
 		// Execute selected command from history
 		if len(historyCommands) > 0 && m.historyCursor < len(historyCommands) {
@@ -745,28 +760,6 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "e":
-		// Enter command execution mode
-		target := m.getTargetDevice()
-		if target >= 0 && target < len(m.filteredDevices) {
-			device := m.filteredDevices[target]
-			// Check if device is online
-			if !isDeviceOnline(device) {
-				deviceName := device.Name
-				if deviceName == "" {
-					deviceName = device.Hostname
-				}
-				m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
-				return m, nil
-			}
-			// Enter command mode
-			m.commandMode = true
-			m.commandInput = ""
-			m.commandOutput = ""
-			m.sshError = nil
-			return m, nil
-		}
-		return m, nil
 	}
 	return m, nil
 }
@@ -948,9 +941,6 @@ func (m model) View() string {
 	} else if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"
 		b.WriteString(titleStyle.Render(title))
-	} else if m.commandMode {
-		title += " - Execute Command: " + m.commandInput + "_"
-		b.WriteString(titleStyle.Render(title))
 	} else if m.searchMode {
 		// Render search with different colors on the same line
 		baseTitle := titleStyle.Render(title)
@@ -1027,10 +1017,10 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • e cmd • tab history • p profile • r reload • u tailscale-up • m manage"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
 	if m.showHistoryPanel {
 		if m.activeFocus == focusHistory {
-			help = "↑/k up • ↓/j down • enter execute • tab switch • esc close"
+			help = "↑/k up • ↓/j down • e new-command • enter execute • tab switch • esc close"
 		} else if m.activeFocus == focusOutput {
 			help = "↑/k up • ↓/j down • tab switch • esc close"
 		} else {
@@ -1301,11 +1291,11 @@ func (m model) renderHistoryPanel() string {
 	historyContent.WriteString(machineHeader)
 	historyContent.WriteString("\n")
 
-	// Line 2: "Command history:"
+	// Line 2: "Commands over SSH History:"
 	historyTitle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#00D7FF")).
-		Render("Command history:")
+		Render("Commands over SSH History:")
 	historyContent.WriteString(historyTitle)
 	historyContent.WriteString("\n\n")
 
@@ -1318,7 +1308,7 @@ func (m model) renderHistoryPanel() string {
 	if len(historyCommands) == 0 {
 		historyContent.WriteString(grayItalicStyle.Render("No command history for this device"))
 		historyContent.WriteString("\n")
-		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to execute a command"))
+		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to type a new command in this panel"))
 	} else {
 		// Render command list
 		maxVisible := 15 // Show up to 15 commands
@@ -1364,6 +1354,15 @@ func (m model) renderHistoryPanel() string {
 
 		historyContent.WriteString("\n\n")
 		historyContent.WriteString(grayItalicStyle.Render(fmt.Sprintf("Total: %d commands", len(historyCommands))))
+	}
+
+	historyContent.WriteString("\n\n")
+	if m.commandMode {
+		historyContent.WriteString(grayItalicStyle.Render("New command:"))
+		historyContent.WriteString("\n")
+		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(m.commandInput+"_"))
+	} else {
+		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to type a new command"))
 	}
 
 	// Apply border style - make responsive to terminal size
