@@ -282,9 +282,63 @@ Cobra provides built-in shell completion. Generate completion scripts for your s
 
 ### Running tests
 
+The project includes comprehensive unit tests for core functionality.
+
+**Run all tests:**
+
 ```bash
 go test ./...
 ```
+
+**Run tests for a specific package:**
+
+```bash
+# Test config management
+go test ./commands
+
+# Test TUI model
+go test ./tui
+
+# Test utility functions
+go test ./util
+```
+
+**Run tests with verbose output:**
+
+```bash
+go test -v ./...
+```
+
+**Run tests without cache:**
+
+```bash
+go test -count=1 ./...
+```
+
+**Run tests with coverage:**
+
+```bash
+# Generate coverage report
+go test -cover ./...
+
+# Generate detailed coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+**Test files:**
+
+- `commands/config_test.go` - Config management tests (account operations)
+- `tui/model_test.go` - TUI model tests (device filtering, sorting, status)
+
+**Test coverage includes:**
+
+- Account activation and retrieval
+- Device online/offline detection
+- Status icon selection
+- Device sorting by status
+- Device filtering by search query and profile
+- Input validation functions
 
 ### Adding new commands
 
