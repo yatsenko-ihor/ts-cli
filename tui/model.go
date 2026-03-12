@@ -846,15 +846,26 @@ func (m *model) moveCursorDown() {
 			// Scroll output panel - calculate max scroll based on output lines
 			if m.commandOutput != "" {
 				lines := strings.Split(m.commandOutput, "\n")
-				// Calculate visible height for output
-				availHeight := 15 // Default minimum
+
+				outputHeight := 25
 				if m.height > 0 {
-					availHeight = (m.height - 12) / 2
+					availHeight := (m.height - 12) / 2
 					if availHeight < 15 {
-						availHeight = 15
+						outputHeight = 15
+					} else if availHeight < outputHeight {
+						outputHeight = availHeight
 					}
 				}
-				maxScroll := len(lines) - availHeight + 3 // +3 for header and padding
+
+				lineBudget := outputHeight - 2 // header + spacer in output panel
+				if m.outputScroll > 0 {
+					lineBudget-- // top indicator row when scrolled
+				}
+				if lineBudget < 1 {
+					lineBudget = 1
+				}
+
+				maxScroll := len(lines) - lineBudget
 				if maxScroll < 0 {
 					maxScroll = 0
 				}
@@ -1481,74 +1492,11 @@ func (m model) renderHistoryPanel() string {
 
 // renderOutputPanel renders the command output panel
 func (m model) renderOutputPanel() string {
-	var outputContent strings.Builder
-
-	// Header
-	outputHeader := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#00FF00")).
-		Render("Command Output:")
-	outputContent.WriteString(outputHeader)
-	outputContent.WriteString("\n\n")
-
-	// Output text or placeholder
-	if m.commandOutput != "" {
-		lines := strings.Split(m.commandOutput, "\n")
-
-		// Calculate visible height (subtract 3 for header and padding)
-		visibleHeight := 17 // Default
-		if m.height > 0 {
-			availHeight := (m.height - 12) / 2
-			if availHeight < 15 {
-				visibleHeight = 12 // 15 - 3 for header
-			} else if availHeight < 25 {
-				visibleHeight = availHeight - 3
-			} else {
-				visibleHeight = 22 // 25 - 3 for header
-			}
-		}
-
-		// Apply scroll position
-		startIdx := m.outputScroll
-		endIdx := startIdx + visibleHeight
-
-		// Ensure we don't go out of bounds
-		if startIdx >= len(lines) {
-			startIdx = len(lines) - 1
-			if startIdx < 0 {
-				startIdx = 0
-			}
-		}
-		if endIdx > len(lines) {
-			endIdx = len(lines)
-		}
-
-		// Show scroll indicator at top if scrolled
-		if startIdx > 0 {
-			outputContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
-			outputContent.WriteString("\n")
-		}
-
-		// Display visible lines
-		visibleLines := lines[startIdx:endIdx]
-		outputContent.WriteString(strings.Join(visibleLines, "\n"))
-
-		// Show scroll indicator at bottom if more content
-		if endIdx < len(lines) {
-			outputContent.WriteString("\n")
-			outputContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
-		}
-	} else {
-		outputContent.WriteString(grayItalicStyle.Render("No output yet"))
-		outputContent.WriteString("\n")
-		outputContent.WriteString(grayItalicStyle.Render("Execute a command to see output here"))
-	}
-
-	// Apply border style - make responsive to match history panel
+	// Apply border style dimensions first so content can be clamped to this height.
 	outputWidth := 45
 	outputHeight := 25
 
-	// Adjust based on terminal size (same as history panel)
+	// Adjust width based on terminal size (same as history panel)
 	if m.width > 0 {
 		// Match history panel width calculation
 		deviceListWidth := 55
@@ -1575,6 +1523,81 @@ func (m model) renderOutputPanel() string {
 		} else if availHeight < outputHeight {
 			outputHeight = availHeight
 		}
+	}
+
+	var outputContent strings.Builder
+
+	// Header
+	outputHeader := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#00FF00")).
+		Render("Command Output:")
+	outputContent.WriteString(outputHeader)
+	outputContent.WriteString("\n\n")
+
+	// Available lines inside the output frame after header section.
+	availableLines := outputHeight - 2 // "Command Output:" + spacer line
+	if availableLines < 1 {
+		availableLines = 1
+	}
+
+	// Output text or placeholder
+	if m.commandOutput != "" {
+		lines := strings.Split(m.commandOutput, "\n")
+		startIdx := m.outputScroll
+		if startIdx >= len(lines) {
+			startIdx = len(lines) - 1
+			if startIdx < 0 {
+				startIdx = 0
+			}
+		}
+
+		showTop := startIdx > 0
+		lineBudget := availableLines
+		if showTop {
+			lineBudget--
+		}
+		if lineBudget < 1 {
+			lineBudget = 1
+		}
+
+		endIdx := startIdx + lineBudget
+		showBottom := false
+		if endIdx < len(lines) {
+			showBottom = true
+			if lineBudget > 1 {
+				endIdx-- // reserve one row for bottom indicator
+			} else {
+				showBottom = false // no room; prioritize content row
+			}
+		}
+		if endIdx > len(lines) {
+			endIdx = len(lines)
+		}
+
+		// Show scroll indicator at top if scrolled
+		if showTop {
+			outputContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
+			outputContent.WriteString("\n")
+		}
+
+		// Display visible lines
+		if endIdx > startIdx {
+			visibleLines := lines[startIdx:endIdx]
+			outputContent.WriteString(strings.Join(visibleLines, "\n"))
+		}
+
+		// Show scroll indicator at bottom if more content
+		if showBottom {
+			if endIdx > startIdx {
+				outputContent.WriteString("\n")
+			}
+			outputContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
+		}
+	} else {
+		outputContent.WriteString(grayItalicStyle.Render("No output yet"))
+		outputContent.WriteString("\n")
+		outputContent.WriteString(grayItalicStyle.Render("Execute a command to see output here"))
 	}
 
 	outputStyle := lipgloss.NewStyle().
