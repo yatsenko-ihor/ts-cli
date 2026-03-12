@@ -19,8 +19,7 @@ import (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#7D56F4")).
-			MarginBottom(1)
+			Foreground(lipgloss.Color("#7D56F4"))
 
 	selectedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FF06B7")).
@@ -31,8 +30,7 @@ var (
 			PaddingLeft(2)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#626262")).
-			MarginTop(1)
+			Foreground(lipgloss.Color("#626262"))
 
 	listStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -1325,7 +1323,7 @@ func (m model) renderHistoryPanel() string {
 		Bold(true).
 		Foreground(lipgloss.Color("#7D56F4")).
 		Render(fmt.Sprintf("🖥️  %s %s %s", machineName, statusIcon, statusText))
-	historyContent.WriteString(machineHeader)
+	historyContent.WriteString(machineHeader + " ")
 	historyContent.WriteString("\n")
 
 	// Line 2: "Commands over SSH History:"
@@ -1334,7 +1332,7 @@ func (m model) renderHistoryPanel() string {
 		Foreground(lipgloss.Color("#00D7FF")).
 		Render("Commands over SSH History:")
 	historyContent.WriteString(historyTitle)
-	historyContent.WriteString("\n\n")
+	historyContent.WriteString("\n")
 
 	// Get unique commands from history
 	var historyCommands []string
@@ -1389,11 +1387,11 @@ func (m model) renderHistoryPanel() string {
 			historyContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
 		}
 
-		historyContent.WriteString("\n\n")
+		historyContent.WriteString("\n")
 		historyContent.WriteString(grayItalicStyle.Render(fmt.Sprintf("Total: %d commands", len(historyCommands))))
 	}
 
-	historyContent.WriteString("\n\n")
+	historyContent.WriteString("\n")
 	if m.commandMode {
 		historyContent.WriteString(grayItalicStyle.Render("New command:"))
 		historyContent.WriteString("\n")
