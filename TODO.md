@@ -63,7 +63,7 @@
 - [x] once click to "s" log to terminal account and text "Connecting to <machine> : <account>"
 - [x] write unit test
 - [x] make security ausit as security expert and apply notes
-- [ ] make git tag v0.1.0 and rc branch "release/v0.1.0"
+- [x] make git tag v0.1.0 and rc branch "release/v0.1.0"
 - [ ] add information how to run tets to README.md
 
 ## To be implemented later:
