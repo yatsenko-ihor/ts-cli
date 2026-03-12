@@ -1225,6 +1225,51 @@ func (m model) getMachineListWidth() int {
 	return w
 }
 
+func (m model) getRightPanelSize() (int, int) {
+	panelWidth := 45
+	panelHeight := 25
+
+	if m.width > 0 {
+		deviceListWidth := m.getMachineListWidth()
+		remainingWidth := m.width - deviceListWidth - 5
+		if remainingWidth > 45 {
+			panelWidth = 45
+		} else if remainingWidth > 35 {
+			panelWidth = remainingWidth
+		} else {
+			panelWidth = 35
+		}
+	}
+
+	if m.height > 0 {
+		availHeight := (m.height - 12) / 2
+		if availHeight < 15 {
+			panelHeight = 15
+		} else if availHeight < panelHeight {
+			panelHeight = availHeight
+		}
+	}
+
+	return panelWidth, panelHeight
+}
+
+func truncateForWidth(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+
+	if max <= 3 {
+		return string(runes[:max])
+	}
+
+	return string(runes[:max-3]) + "..."
+}
+
 // renderDeviceList renders the device list panel
 func (m model) renderDeviceList() string {
 	var listContent strings.Builder
@@ -1418,6 +1463,7 @@ func (m model) getMaxVisibleItems() int {
 // renderHistoryPanel renders the command history panel
 func (m model) renderHistoryPanel() string {
 	var historyContent strings.Builder
+	historyWidth, historyHeight := m.getRightPanelSize()
 
 	// Get history for current device
 	target := m.getTargetDevice()
@@ -1447,11 +1493,12 @@ func (m model) renderHistoryPanel() string {
 
 	// Header - 2 lines format
 	// Line 1: Device name with status
+	headerText := truncateForWidth(fmt.Sprintf("🖥️  %s %s %s", machineName, statusIcon, statusText), historyWidth)
 	machineHeader := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#7D56F4")).
-		Render(fmt.Sprintf("🖥️  %s %s %s", machineName, statusIcon, statusText))
-	historyContent.WriteString(machineHeader + " ")
+		Render(headerText)
+	historyContent.WriteString(machineHeader)
 	historyContent.WriteString("\n")
 
 	// Line 2: "Commands over SSH History:"
@@ -1469,9 +1516,9 @@ func (m model) renderHistoryPanel() string {
 	}
 
 	if len(historyCommands) == 0 {
-		historyContent.WriteString(grayItalicStyle.Render("No command history for this device"))
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("No command history for this device", historyWidth)))
 		historyContent.WriteString("\n")
-		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to type a new command in this panel"))
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command in this panel", historyWidth)))
 	} else {
 		// Render command list
 		maxVisible := 15 // Show up to 15 commands
@@ -1485,6 +1532,11 @@ func (m model) renderHistoryPanel() string {
 			endIdx = len(historyCommands)
 		}
 
+		maxCmdWidth := historyWidth - 8
+		if maxCmdWidth < 8 {
+			maxCmdWidth = 8
+		}
+
 		for i := startIdx; i < endIdx; i++ {
 			cmd := historyCommands[i]
 			cursor := "  "
@@ -1495,11 +1547,7 @@ func (m model) renderHistoryPanel() string {
 				style = selectedStyle
 			}
 
-			// Truncate long commands
-			displayCmd := cmd
-			if len(displayCmd) > 35 {
-				displayCmd = displayCmd[:32] + "..."
-			}
+			displayCmd := truncateForWidth(cmd, maxCmdWidth)
 
 			historyContent.WriteString(style.Render(cursor + displayCmd))
 			historyContent.WriteString("\n")
@@ -1516,51 +1564,27 @@ func (m model) renderHistoryPanel() string {
 		}
 
 		historyContent.WriteString("\n")
-		historyContent.WriteString(grayItalicStyle.Render(fmt.Sprintf("Total: %d commands", len(historyCommands))))
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth(fmt.Sprintf("Total: %d commands", len(historyCommands)), historyWidth)))
 	}
 
 	historyContent.WriteString("\n")
 	if m.commandMode {
 		historyContent.WriteString(grayItalicStyle.Render("New command:"))
 		historyContent.WriteString("\n")
-		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(m.commandInput+"_"))
+		maxInputWidth := historyWidth - 2
+		if maxInputWidth < 1 {
+			maxInputWidth = 1
+		}
+		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(truncateForWidth(m.commandInput+"_", maxInputWidth)))
 	} else {
-		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to type a new command • 'd' delete selected"))
-	}
-
-	// Apply border style - make responsive to terminal size
-	historyWidth := 45
-	historyHeight := 25
-
-	// Adjust based on terminal size
-	if m.width > 0 {
-		// Right panels share remaining width (~60% of terminal)
-		deviceListWidth := m.getMachineListWidth()
-		// History gets remaining space minus some margin
-		remainingWidth := m.width - deviceListWidth - 5 // 5 char margin
-		if remainingWidth > 45 {
-			historyWidth = 45 // Cap at reasonable max
-		} else if remainingWidth > 35 {
-			historyWidth = remainingWidth
-		} else {
-			historyWidth = 35 // Minimum width
-		}
-	}
-
-	if m.height > 0 {
-		// Each panel gets roughly half of available height
-		availHeight := (m.height - 12) / 2 // Split between history and output
-		if availHeight < 15 {
-			historyHeight = 15
-		} else if availHeight < historyHeight {
-			historyHeight = availHeight
-		}
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command • 'd' delete selected", historyWidth)))
 	}
 
 	historyStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#00D7FF")).
 		Padding(1, 2).
+		MaxWidth(historyWidth).
 		Width(historyWidth).
 		Height(historyHeight)
 
@@ -1574,31 +1598,7 @@ func (m model) renderHistoryPanel() string {
 // renderOutputPanel renders the command output panel
 func (m model) renderOutputPanel() string {
 	// Apply border style dimensions first so content can be clamped to this height.
-	outputWidth := 45
-	outputHeight := 25
-
-	// Adjust width based on terminal size (same as history panel)
-	if m.width > 0 {
-		// Match history panel width calculation
-		deviceListWidth := m.getMachineListWidth()
-		remainingWidth := m.width - deviceListWidth - 5
-		if remainingWidth > 45 {
-			outputWidth = 45
-		} else if remainingWidth > 35 {
-			outputWidth = remainingWidth
-		} else {
-			outputWidth = 35
-		}
-	}
-
-	if m.height > 0 {
-		availHeight := (m.height - 12) / 2
-		if availHeight < 15 {
-			outputHeight = 15
-		} else if availHeight < outputHeight {
-			outputHeight = availHeight
-		}
-	}
+	outputWidth, outputHeight := m.getRightPanelSize()
 
 	var outputContent strings.Builder
 
@@ -1659,6 +1659,9 @@ func (m model) renderOutputPanel() string {
 		// Display visible lines
 		if endIdx > startIdx {
 			visibleLines := lines[startIdx:endIdx]
+			for i := range visibleLines {
+				visibleLines[i] = truncateForWidth(visibleLines[i], outputWidth)
+			}
 			outputContent.WriteString(strings.Join(visibleLines, "\n"))
 		}
 
@@ -1679,6 +1682,7 @@ func (m model) renderOutputPanel() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#00FF00")).
 		Padding(1, 2).
+		MaxWidth(outputWidth).
 		Width(outputWidth).
 		Height(outputHeight)
 
