@@ -1035,7 +1035,7 @@ func (m model) View() string {
 		warningStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFA500")).
 			Bold(true)
-		
+
 		warningMsg := fmt.Sprintf("⚠️  Warning: Terminal size (%dx%d) is too small. Minimum recommended: %dx%d for optimal display.",
 			m.width, m.height, minWidth, minHeight)
 		b.WriteString(warningStyle.Render(warningMsg))
@@ -1099,7 +1099,7 @@ func (m model) renderDeviceList() string {
 	// Render the list in a frame
 	// Make responsive to terminal size
 	deviceListStyle := listStyle
-	
+
 	if m.showHistoryPanel {
 		// Combined height of history + output panels
 		targetHeight := 52
@@ -1114,12 +1114,18 @@ func (m model) renderDeviceList() string {
 			}
 		}
 		deviceListStyle = deviceListStyle.Height(targetHeight)
-		
-		// Adjust width if terminal is narrow
-		if m.width > 0 && m.width < 110 {
-			listWidth := m.width - 50 // Leave room for panels
-			if listWidth < 40 {
-				listWidth = 40
+
+		// Device list takes ~40% of width (min 40, max 55 chars)
+		if m.width > 0 {
+			listWidth := 55 // Default width
+			if m.width < 130 {
+				// Scale down proportionally for narrower terminals
+				listWidth = int(float64(m.width) * 0.40)
+				if listWidth < 40 {
+					listWidth = 40
+				} else if listWidth > 55 {
+					listWidth = 55
+				}
 			}
 			deviceListStyle = deviceListStyle.Width(listWidth)
 		}
@@ -1130,7 +1136,7 @@ func (m model) renderDeviceList() string {
 			deviceListStyle = deviceListStyle.Height(availHeight)
 		}
 	}
-	
+
 	return deviceListStyle.Render(listContent.String())
 }
 
@@ -1292,18 +1298,29 @@ func (m model) renderHistoryPanel() string {
 	// Apply border style - make responsive to terminal size
 	historyWidth := 45
 	historyHeight := 25
-	
+
 	// Adjust based on terminal size
 	if m.width > 0 {
-		// Calculate available width for right panel
-		availWidth := (m.width - 50) / 2 // Roughly half of remaining space
-		if availWidth < 40 {
-			historyWidth = 40
-		} else if availWidth < historyWidth {
-			historyWidth = availWidth
+		// Right panels share remaining width (~60% of terminal)
+		// Device list takes ~40%, so remaining is ~60%
+		deviceListWidth := 55
+		if m.width < 130 {
+			deviceListWidth = int(float64(m.width) * 0.40)
+			if deviceListWidth < 40 {
+				deviceListWidth = 40
+			}
+		}
+		// History gets remaining space minus some margin
+		remainingWidth := m.width - deviceListWidth - 5 // 5 char margin
+		if remainingWidth > 45 {
+			historyWidth = 45 // Cap at reasonable max
+		} else if remainingWidth > 35 {
+			historyWidth = remainingWidth
+		} else {
+			historyWidth = 35 // Minimum width
 		}
 	}
-	
+
 	if m.height > 0 {
 		// Each panel gets roughly half of available height
 		availHeight := (m.height - 12) / 2 // Split between history and output
@@ -1313,7 +1330,7 @@ func (m model) renderHistoryPanel() string {
 			historyHeight = availHeight
 		}
 	}
-	
+
 	historyStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#00D7FF")).
@@ -1360,17 +1377,27 @@ func (m model) renderOutputPanel() string {
 	// Apply border style - make responsive to match history panel
 	outputWidth := 45
 	outputHeight := 25
-	
+
 	// Adjust based on terminal size (same as history panel)
 	if m.width > 0 {
-		availWidth := (m.width - 50) / 2
-		if availWidth < 40 {
-			outputWidth = 40
-		} else if availWidth < outputWidth {
-			outputWidth = availWidth
+		// Match history panel width calculation
+		deviceListWidth := 55
+		if m.width < 130 {
+			deviceListWidth = int(float64(m.width) * 0.40)
+			if deviceListWidth < 40 {
+				deviceListWidth = 40
+			}
+		}
+		remainingWidth := m.width - deviceListWidth - 5
+		if remainingWidth > 45 {
+			outputWidth = 45
+		} else if remainingWidth > 35 {
+			outputWidth = remainingWidth
+		} else {
+			outputWidth = 35
 		}
 	}
-	
+
 	if m.height > 0 {
 		availHeight := (m.height - 12) / 2
 		if availHeight < 15 {
@@ -1379,7 +1406,7 @@ func (m model) renderOutputPanel() string {
 			outputHeight = availHeight
 		}
 	}
-	
+
 	outputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#00FF00")).
@@ -1407,7 +1434,7 @@ func (m model) renderProfileSelection() string {
 			listWidth = 40
 		}
 	}
-	
+
 	profileList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#7D56F4")).
@@ -1475,7 +1502,7 @@ func (m model) renderAccountManagement() string {
 			listWidth = 40
 		}
 	}
-	
+
 	optionsList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#7D56F4")).
