@@ -941,14 +941,6 @@ func (m model) View() string {
 	} else if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"
 		b.WriteString(titleStyle.Render(title))
-	} else if m.searchMode {
-		// Render search with different colors on the same line
-		baseTitle := titleStyle.Render(title)
-		searchLabel := searchLabelStyle.Render("> Search: ")
-		searchInput := searchQueryStyle.Render(m.searchQuery + "_")
-		b.WriteString(baseTitle)
-		b.WriteString("\n")
-		b.WriteString(searchLabel + searchInput)
 	} else if m.searchQuery != "" {
 		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.filteredDevices), len(m.devices))
 		b.WriteString(titleStyle.Render(title))
@@ -963,17 +955,6 @@ func (m model) View() string {
 	// Show real active Tailscale account at the top
 	if m.tailscaleActiveAccount != "" {
 		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Active account: %s", m.tailscaleActiveAccount)))
-		b.WriteString("\n")
-	}
-
-	// Show search scope or "all" when viewing all profiles
-	if m.selectedProfile == "" {
-		// When no profile filter is set, show "all"
-		b.WriteString(grayItalicStyle.Render("Search in: all"))
-		b.WriteString("\n")
-	} else {
-		// When a profile is selected, show the selected profile
-		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Search in: %s", m.selectedProfile)))
 		b.WriteString("\n")
 	}
 
@@ -1110,6 +1091,31 @@ func (m model) renderDeviceList() string {
 	var listContent strings.Builder
 	maxVisible := m.getMaxVisibleItems()
 
+	// Frame header with search scope and query input
+	listHeader := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#7D56F4")).
+		Render("List machines")
+	listContent.WriteString(listHeader)
+	listContent.WriteString("\n")
+
+	searchScope := "all"
+	if m.selectedProfile != "" {
+		searchScope = m.selectedProfile
+	}
+	listContent.WriteString(grayItalicStyle.Render(fmt.Sprintf("Search in: %s", searchScope)))
+	listContent.WriteString("\n")
+
+	if m.searchMode {
+		listContent.WriteString(searchLabelStyle.Render("> Search: ") + searchQueryStyle.Render(m.searchQuery+"_"))
+		listContent.WriteString("\n")
+	} else if m.searchQuery != "" {
+		listContent.WriteString(searchLabelStyle.Render("Search: ") + searchQueryStyle.Render(m.searchQuery))
+		listContent.WriteString("\n")
+	}
+
+	listContent.WriteString("\n")
+
 	// Calculate visible range
 	visibleStart := m.viewportTop
 	visibleEnd := m.viewportTop + maxVisible
@@ -1245,8 +1251,16 @@ func (m model) getMaxVisibleItems() int {
 	// Account for: title (2 lines), frame borders (4 lines), detail panel (~10 lines), help (2 lines), padding (4)
 	// This leaves space for the device list
 	availableHeight := m.height - 22
-	if availableHeight < 5 {
-		availableHeight = 5 // Minimum visible items
+
+	// Device list now includes in-frame header and search scope/input lines
+	headerLines := 3 // "List machines", "Search in", and spacer line
+	if m.searchMode || m.searchQuery != "" {
+		headerLines++
+	}
+	availableHeight -= headerLines
+
+	if availableHeight < 3 {
+		availableHeight = 3 // Minimum visible items
 	}
 
 	return availableHeight

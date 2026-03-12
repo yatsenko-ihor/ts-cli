@@ -75,7 +75,7 @@
 - [x] make sure all app is fit to terminal width and height. Do not create frames too tall or too wide. Once terminal is really small and even list of machines is not proper fix - give at bottom (like to "Top") a "⚠️Warning" that size of windows is not enought for comfort work
 - [x] add scroll to "Output frame", do not extend height more then reminal provide
 - [x] move "Execute Command" and logic into frame "Command history" and rename to "Commands over SSH History:"
-- [ ] move "Search in: <>" and Search user input into "List machines" frame
+- [x] move "Search in: <>" and Search user input into "List machines" frame
 
 ## To be implemented later:
 
