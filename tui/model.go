@@ -127,6 +127,7 @@ const (
 	focusSearch
 	focusSSH
 	focusHistory // Focus on history panel
+	focusOutput  // Focus on output panel
 )
 
 type model struct {
@@ -165,6 +166,7 @@ type model struct {
 	history                *util.HistoryStore   // Command history store
 	historyCursor          int                  // Cursor position in history list
 	showHistoryPanel       bool                 // Whether to show the history panel
+	outputScroll           int                  // Scroll position in output panel
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -374,6 +376,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.commandOutput = ""
 		} else {
 			m.commandOutput = msg.output
+			m.outputScroll = 0 // Reset scroll when new output arrives
 			m.sshError = nil
 		}
 		return m, nil
@@ -640,18 +643,25 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "tab":
-		// Toggle history panel and switch focus
+		// Toggle history panel and cycle through focus
 		if !m.showHistoryPanel {
 			// Show history panel
 			m.showHistoryPanel = true
 			m.activeFocus = focusHistory
 			m.historyCursor = 0
+			m.outputScroll = 0
 		} else {
-			// Toggle focus between device list and history
-			if m.activeFocus == focusList {
+			// Cycle focus: list -> history -> output -> list
+			switch m.activeFocus {
+			case focusList:
 				m.activeFocus = focusHistory
 				m.historyCursor = 0
-			} else {
+			case focusHistory:
+				m.activeFocus = focusOutput
+				m.outputScroll = 0
+			case focusOutput:
+				m.activeFocus = focusList
+			default:
 				m.activeFocus = focusList
 			}
 		}
@@ -772,6 +782,24 @@ func (m model) getTargetDevice() int {
 
 // moveCursorUp moves the cursor up and adjusts viewport if needed
 func (m *model) moveCursorUp() {
+	// Handle different panels based on focus
+	if m.showHistoryPanel {
+		if m.activeFocus == focusHistory {
+			// Scroll history list
+			if m.historyCursor > 0 {
+				m.historyCursor--
+			}
+			return
+		} else if m.activeFocus == focusOutput {
+			// Scroll output panel
+			if m.outputScroll > 0 {
+				m.outputScroll--
+			}
+			return
+		}
+	}
+
+	// Default: scroll device list
 	if m.cursor > 0 {
 		m.cursor--
 		// Scroll up if cursor goes above viewport
@@ -785,6 +813,47 @@ func (m *model) moveCursorUp() {
 
 // moveCursorDown moves the cursor down and adjusts viewport if needed
 func (m *model) moveCursorDown() {
+	// Handle different panels based on focus
+	if m.showHistoryPanel {
+		if m.activeFocus == focusHistory {
+			// Scroll history list
+			if m.history != nil && m.selected >= 0 && m.selected < len(m.filteredDevices) {
+				device := m.filteredDevices[m.selected]
+				machineID := device.ID
+				if machineID == "" {
+					machineID = device.Hostname
+				}
+				historyCommands := m.history.GetUniqueCommands(machineID)
+				if m.historyCursor < len(historyCommands)-1 {
+					m.historyCursor++
+				}
+			}
+			return
+		} else if m.activeFocus == focusOutput {
+			// Scroll output panel - calculate max scroll based on output lines
+			if m.commandOutput != "" {
+				lines := strings.Split(m.commandOutput, "\n")
+				// Calculate visible height for output
+				availHeight := 15 // Default minimum
+				if m.height > 0 {
+					availHeight = (m.height - 12) / 2
+					if availHeight < 15 {
+						availHeight = 15
+					}
+				}
+				maxScroll := len(lines) - availHeight + 3 // +3 for header and padding
+				if maxScroll < 0 {
+					maxScroll = 0
+				}
+				if m.outputScroll < maxScroll {
+					m.outputScroll++
+				}
+			}
+			return
+		}
+	}
+
+	// Default: scroll device list
 	if m.cursor < len(m.filteredDevices)-1 {
 		m.cursor++
 		// Scroll down if cursor goes below viewport
@@ -962,6 +1031,8 @@ func (m model) View() string {
 	if m.showHistoryPanel {
 		if m.activeFocus == focusHistory {
 			help = "↑/k up • ↓/j down • enter execute • tab switch • esc close"
+		} else if m.activeFocus == focusOutput {
+			help = "↑/k up • ↓/j down • tab switch • esc close"
 		} else {
 			help = "↑/k up • ↓/j down • enter select • tab history • esc close"
 		}
@@ -1359,15 +1430,51 @@ func (m model) renderOutputPanel() string {
 
 	// Output text or placeholder
 	if m.commandOutput != "" {
-		// Limit output display to prevent overwhelming the UI
-		output := m.commandOutput
-		maxLines := 20
-		lines := strings.Split(output, "\n")
-		if len(lines) > maxLines {
-			lines = lines[:maxLines]
-			lines = append(lines, "... (output truncated)")
+		lines := strings.Split(m.commandOutput, "\n")
+
+		// Calculate visible height (subtract 3 for header and padding)
+		visibleHeight := 17 // Default
+		if m.height > 0 {
+			availHeight := (m.height - 12) / 2
+			if availHeight < 15 {
+				visibleHeight = 12 // 15 - 3 for header
+			} else if availHeight < 25 {
+				visibleHeight = availHeight - 3
+			} else {
+				visibleHeight = 22 // 25 - 3 for header
+			}
 		}
-		outputContent.WriteString(strings.Join(lines, "\n"))
+
+		// Apply scroll position
+		startIdx := m.outputScroll
+		endIdx := startIdx + visibleHeight
+
+		// Ensure we don't go out of bounds
+		if startIdx >= len(lines) {
+			startIdx = len(lines) - 1
+			if startIdx < 0 {
+				startIdx = 0
+			}
+		}
+		if endIdx > len(lines) {
+			endIdx = len(lines)
+		}
+
+		// Show scroll indicator at top if scrolled
+		if startIdx > 0 {
+			outputContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
+			outputContent.WriteString("\n")
+		}
+
+		// Display visible lines
+		visibleLines := lines[startIdx:endIdx]
+		outputContent.WriteString(strings.Join(visibleLines, "\n"))
+
+		// Show scroll indicator at bottom if more content
+		if endIdx < len(lines) {
+			outputContent.WriteString("\n")
+			outputContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
+		}
 	} else {
 		outputContent.WriteString(grayItalicStyle.Render("No output yet"))
 		outputContent.WriteString("\n")
@@ -1413,6 +1520,10 @@ func (m model) renderOutputPanel() string {
 		Padding(1, 2).
 		Width(outputWidth).
 		Height(outputHeight)
+
+	if m.activeFocus == focusOutput {
+		outputStyle = outputStyle.BorderForeground(lipgloss.Color("#FF06B7"))
+	}
 
 	return outputStyle.Render(outputContent.String())
 }
