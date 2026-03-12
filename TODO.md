@@ -58,9 +58,9 @@
 - [x] once click "r" for reload show somehow visually thst reload was done
 - [x] I see "Note: ts-cli uses the Tailscale API to query devices, but you'll need
       Tailscale running locally to actually connect to them via SSH." Start tailscale by yourself and log it to terminal
-- [ ] rename "Active account:" to "Search in: "
-- [ ] add to top of interactive mode "Active account: " to real active in tailscale
-- [ ] once click to "s" log to terminal account and text "Connecting to <machine> : <account>"
+- [x] rename "Active account:" to "Search in: "
+- [x] add to top of interactive mode "Active account: " to real active in tailscale
+- [x] once click to "s" log to terminal account and text "Connecting to <machine> : <account>"
 
 ## To be implemented later:
 
