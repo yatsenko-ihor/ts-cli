@@ -121,11 +121,9 @@ type commandExecutedMsg struct {
 type panelFocus int
 
 const (
-	focusList panelFocus = iota
-	focusSearch
-	focusSSH
-	focusHistory // Focus on history panel
-	focusOutput  // Focus on output panel
+	focusList    panelFocus = iota
+	focusHistory            // Focus on history panel
+	focusOutput             // Focus on output panel
 )
 
 type model struct {
