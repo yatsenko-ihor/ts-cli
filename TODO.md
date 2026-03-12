@@ -82,7 +82,7 @@
 - [x] same some vertical space if possible (remove not necessary spaces)
 - [x] expand list of machines to full frame height
 - [x] move "↑/k up • ↓/j down • / search •...." under "List machines" as was before
-- [ ] once on frame "Command Output:" appears " ↓ more below" app make height of frame bigger. Avoid it. Frame should to change size only during window / terminal resize.
+- [x] once on frame "Command Output:" appears " ↓ more below" app make height of frame bigger. Avoid it. Frame should to change size only during window / terminal resize.
 
 ## To be implemented later:
 
