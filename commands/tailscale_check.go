@@ -66,10 +66,10 @@ Visit https://tailscale.com/download for installation instructions.`
 // attemptToStartTailscale tries to start Tailscale based on the OS
 func attemptToStartTailscale() bool {
 	fmt.Println("🔄 Attempting to start Tailscale...")
-	
+
 	var cmd *exec.Cmd
 	var description string
-	
+
 	switch runtime.GOOS {
 	case "darwin":
 		// On macOS, try to open the Tailscale app
@@ -83,9 +83,9 @@ func attemptToStartTailscale() bool {
 		fmt.Println("⚠️  Automatic Tailscale start not supported on this OS")
 		return false
 	}
-	
+
 	fmt.Printf("   %s...\n", description)
-	
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("❌ Failed to start Tailscale: %v\n", err)
@@ -94,22 +94,22 @@ func attemptToStartTailscale() bool {
 		}
 		return false
 	}
-	
+
 	fmt.Println("✅ Tailscale start command executed successfully")
-	
+
 	// Wait a moment for Tailscale to start
 	fmt.Println("   Waiting for Tailscale to initialize...")
 	// Give it a couple seconds to start
 	cmd = exec.Command("sleep", "2")
 	cmd.Run()
-	
+
 	// Verify it's running
 	isRunning, _ := CheckTailscaleStatus()
 	if isRunning {
 		fmt.Println("✅ Tailscale is now running!")
 		return true
 	}
-	
+
 	fmt.Println("⚠️  Tailscale start command succeeded, but service not yet active")
 	fmt.Println("   Please wait a moment and try again, or start Tailscale manually")
 	return false
@@ -120,12 +120,12 @@ func WarnIfTailscaleNotRunning() {
 	isRunning, message := CheckTailscaleStatus()
 	if !isRunning {
 		fmt.Printf("\n⚠️  Warning: %s\n\n", message)
-		
+
 		// Attempt to start Tailscale automatically
 		fmt.Println("Note: ts-cli uses the Tailscale API to query devices, but you'll need")
 		fmt.Println("Tailscale running locally to actually connect to them via SSH.")
 		fmt.Println()
-		
+
 		started := attemptToStartTailscale()
 		if !started {
 			fmt.Println("\n💡 Please start Tailscale manually and try again.")

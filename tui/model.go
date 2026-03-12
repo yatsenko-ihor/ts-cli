@@ -625,6 +625,12 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Check if Tailscale is running locally before attempting SSH
+	if isRunning, message := checkLocalTailscaleStatus(); !isRunning {
+		m.sshError = fmt.Errorf("Tailscale is not running locally: %s\nPress 'u' to run 'tailscale up' or start Tailscale manually", message)
+		return m, nil
+	}
+
 	// Clear any previous SSH errors
 	m.sshError = nil
 
@@ -689,14 +695,14 @@ func (m model) View() string {
 	}
 	b.WriteString("\n")
 
-	// Show active account or "all" when viewing all profiles
+	// Show search scope or "all" when viewing all profiles
 	if m.selectedProfile == "" {
 		// When no profile filter is set, show "all"
-		b.WriteString(grayItalicStyle.Render("Active account: all"))
+		b.WriteString(grayItalicStyle.Render("Search in: all"))
 		b.WriteString("\n")
-	} else if m.activeAccount != "" {
-		// When a profile is selected, show the active account
-		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Active account: %s", m.activeAccount)))
+	} else {
+		// When a profile is selected, show the selected profile
+		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Search in: %s", m.selectedProfile)))
 		b.WriteString("\n")
 	}
 
@@ -1470,4 +1476,24 @@ fi
 	}
 
 	return cmd
+}
+
+// checkLocalTailscaleStatus checks if Tailscale is running locally
+func checkLocalTailscaleStatus() (bool, string) {
+	cmd := exec.Command("tailscale", "status")
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		// Tailscale command failed - daemon might not be running or not installed
+		return false, "Tailscale daemon is not running"
+	}
+	
+	// Check if output indicates we're not connected
+	outputStr := string(output)
+	if strings.Contains(strings.ToLower(outputStr), "logged out") {
+		return false, "You are logged out from Tailscale"
+	}
+	
+	// Tailscale is running and connected
+	return true, ""
 }
