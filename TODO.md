@@ -93,6 +93,6 @@
 - [x] write md doc how to use with tmux
 - [x] make widther "Machine list" frame and make not futther changes of frame except when temrinal window resize
 - [x] extend "History command" width frame to end of terminal
-- [ ] extend "Command Output" width frame to end of terminal
+- [x] extend "Command Output" width frame to end of terminal
 
 ## To be implemented later:

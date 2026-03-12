@@ -1225,34 +1225,6 @@ func (m model) getMachineListWidth() int {
 	return w
 }
 
-func (m model) getRightPanelSize() (int, int) {
-	panelWidth := 45
-	panelHeight := 25
-
-	if m.width > 0 {
-		deviceListWidth := m.getMachineListWidth()
-		remainingWidth := m.width - deviceListWidth - 5
-		if remainingWidth > 45 {
-			panelWidth = 45
-		} else if remainingWidth > 35 {
-			panelWidth = remainingWidth
-		} else {
-			panelWidth = 35
-		}
-	}
-
-	if m.height > 0 {
-		availHeight := (m.height - 12) / 2
-		if availHeight < 15 {
-			panelHeight = 15
-		} else if availHeight < panelHeight {
-			panelHeight = availHeight
-		}
-	}
-
-	return panelWidth, panelHeight
-}
-
 func (m model) getHistoryPanelSize() (int, int) {
 	panelWidth := 45
 	panelHeight := 25
@@ -1641,7 +1613,7 @@ func (m model) renderHistoryPanel() string {
 // renderOutputPanel renders the command output panel
 func (m model) renderOutputPanel() string {
 	// Apply border style dimensions first so content can be clamped to this height.
-	outputWidth, outputHeight := m.getRightPanelSize()
+	outputWidth, outputHeight := m.getHistoryPanelSize()
 
 	var outputContent strings.Builder
 
