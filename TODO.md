@@ -61,10 +61,12 @@
 - [x] rename "Active account:" to "Search in: "
 - [x] add to top of interactive mode "Active account: " to real active in tailscale
 - [x] once click to "s" log to terminal account and text "Connecting to <machine> : <account>"
+- [ ] write unit test
+- [ ] make security ausit as security expert and apply notes
+- [ ] make git tag v0.1.0 and rc branch "release/v0.1.0"
 
 ## To be implemented later:
 
-- [ ] write unit test
-- [ ] make git tag v0.1.0 and rc branch "release/v0.1.0"
-- [ ] make security ausit as security expert and apply notes
 - [ ] try to search is it possible to open another tmux pane if app running in tmux
+- [ ] add ability to send command over ssh to the machine (remember it is history file)
+- [ ] separate frame(right side of terminal), once tab click on machine(check if it's online or not) - on that frame show commands fom history. Navigation in frame also vim like and over enter - command send to remote machine. Output of command should be printed in seprate frame.

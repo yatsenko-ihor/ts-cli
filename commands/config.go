@@ -196,11 +196,6 @@ func (c *Config) GetActiveAccount() *Account {
 			return &c.Accounts[i]
 		}
 	}
-	// Return first account if none is marked active
-	if len(c.Accounts) > 0 {
-		c.Accounts[0].Active = true
-		return &c.Accounts[0]
-	}
 	return nil
 }
 
@@ -216,15 +211,22 @@ func (c *Config) GetAccountByTailnet(tailnet string) *Account {
 
 // SetActiveAccount sets the active account by tailnet
 func (c *Config) SetActiveAccount(tailnet string) bool {
+	// First check if the account exists
 	found := false
 	for i := range c.Accounts {
 		if c.Accounts[i].Tailnet == tailnet {
-			c.Accounts[i].Active = true
 			found = true
-		} else {
-			c.Accounts[i].Active = false
+			break
 		}
 	}
+	
+	// Only modify account states if the tailnet was found
+	if found {
+		for i := range c.Accounts {
+			c.Accounts[i].Active = c.Accounts[i].Tailnet == tailnet
+		}
+	}
+	
 	return found
 }
 
