@@ -66,7 +66,7 @@
 - [x] make git tag v0.1.0 and rc branch "release/v0.1.0"
 - [x] add information how to run tets to README.md
 - [x] add ability to send command over ssh to the machine (remember it is history file)
-- [ ] separate frame(right side of terminal), once tab click on machine(check if it's online or not) - on that frame show commands fom history. Navigation in frame also vim like and over enter - command send to remote machine. Output of command should be printed in seprate frame.
+- [x] separate frame(right side of terminal), once tab click on machine(check if it's online or not) - on that frame show commands fom history. Navigation in frame also vim like and over enter - command send to remote machine. Output of command should be printed in seprate frame.
 
 ## To be implemented later:
 
