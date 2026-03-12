@@ -1154,11 +1154,21 @@ func (m model) renderHistoryPanel() string {
 		statusText = "Online"
 	}
 
-	// Header
-	historyContent.WriteString(lipgloss.NewStyle().
+	// Header - 2 lines format
+	// Line 1: Device name with status
+	machineHeader := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#7D56F4")).
-		Render(fmt.Sprintf("Command History - %s %s %s", machineName, statusIcon, statusText)))
+		Render(fmt.Sprintf("🖥️  %s %s %s", machineName, statusIcon, statusText))
+	historyContent.WriteString(machineHeader)
+	historyContent.WriteString("\n")
+	
+	// Line 2: "Command history:"
+	historyTitle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#00D7FF")).
+		Render("Command history:")
+	historyContent.WriteString(historyTitle)
 	historyContent.WriteString("\n\n")
 
 	// Get unique commands from history
