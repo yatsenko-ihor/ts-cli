@@ -1110,6 +1110,35 @@ func (m model) View() string {
 func (m model) renderDeviceList() string {
 	var listContent strings.Builder
 	maxVisible := m.getMaxVisibleItems()
+	splitTargetHeight := 0
+
+	if m.showHistoryPanel {
+		panelHeight := 25
+		if m.height > 0 {
+			panelHeight = (m.height - 12) / 2
+			if panelHeight < 15 {
+				panelHeight = 15
+			} else if panelHeight > 25 {
+				panelHeight = 25
+			}
+		}
+
+		// Match stacked right panel height (including border compensation)
+		splitTargetHeight = (panelHeight * 2) + 2
+
+		// Reserve lines for in-frame header and search scope/input so device rows fill remaining space.
+		headerLines := 3 // title + "Search in" + spacer line
+		if m.searchMode || m.searchQuery != "" {
+			headerLines++
+		}
+		maxVisible = splitTargetHeight - headerLines
+		if m.viewportTop > 0 {
+			maxVisible-- // top "more above" indicator
+		}
+		if maxVisible < 1 {
+			maxVisible = 1
+		}
+	}
 
 	// Frame header with search scope and query input
 	listHeader := lipgloss.NewStyle().
@@ -1141,6 +1170,10 @@ func (m model) renderDeviceList() string {
 	visibleEnd := m.viewportTop + maxVisible
 	if visibleEnd > len(m.filteredDevices) {
 		visibleEnd = len(m.filteredDevices)
+	}
+	if m.showHistoryPanel && visibleEnd < len(m.filteredDevices) && visibleEnd > visibleStart {
+		// Reserve one line for bottom "more below" indicator in split view.
+		visibleEnd--
 	}
 
 	// Show scroll indicator at top if needed
@@ -1188,20 +1221,9 @@ func (m model) renderDeviceList() string {
 	deviceListStyle := listStyle
 
 	if m.showHistoryPanel {
-		// Keep list height equal to history+output combined height
-		// Style.Height controls content area; stacked right panels add one extra border line.
-		// Add +2 so left frame (single border) matches right stack (two bordered frames).
-		targetHeight := 52 // (25 + 25) + 2 border compensation
-		if m.height > 0 {
-			panelHeight := (m.height - 12) / 2
-			if panelHeight < 15 {
-				panelHeight = 15
-			} else if panelHeight > 25 {
-				panelHeight = 25
-			}
-			targetHeight = (panelHeight * 2) + 2
+		if splitTargetHeight > 0 {
+			deviceListStyle = deviceListStyle.Height(splitTargetHeight)
 		}
-		deviceListStyle = deviceListStyle.Height(targetHeight)
 
 		// Device list takes ~40% of width (min 40, max 55 chars)
 		if m.width > 0 {

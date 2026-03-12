@@ -80,8 +80,8 @@
 - [x] still not proper height of frames. height of "Commands over SSH History:" + "Output" bigger then of "List machines"
 - [x] Add to frame "Commands over SSH History:" button "d" to delete command from history
 - [x] same some vertical space if possible (remove not necessary spaces)
-- [ ] expand list of machines to full frame height
-- [ ] move ↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p prof
+- [x] expand list of machines to full frame height
+- [ ] move "↑/k up • ↓/j down • / search •...." under "List machines" as was before
 
 ## To be implemented later:
 
