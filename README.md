@@ -23,7 +23,9 @@ A command-line interface tool for managing Tailscale devices and resources via t
 
 ```bash
 # Clone the repository
-cd /Users/ihor/Development/ts-cli
+
+# Navigate to project folder
+cd ~/ts-cli
 
 # Download dependencies
 go mod download
@@ -180,6 +182,7 @@ ts-cli ssh laptop
 Launch an interactive terminal UI to browse and manage devices with split-screen support.
 
 ```bash
+ts-cli
 ts-cli interactive
 ts-cli i      # Short alias
 ts-cli tui    # Alternative alias

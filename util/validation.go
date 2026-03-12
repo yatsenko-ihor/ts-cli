@@ -107,7 +107,7 @@ func ValidateAPIKey(apiKey string) error {
 func SanitizeInput(input string) string {
 	// Remove null bytes
 	input = strings.ReplaceAll(input, "\x00", "")
-	
+
 	// Remove control characters except tab, newline, carriage return
 	var sanitized strings.Builder
 	for _, r := range input {
@@ -115,6 +115,6 @@ func SanitizeInput(input string) string {
 			sanitized.WriteRune(r)
 		}
 	}
-	
+
 	return strings.TrimSpace(sanitized.String())
 }
