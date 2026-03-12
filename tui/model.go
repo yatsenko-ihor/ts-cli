@@ -1191,7 +1191,9 @@ func (m model) renderDeviceList() string {
 
 	if m.showHistoryPanel {
 		// Keep list height equal to history+output combined height
-		targetHeight := 50 // 25 + 25 default
+		// Style.Height controls content area; stacked right panels add one extra border line.
+		// Add +2 so left frame (single border) matches right stack (two bordered frames).
+		targetHeight := 52 // (25 + 25) + 2 border compensation
 		if m.height > 0 {
 			panelHeight := (m.height - 12) / 2
 			if panelHeight < 15 {
@@ -1199,7 +1201,7 @@ func (m model) renderDeviceList() string {
 			} else if panelHeight > 25 {
 				panelHeight = 25
 			}
-			targetHeight = panelHeight * 2
+			targetHeight = (panelHeight * 2) + 2
 		}
 		deviceListStyle = deviceListStyle.Height(targetHeight)
 
