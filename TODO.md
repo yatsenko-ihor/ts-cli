@@ -70,7 +70,7 @@
 - [x] make "Command History - pi......net 🟢 Online" in 2 lines like:
       "🖥️ pi-1.tail7338e2.ts.net
       "Command history:"
-- [ ] make "Command history" frame a bit narrower
+- [x] make "Command history" frame a bit narrower
 - [ ] make Output frame same height as "Command history" and if enough space - put right after "Command history". If space not enought - put exactly under "Command history" with same width. And height of listm machines frame should be same as "Command history" + "Output" frames
 
 ## To be implemented later:

@@ -1206,8 +1206,8 @@ func (m model) renderHistoryPanel() string {
 
 			// Truncate long commands
 			displayCmd := cmd
-			if len(displayCmd) > 50 {
-				displayCmd = displayCmd[:47] + "..."
+			if len(displayCmd) > 35 {
+				displayCmd = displayCmd[:32] + "..."
 			}
 
 			historyContent.WriteString(style.Render(cursor + displayCmd))
@@ -1233,7 +1233,7 @@ func (m model) renderHistoryPanel() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#00D7FF")).
 		Padding(1, 2).
-		Width(60).
+		Width(45).
 		Height(25)
 
 	if m.activeFocus == focusHistory {
