@@ -114,6 +114,12 @@ type reloadMsg struct {
 	err     error
 }
 
+type commandExecutedMsg struct {
+	output   string
+	exitCode int
+	err      error
+}
+
 type panelFocus int
 
 const (
@@ -152,6 +158,10 @@ type model struct {
 	installationBroken     bool                 // Whether existing PATH installation is broken
 	accountManageMode      bool                 // Whether we're in account management mode
 	manageCursor           int                  // Cursor position in account management menu
+	commandMode            bool                 // Whether we're in command input mode
+	commandInput           string               // Current command being typed
+	commandOutput          string               // Output from last command execution
+	history                *util.HistoryStore   // Command history store
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -172,6 +182,13 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 
 	// Get real active Tailscale account
 	tailscaleActiveAccount := getRealTailscaleAccount()
+
+	// Initialize history store
+	history, err := util.NewHistoryStore()
+	if err != nil {
+		// If history fails to load, continue without it
+		history = nil
+	}
 
 	return model{
 		devices:                devices,
@@ -197,6 +214,10 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		installationBroken:     installationBroken,
 		accountManageMode:      false,
 		manageCursor:           0,
+		commandMode:            false,
+		commandInput:           "",
+		commandOutput:          "",
+		history:                history,
 	}
 }
 
@@ -341,10 +362,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return clearReloadMsg{}
 		})
 
+	case commandExecutedMsg:
+		// Handle command execution result
+		if msg.err != nil {
+			m.sshError = fmt.Errorf("command failed: %w", msg.err)
+			m.commandOutput = ""
+		} else {
+			m.commandOutput = msg.output
+			m.sshError = nil
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		// Dispatch to appropriate mode handler
 		if m.usernamePrompt {
 			return m.handleUsernamePrompt(msg)
+		}
+		if m.commandMode {
+			return m.handleCommandMode(msg)
 		}
 		if m.searchMode {
 			return m.handleSearchMode(msg)
@@ -433,6 +468,37 @@ func (m model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(msg.String()) == 1 {
 			m.searchQuery += msg.String()
 			m.filterDevices()
+		}
+		return m, nil
+	}
+}
+
+// handleCommandMode handles key presses in command input mode
+func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+c":
+		// Cancel command mode
+		m.commandMode = false
+		m.commandInput = ""
+		return m, nil
+	case "enter":
+		// Execute command if input is not empty
+		if m.commandInput != "" {
+			command := util.SanitizeInput(m.commandInput)
+			m.commandMode = false
+			m.commandInput = ""
+			return m, m.executeRemoteCommand(command)
+		}
+		return m, nil
+	case "backspace":
+		if len(m.commandInput) > 0 {
+			m.commandInput = m.commandInput[:len(m.commandInput)-1]
+		}
+		return m, nil
+	default:
+		// Add character to command input
+		if len(msg.String()) == 1 {
+			m.commandInput += msg.String()
 		}
 		return m, nil
 	}
@@ -582,6 +648,29 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.clearUsername()
 		}
 		return m, nil
+
+	case "e":
+		// Enter command execution mode
+		target := m.getTargetDevice()
+		if target >= 0 && target < len(m.filteredDevices) {
+			device := m.filteredDevices[target]
+			// Check if device is online
+			if !isDeviceOnline(device) {
+				deviceName := device.Name
+				if deviceName == "" {
+					deviceName = device.Hostname
+				}
+				m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+				return m, nil
+			}
+			// Enter command mode
+			m.commandMode = true
+			m.commandInput = ""
+			m.commandOutput = ""
+			m.sshError = nil
+			return m, nil
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -704,6 +793,9 @@ func (m model) View() string {
 	} else if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"
 		b.WriteString(titleStyle.Render(title))
+	} else if m.commandMode {
+		title += " - Execute Command: " + m.commandInput + "_"
+		b.WriteString(titleStyle.Render(title))
 	} else if m.searchMode {
 		// Render search with different colors on the same line
 		baseTitle := titleStyle.Render(title)
@@ -757,17 +849,30 @@ func (m model) View() string {
 	}
 
 	// Help text
-	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • p profile • r reload • u tailscale-up • m manage"
+	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • e cmd • p profile • r reload • u tailscale-up • m manage"
 	if m.sshUsername != "" {
 		help += " • d clear-user"
 	}
 	help += " • q quit"
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
+	} else if m.commandMode {
+		help = "Type command to execute • esc cancel • enter execute"
 	} else if m.searchMode {
 		help = "Type to search • esc cancel • enter confirm"
 	}
 	b.WriteString(helpStyle.Render(help))
+
+	// Show command output if any
+	if m.commandOutput != "" {
+		b.WriteString("\n\n")
+		outputStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#00FF00")).
+			Padding(1).
+			MarginTop(1)
+		b.WriteString(outputStyle.Render("Command Output:\n" + m.commandOutput))
+	}
 
 	// Show copy success message if any
 	if m.copiedText != "" {
@@ -1053,6 +1158,71 @@ func (m model) sshToDevice(index int) tea.Cmd {
 			})()
 		},
 	)
+}
+
+// executeRemoteCommand executes a command on a remote device via SSH
+func (m model) executeRemoteCommand(command string) tea.Cmd {
+	target := m.getTargetDevice()
+	if target < 0 || target >= len(m.filteredDevices) {
+		return func() tea.Msg {
+			return commandExecutedMsg{err: fmt.Errorf("no device selected")}
+		}
+	}
+
+	device := m.filteredDevices[target]
+
+	// Get the primary IP address
+	if len(device.Addresses) == 0 {
+		return func() tea.Msg {
+			return commandExecutedMsg{err: fmt.Errorf("device has no IP addresses")}
+		}
+	}
+
+	address := device.Addresses[0]
+	name := device.Name
+	if name == "" {
+		name = device.Hostname
+	}
+
+	// Build SSH target
+	var sshTarget string
+	if m.sshUsername != "" {
+		sshTarget = fmt.Sprintf("%s@%s", m.sshUsername, address)
+	} else {
+		sshTarget = address
+	}
+
+	// Get machine ID for history
+	machineID := device.ID
+	if machineID == "" {
+		machineID = device.Hostname
+	}
+
+	return func() tea.Msg {
+		// Execute command via SSH
+		cmd := exec.Command("ssh", sshTarget, command)
+		output, err := cmd.CombinedOutput()
+
+		exitCode := 0
+		if err != nil {
+			// Try to get exit code
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				exitCode = exitErr.ExitCode()
+			}
+		}
+
+		// Save to history if history store is available
+		if m.history != nil {
+			m.history.AddCommand(machineID, name, command, exitCode, string(output))
+			_ = m.history.Save() // Ignore save errors
+		}
+
+		return commandExecutedMsg{
+			output:   string(output),
+			exitCode: exitCode,
+			err:      err,
+		}
+	}
 }
 
 // copySSHCommand copies the SSH command to the clipboard
