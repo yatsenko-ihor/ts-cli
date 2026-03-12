@@ -91,4 +91,4 @@
 - [x] try to search is it possible to open another tmux pane if app running in tmux
 - [x] Move control/help panel out of "Machine list" panel to own panel at the bottom. But make it independed of frames. Changing length of panel should not change any frame size
 ## To be implemented later:
-- [ ] write md doc how to use with tmux
+- [x] write md doc how to use with tmux
