@@ -1143,6 +1143,9 @@ func (m model) View() string {
 		b.WriteString(warningStyle.Render(warningMsg))
 	}
 
+	b.WriteString("\n")
+	b.WriteString(m.renderHelpPanel())
+
 	return b.String()
 }
 
@@ -1174,6 +1177,23 @@ func (m model) getHelpText() string {
 	return help
 }
 
+func (m model) renderHelpPanel() string {
+	helpPanelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#626262")).
+		Padding(0, 1)
+
+	if m.width > 0 {
+		panelWidth := m.width - 2
+		if panelWidth < 40 {
+			panelWidth = 40
+		}
+		helpPanelStyle = helpPanelStyle.Width(panelWidth)
+	}
+
+	return helpPanelStyle.Render(helpStyle.Render(m.getHelpText()))
+}
+
 // renderDeviceList renders the device list panel
 func (m model) renderDeviceList() string {
 	var listContent strings.Builder
@@ -1194,12 +1214,11 @@ func (m model) renderDeviceList() string {
 		// Match stacked right panel height (including border compensation)
 		splitTargetHeight = (panelHeight * 2) + 2
 
-		// Reserve lines for in-frame header/search/help so device rows fill remaining space.
+		// Reserve lines for in-frame header/search so device rows fill remaining space.
 		headerLines := 3 // title + "Search in" + spacer line
 		if m.searchMode || m.searchQuery != "" {
 			headerLines++
 		}
-		headerLines += 2 // help line + spacer line
 		maxVisible = splitTargetHeight - headerLines
 		if m.viewportTop > 0 {
 			maxVisible-- // top "more above" indicator
@@ -1231,9 +1250,6 @@ func (m model) renderDeviceList() string {
 		listContent.WriteString(searchLabelStyle.Render("Search: ") + searchQueryStyle.Render(m.searchQuery))
 		listContent.WriteString("\n")
 	}
-
-	listContent.WriteString(helpStyle.Render(m.getHelpText()))
-	listContent.WriteString("\n")
 
 	listContent.WriteString("\n")
 
