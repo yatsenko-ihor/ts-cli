@@ -1049,16 +1049,19 @@ func (m model) View() string {
 		)
 		b.WriteString(splitView)
 	} else {
-		// Normal view: device list and details
-		b.WriteString(m.renderDeviceList())
+		// Normal view: keep controls directly under list frame
+		deviceList := m.renderDeviceList()
+		leftPanel := lipgloss.JoinVertical(
+			lipgloss.Left,
+			deviceList,
+			helpStyle.Render(help),
+		)
+		b.WriteString(leftPanel)
 
 		// Device details if selected
 		if m.selected >= 0 && m.selected < len(m.filteredDevices) {
 			b.WriteString(m.renderDeviceDetails())
 		}
-
-		// Keep help in global bottom area for non-split mode
-		b.WriteString(helpStyle.Render(help))
 	}
 
 	// Show command output if any (when history panel is not shown)
