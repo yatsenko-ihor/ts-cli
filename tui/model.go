@@ -559,6 +559,27 @@ func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "d":
+		// Delete selected command from history for this machine
+		if m.history == nil || len(historyCommands) == 0 || m.historyCursor >= len(historyCommands) {
+			return m, nil
+		}
+		selectedCommand := historyCommands[m.historyCursor]
+		removed, err := m.history.DeleteCommandForMachine(machineID, selectedCommand)
+		if err != nil {
+			m.sshError = fmt.Errorf("failed to delete command from history: %w", err)
+			return m, nil
+		}
+		if removed > 0 {
+			updatedCommands := m.history.GetUniqueCommands(machineID)
+			if len(updatedCommands) == 0 {
+				m.historyCursor = 0
+			} else if m.historyCursor >= len(updatedCommands) {
+				m.historyCursor = len(updatedCommands) - 1
+			}
+		}
+		return m, nil
+
 	case "e":
 		// Enter command mode from history panel
 		if !isDeviceOnline(device) {
@@ -1002,7 +1023,7 @@ func (m model) View() string {
 	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
 	if m.showHistoryPanel {
 		if m.activeFocus == focusHistory {
-			help = "↑/k up • ↓/j down • e new-command • enter execute • tab switch • esc close"
+			help = "↑/k up • ↓/j down • e new-command • d delete • enter execute • tab switch • esc close"
 		} else if m.activeFocus == focusOutput {
 			help = "↑/k up • ↓/j down • tab switch • esc close"
 		} else {
@@ -1376,7 +1397,7 @@ func (m model) renderHistoryPanel() string {
 		historyContent.WriteString("\n")
 		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(m.commandInput+"_"))
 	} else {
-		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to type a new command"))
+		historyContent.WriteString(grayItalicStyle.Render("Press 'e' to type a new command • 'd' delete selected"))
 	}
 
 	// Apply border style - make responsive to terminal size

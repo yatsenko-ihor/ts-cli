@@ -78,6 +78,8 @@
 - [x] move "Search in: <>" and Search user input into "List machines" frame
 - [x] add with "Tab" navigation between frames
 - [x] still not proper height of frames. height of "Commands over SSH History:" + "Output" bigger then of "List machines"
+- [x] Add to frame "Commands over SSH History:" button "d" to delete command from history
+- [ ] same some vertical space if possible (remove not necessary spaces)
 
 ## To be implemented later:
 

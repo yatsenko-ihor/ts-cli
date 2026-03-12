@@ -138,6 +138,36 @@ func (h *HistoryStore) GetUniqueCommands(machineID string) []string {
 	return unique
 }
 
+// DeleteCommandForMachine removes all matching command entries for a machine.
+// Returns how many entries were removed.
+func (h *HistoryStore) DeleteCommandForMachine(machineID, command string) (int, error) {
+	if machineID == "" || command == "" {
+		return 0, nil
+	}
+
+	filtered := make([]CommandHistory, 0, len(h.commands))
+	removed := 0
+
+	for _, entry := range h.commands {
+		if entry.MachineID == machineID && entry.Command == command {
+			removed++
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+
+	if removed == 0 {
+		return 0, nil
+	}
+
+	h.commands = filtered
+	if err := h.Save(); err != nil {
+		return 0, err
+	}
+
+	return removed, nil
+}
+
 // Clear removes all history
 func (h *HistoryStore) Clear() error {
 	h.commands = []CommandHistory{}
