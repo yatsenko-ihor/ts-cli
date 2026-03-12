@@ -986,37 +986,6 @@ func (m model) View() string {
 	}
 	b.WriteString("\n")
 
-	// Render split view if history panel is shown
-	if m.showHistoryPanel {
-		// Split view: device list on left, history + output stacked on right
-		deviceList := m.renderDeviceList()
-		historyPanel := m.renderHistoryPanel()
-		outputPanel := m.renderOutputPanel()
-
-		// Stack history and output vertically
-		rightPanel := lipgloss.JoinVertical(
-			lipgloss.Left,
-			historyPanel,
-			outputPanel,
-		)
-
-		// Join device list and stacked panels horizontally
-		splitView := lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			deviceList,
-			rightPanel,
-		)
-		b.WriteString(splitView)
-	} else {
-		// Normal view: device list and details
-		b.WriteString(m.renderDeviceList())
-
-		// Device details if selected
-		if m.selected >= 0 && m.selected < len(m.filteredDevices) {
-			b.WriteString(m.renderDeviceDetails())
-		}
-	}
-
 	// Help text
 	help := "↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
 	if m.showHistoryPanel {
@@ -1041,7 +1010,45 @@ func (m model) View() string {
 	} else if m.searchMode {
 		help = "Type to search • esc cancel • enter confirm"
 	}
-	b.WriteString(helpStyle.Render(help))
+
+	// Render split view if history panel is shown
+	if m.showHistoryPanel {
+		// Split view: device list on left (with help under it), history + output on right
+		deviceList := m.renderDeviceList()
+		leftPanel := lipgloss.JoinVertical(
+			lipgloss.Left,
+			deviceList,
+			helpStyle.Render(help),
+		)
+		historyPanel := m.renderHistoryPanel()
+		outputPanel := m.renderOutputPanel()
+
+		// Stack history and output vertically
+		rightPanel := lipgloss.JoinVertical(
+			lipgloss.Left,
+			historyPanel,
+			outputPanel,
+		)
+
+		// Join left and right columns horizontally
+		splitView := lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			leftPanel,
+			rightPanel,
+		)
+		b.WriteString(splitView)
+	} else {
+		// Normal view: device list and details
+		b.WriteString(m.renderDeviceList())
+
+		// Device details if selected
+		if m.selected >= 0 && m.selected < len(m.filteredDevices) {
+			b.WriteString(m.renderDeviceDetails())
+		}
+
+		// Keep help in global bottom area for non-split mode
+		b.WriteString(helpStyle.Render(help))
+	}
 
 	// Show command output if any (when history panel is not shown)
 	if m.commandOutput != "" && !m.showHistoryPanel {
