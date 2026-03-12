@@ -196,7 +196,8 @@ ts-cli tui    # Alternative alias
 - `/`: Enter search mode (vim-style)
 - `s`: SSH to selected device (prompts for username if not configured)
 - `c`: Copy SSH command to clipboard
-- `Tab`: Toggle split-screen SSH panel
+- `Tab`: Show/cycle frame focus (`list -> history -> output -> list`)
+- `Esc`: Close split panels and return to list focus
 - `q`: Quit
 
 **Features:**
@@ -219,7 +220,29 @@ When terminal width > 80 columns, the split-screen mode shows:
     - Connection instructions
     - Username configuration status
 
-Press `Tab` to toggle the SSH panel visibility.
+Press `Tab` to open split panels and cycle focus between frames.
+
+### Running In tmux
+
+Yes, opening another tmux pane while `ts-cli` is running in tmux is possible.
+
+- Split current window horizontally and launch `ts-cli` in the new pane:
+
+```bash
+tmux split-window -h -c "#{pane_current_path}" "ts-cli"
+```
+
+- Split vertically instead:
+
+```bash
+tmux split-window -v -c "#{pane_current_path}" "ts-cli"
+```
+
+- Useful shortcut from inside tmux command prompt (`Ctrl+b` then `:`):
+
+```text
+bind-key T split-window -h -c "#{pane_current_path}" "ts-cli"
+```
 
 **Note**: When you run `ts-cli` without any subcommand, it defaults to interactive mode.
 
