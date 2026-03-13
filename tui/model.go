@@ -19,10 +19,10 @@ import (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#7D56F4"))
+			Foreground(lipgloss.Color("#4C4F9C"))
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF06B7")).
+			Foreground(lipgloss.Color("#C2185B")).
 			Bold(true).
 			PaddingLeft(2)
 
@@ -30,16 +30,16 @@ var (
 			PaddingLeft(2)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#626262"))
+			Foreground(lipgloss.Color("#4E4E4E"))
 
 	listStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7D56F4")).
+			BorderForeground(lipgloss.Color("#4C4F9C")).
 			Padding(1, 2)
 
 	detailStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7D56F4")).
+			BorderForeground(lipgloss.Color("#4C4F9C")).
 			Padding(1).
 			MarginTop(1)
 
@@ -50,29 +50,36 @@ var (
 
 	searchLabelStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#8d8405"))
+				Foreground(lipgloss.Color("#8A5A00"))
 
 	searchQueryStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#8d8405"))
+				Foreground(lipgloss.Color("#8A5A00"))
 
 	grayItalicStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#626262")).
+			Foreground(lipgloss.Color("#5A5A5A")).
 			Italic(true)
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00"))
+			Foreground(lipgloss.Color("#1B8F3A"))
 
 	infoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFA500"))
 
 	promptLabelStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#7D56F4"))
+				Foreground(lipgloss.Color("#4C4F9C"))
 
 	promptInputStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#00D7FF"))
+				Foreground(lipgloss.Color("#0B7A75"))
+)
+
+const (
+	panelBorderWidth       = 2 // left+right or top+bottom border chars
+	panelHorizontalPadding = 4 // horizontal padding from Padding(1,2)
+	panelVerticalPadding   = 2 // vertical padding from Padding(1,2)
+	splitRightSafetyGutter = 1 // keep one spare column to avoid terminal-edge clipping
 )
 
 type sshMsg struct {
@@ -1201,11 +1208,12 @@ func (m model) getMachineListWidth() int {
 			return 62
 		}
 
-		w := int(float64(m.width) * 0.45)
+		// Keep list slightly wider while reserving room for right-side panels.
+		w := int(float64(m.width) * 0.53)
 		if w < 48 {
 			w = 48
-		} else if w > 70 {
-			w = 70
+		} else if w > 90 {
+			w = 90
 		}
 		return w
 	}
@@ -1230,8 +1238,10 @@ func (m model) getHistoryPanelSize() (int, int) {
 	panelHeight := 25
 
 	if m.width > 0 {
-		deviceListWidth := m.getMachineListWidth()
-		remainingWidth := m.width - deviceListWidth - 5
+		// Compute right panel content width from the remaining terminal width
+		// after accounting for list panel frame width.
+		leftOuterWidth := m.getMachineListWidth() + panelBorderWidth
+		remainingWidth := m.width - leftOuterWidth - panelBorderWidth - splitRightSafetyGutter
 		if remainingWidth > 35 {
 			panelWidth = remainingWidth
 		} else {
@@ -1249,6 +1259,27 @@ func (m model) getHistoryPanelSize() (int, int) {
 	}
 
 	return panelWidth, panelHeight
+}
+
+func getPanelInnerWidth(outerWidth int) int {
+	innerWidth := outerWidth - panelHorizontalPadding
+	if innerWidth < 1 {
+		return 1
+	}
+	return innerWidth
+}
+
+func clampToLines(content string, maxLines int) string {
+	if maxLines <= 0 {
+		return ""
+	}
+
+	lines := strings.Split(content, "\n")
+	if len(lines) <= maxLines {
+		return content
+	}
+
+	return strings.Join(lines[:maxLines], "\n")
 }
 
 func truncateForWidth(s string, max int) string {
@@ -1293,25 +1324,18 @@ func (m model) renderDeviceList() string {
 	splitTargetHeight := 0
 
 	if m.showHistoryPanel {
-		panelHeight := 25
-		if m.height > 0 {
-			panelHeight = (m.height - 12) / 2
-			if panelHeight < 15 {
-				panelHeight = 15
-			} else if panelHeight > 25 {
-				panelHeight = 25
-			}
-		}
+		_, panelHeight := m.getHistoryPanelSize()
 
 		// Match stacked right panel height (including border compensation)
-		splitTargetHeight = (panelHeight * 2) + 2
+		splitTargetHeight = (panelHeight * 2) + panelBorderWidth
 
 		// Reserve lines for in-frame header/search so device rows fill remaining space.
+		listContentHeight := splitTargetHeight - panelVerticalPadding
 		headerLines := 3 // title + "Search in" + spacer line
 		if m.searchMode || m.searchQuery != "" {
 			headerLines++
 		}
-		maxVisible = splitTargetHeight - headerLines
+		maxVisible = listContentHeight - headerLines
 		if m.viewportTop > 0 {
 			maxVisible-- // top "more above" indicator
 		}
@@ -1480,6 +1504,7 @@ func (m model) getMaxVisibleItems() int {
 func (m model) renderHistoryPanel() string {
 	var historyContent strings.Builder
 	historyWidth, historyHeight := m.getHistoryPanelSize()
+	historyInnerWidth := getPanelInnerWidth(historyWidth)
 
 	// Get history for current device
 	target := m.getTargetDevice()
@@ -1507,10 +1532,10 @@ func (m model) renderHistoryPanel() string {
 
 	// Header - 2 lines format
 	// Line 1: Device name with status
-	headerText := truncateForWidth(fmt.Sprintf("🖥️  %s %s", machineName, statusIcon), historyWidth)
+	headerText := truncateForWidth(fmt.Sprintf("🖥️  %s %s", machineName, statusIcon), historyInnerWidth)
 	machineHeader := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#7D56F4")).
+		Foreground(lipgloss.Color("#4C4F9C")).
 		Render(headerText)
 	historyContent.WriteString(machineHeader)
 	historyContent.WriteString("\n")
@@ -1518,7 +1543,7 @@ func (m model) renderHistoryPanel() string {
 	// Line 2: "Commands over SSH History:"
 	historyTitle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#00D7FF")).
+		Foreground(lipgloss.Color("#0B7A75")).
 		Render("Commands over SSH History:")
 	historyContent.WriteString(historyTitle)
 	historyContent.WriteString("\n")
@@ -1530,13 +1555,22 @@ func (m model) renderHistoryPanel() string {
 	}
 
 	if len(historyCommands) == 0 {
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("No command history for this device", historyWidth)))
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("No command history for this device", historyInnerWidth)))
 		historyContent.WriteString("\n")
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command in this panel", historyWidth)))
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command in this panel", historyInnerWidth)))
 	} else {
+		contentHeight := historyHeight - panelVerticalPadding
+		helpLines := 1
+		if m.commandMode {
+			helpLines = 2
+		}
+		reservedLines := 2 + 1 + helpLines + 1          // headers + total + separator + help/input
+		maxVisible := contentHeight - reservedLines - 2 // reserve room for top/bottom indicators
+		if maxVisible < 1 {
+			maxVisible = 1
+		}
+
 		// Render command list
-		//TODO: make maxVisible dynamic based on panel height and reserve lines for header and indicators
-		maxVisible := 15 // Show up to 15 commands
 		startIdx := 0
 		if len(historyCommands) > maxVisible && m.historyCursor >= maxVisible {
 			startIdx = m.historyCursor - maxVisible + 1
@@ -1547,9 +1581,17 @@ func (m model) renderHistoryPanel() string {
 			endIdx = len(historyCommands)
 		}
 
-		maxCmdWidth := historyWidth - 8
+		showTop := startIdx > 0
+		showBottom := endIdx < len(historyCommands)
+
+		maxCmdWidth := historyInnerWidth - 4
 		if maxCmdWidth < 8 {
 			maxCmdWidth = 8
+		}
+
+		if showTop {
+			historyContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
+			historyContent.WriteString("\n")
 		}
 
 		for i := startIdx; i < endIdx; i++ {
@@ -1568,65 +1610,63 @@ func (m model) renderHistoryPanel() string {
 			historyContent.WriteString("\n")
 		}
 
-		// Show scroll indicators
-		if startIdx > 0 {
-			historyContent.WriteString("\n")
-			historyContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
-		}
-		if endIdx < len(historyCommands) {
-			historyContent.WriteString("\n")
+		if showBottom {
 			historyContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
+			historyContent.WriteString("\n")
 		}
 
-		historyContent.WriteString("\n")
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth(fmt.Sprintf("Total: %d commands", len(historyCommands)), historyWidth)))
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth(fmt.Sprintf("Total: %d commands", len(historyCommands)), historyInnerWidth)))
 	}
 
 	historyContent.WriteString("\n")
 	if m.commandMode {
 		historyContent.WriteString(grayItalicStyle.Render("New command:"))
 		historyContent.WriteString("\n")
-		maxInputWidth := historyWidth - 2
+		maxInputWidth := historyInnerWidth - 2
 		if maxInputWidth < 1 {
 			maxInputWidth = 1
 		}
 		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(truncateForWidth(m.commandInput+"_", maxInputWidth)))
 	} else {
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command • 'd' delete selected", historyWidth)))
+		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command • 'd' delete selected", historyInnerWidth)))
 	}
 
 	historyStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#00D7FF")).
+		BorderForeground(lipgloss.Color("#0B7A75")).
 		Padding(1, 2).
 		MaxWidth(historyWidth).
 		Width(historyWidth).
 		Height(historyHeight)
 
 	if m.activeFocus == focusHistory {
-		historyStyle = historyStyle.BorderForeground(lipgloss.Color("#FF06B7"))
+		historyStyle = historyStyle.BorderForeground(lipgloss.Color("#C2185B"))
 	}
 
-	return historyStyle.Render(historyContent.String())
+	// Height in lipgloss is a minimum, so clamp content to avoid frame growth.
+	historyContentHeight := historyHeight - panelVerticalPadding
+	return historyStyle.Render(clampToLines(historyContent.String(), historyContentHeight))
 }
 
 // renderOutputPanel renders the command output panel
 func (m model) renderOutputPanel() string {
 	// Apply border style dimensions first so content can be clamped to this height.
 	outputWidth, outputHeight := m.getHistoryPanelSize()
+	outputInnerWidth := getPanelInnerWidth(outputWidth)
 
 	var outputContent strings.Builder
 
 	// Header
 	outputHeader := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#00FF00")).
+		Foreground(lipgloss.Color("#1B8F3A")).
 		Render("Command Output:")
 	outputContent.WriteString(outputHeader)
 	outputContent.WriteString("\n\n")
 
 	// Available lines inside the output frame after header section.
-	availableLines := outputHeight - 2 // "Command Output:" + spacer line
+	contentHeight := outputHeight - panelVerticalPadding
+	availableLines := contentHeight - 2 // "Command Output:" + spacer line
 	if availableLines < 1 {
 		availableLines = 1
 	}
@@ -1675,7 +1715,7 @@ func (m model) renderOutputPanel() string {
 		if endIdx > startIdx {
 			visibleLines := lines[startIdx:endIdx]
 			for i := range visibleLines {
-				visibleLines[i] = truncateForWidth(visibleLines[i], outputWidth)
+				visibleLines[i] = truncateForWidth(visibleLines[i], outputInnerWidth)
 			}
 			outputContent.WriteString(strings.Join(visibleLines, "\n"))
 		}
@@ -1688,24 +1728,26 @@ func (m model) renderOutputPanel() string {
 			outputContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
 		}
 	} else {
-		outputContent.WriteString(grayItalicStyle.Render("No output yet"))
+		outputContent.WriteString(grayItalicStyle.Render(truncateForWidth("No output yet", outputInnerWidth)))
 		outputContent.WriteString("\n")
-		outputContent.WriteString(grayItalicStyle.Render("Execute a command to see output here"))
+		outputContent.WriteString(grayItalicStyle.Render(truncateForWidth("Execute a command to see output here", outputInnerWidth)))
 	}
 
 	outputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#00FF00")).
+		BorderForeground(lipgloss.Color("#1B8F3A")).
 		Padding(1, 2).
 		MaxWidth(outputWidth).
 		Width(outputWidth).
 		Height(outputHeight)
 
 	if m.activeFocus == focusOutput {
-		outputStyle = outputStyle.BorderForeground(lipgloss.Color("#FF06B7"))
+		outputStyle = outputStyle.BorderForeground(lipgloss.Color("#C2185B"))
 	}
 
-	return outputStyle.Render(outputContent.String())
+	// Height in lipgloss is a minimum, so clamp content to avoid frame growth.
+	outputContentHeight := outputHeight - panelVerticalPadding
+	return outputStyle.Render(clampToLines(outputContent.String(), outputContentHeight))
 }
 
 // renderProfileSelection renders the profile selection view
