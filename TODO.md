@@ -94,5 +94,7 @@
 - [x] make widther "Machine list" frame and make not futther changes of frame except when temrinal window resize
 - [x] extend "History command" width frame to end of terminal
 - [x] extend "Command Output" width frame to end of terminal
+- [ ] add to "Command Output" frame selection for item (when navigate) and commands ("c" - copy file path, n - copy filename)
+- [ ] make TUI minimalistic
 
 ## To be implemented later:
