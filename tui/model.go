@@ -170,6 +170,7 @@ type model struct {
 	historyCursor          int                  // Cursor position in history list
 	showHistoryPanel       bool                 // Whether to show the history panel
 	outputScroll           int                  // Scroll position in output panel
+	outputCursor           int                  // Selected line in output panel
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
@@ -228,6 +229,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		history:                history,
 		historyCursor:          0,
 		showHistoryPanel:       false,
+		outputCursor:           0,
 	}
 }
 
@@ -377,9 +379,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.sshError = fmt.Errorf("command failed: %w", msg.err)
 			m.commandOutput = ""
+			m.outputCursor = 0
+			m.outputScroll = 0
 		} else {
 			m.commandOutput = msg.output
 			m.outputScroll = 0 // Reset scroll when new output arrives
+			m.outputCursor = 0
 			m.sshError = nil
 		}
 		return m, nil
@@ -527,6 +532,7 @@ func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		m.activeFocus = focusOutput
 		m.outputScroll = 0
+		m.outputCursor = 0
 		return m, nil
 	case "shift+tab", "backtab":
 		m.activeFocus = focusList
@@ -696,11 +702,13 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeFocus = focusOutput
 			m.historyCursor = 0
 			m.outputScroll = 0
+			m.outputCursor = 0
 		} else {
 			switch m.activeFocus {
 			case focusList:
 				m.activeFocus = focusOutput
 				m.outputScroll = 0
+				m.outputCursor = 0
 			case focusHistory:
 				m.activeFocus = focusList
 			case focusOutput:
@@ -722,6 +730,7 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeFocus = focusHistory
 			m.historyCursor = 0
 			m.outputScroll = 0
+			m.outputCursor = 0
 		} else {
 			// Cycle focus: list -> history -> output -> list
 			switch m.activeFocus {
@@ -731,6 +740,7 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case focusHistory:
 				m.activeFocus = focusOutput
 				m.outputScroll = 0
+				m.outputCursor = 0
 			case focusOutput:
 				m.activeFocus = focusList
 			default:
@@ -747,11 +757,13 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeFocus = focusOutput
 			m.historyCursor = 0
 			m.outputScroll = 0
+			m.outputCursor = 0
 		} else {
 			switch m.activeFocus {
 			case focusList:
 				m.activeFocus = focusOutput
 				m.outputScroll = 0
+				m.outputCursor = 0
 			case focusHistory:
 				m.activeFocus = focusList
 			case focusOutput:
@@ -784,10 +796,18 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sshError = nil
 
 	case "c":
+		if m.showHistoryPanel && m.activeFocus == focusOutput {
+			return m, m.copySelectedOutputItem(false)
+		}
 		// Copy SSH command to clipboard
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.filteredDevices) {
 			return m, m.copySSHCommand(target)
+		}
+
+	case "n":
+		if m.showHistoryPanel && m.activeFocus == focusOutput {
+			return m, m.copySelectedOutputItem(true)
 		}
 
 	case "s":
@@ -865,9 +885,11 @@ func (m *model) moveCursorUp() {
 			}
 			return
 		} else if m.activeFocus == focusOutput {
-			// Scroll output panel
-			if m.outputScroll > 0 {
-				m.outputScroll--
+			// Move selection in output panel
+			lines := splitOutputLines(m.commandOutput)
+			if len(lines) > 0 && m.outputCursor > 0 {
+				m.outputCursor--
+				m.ensureOutputCursorVisible()
 			}
 			return
 		}
@@ -904,35 +926,11 @@ func (m *model) moveCursorDown() {
 			}
 			return
 		} else if m.activeFocus == focusOutput {
-			// Scroll output panel - calculate max scroll based on output lines
-			if m.commandOutput != "" {
-				lines := strings.Split(m.commandOutput, "\n")
-
-				outputHeight := 25
-				if m.height > 0 {
-					availHeight := (m.height - 12) / 2
-					if availHeight < 15 {
-						outputHeight = 15
-					} else if availHeight < outputHeight {
-						outputHeight = availHeight
-					}
-				}
-
-				lineBudget := outputHeight - 2 // header + spacer in output panel
-				if m.outputScroll > 0 {
-					lineBudget-- // top indicator row when scrolled
-				}
-				if lineBudget < 1 {
-					lineBudget = 1
-				}
-
-				maxScroll := len(lines) - lineBudget
-				if maxScroll < 0 {
-					maxScroll = 0
-				}
-				if m.outputScroll < maxScroll {
-					m.outputScroll++
-				}
+			// Move selection in output panel
+			lines := splitOutputLines(m.commandOutput)
+			if len(lines) > 0 && m.outputCursor < len(lines)-1 {
+				m.outputCursor++
+				m.ensureOutputCursorVisible()
 			}
 			return
 		}
@@ -1162,7 +1160,7 @@ func (m model) getHelpText() string {
 		if m.activeFocus == focusHistory {
 			help = "↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
 		} else if m.activeFocus == focusOutput {
-			help = "↑/k up • ↓/j down • tab/shift+tab switch • esc close"
+			help = "↑/k up • ↓/j down • c copy-path • n copy-name • tab/shift+tab switch • esc close"
 		} else {
 			help = "↑/k up • ↓/j down • enter select • tab/shift+tab switch • esc close"
 		}
@@ -1280,6 +1278,96 @@ func clampToLines(content string, maxLines int) string {
 	}
 
 	return strings.Join(lines[:maxLines], "\n")
+}
+
+func splitOutputLines(output string) []string {
+	if output == "" {
+		return nil
+	}
+
+	lines := strings.Split(output, "\n")
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	return lines
+}
+
+func outputViewport(totalLines, outputHeight, outputScroll int) (startIdx, endIdx int, showTop, showBottom bool) {
+	if totalLines <= 0 {
+		return 0, 0, false, false
+	}
+
+	contentHeight := outputHeight - panelVerticalPadding
+	availableLines := contentHeight - 2 // "Command Output:" + spacer line
+	if availableLines < 1 {
+		availableLines = 1
+	}
+
+	startIdx = outputScroll
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	if startIdx >= totalLines {
+		startIdx = totalLines - 1
+	}
+
+	showTop = startIdx > 0
+	lineBudget := availableLines
+	if showTop {
+		lineBudget--
+	}
+	if lineBudget < 1 {
+		lineBudget = 1
+	}
+
+	endIdx = startIdx + lineBudget
+	if endIdx > totalLines {
+		endIdx = totalLines
+	}
+
+	showBottom = endIdx < totalLines
+	if showBottom && lineBudget > 1 {
+		endIdx-- // reserve one row for bottom indicator
+		if endIdx < startIdx {
+			endIdx = startIdx
+		}
+	}
+
+	return startIdx, endIdx, showTop, showBottom
+}
+
+func (m *model) ensureOutputCursorVisible() {
+	lines := splitOutputLines(m.commandOutput)
+	if len(lines) == 0 {
+		m.outputCursor = 0
+		m.outputScroll = 0
+		return
+	}
+
+	if m.outputCursor < 0 {
+		m.outputCursor = 0
+	}
+	if m.outputCursor >= len(lines) {
+		m.outputCursor = len(lines) - 1
+	}
+
+	_, outputHeight := m.getHistoryPanelSize()
+	for i := 0; i < len(lines)+2; i++ {
+		startIdx, endIdx, _, _ := outputViewport(len(lines), outputHeight, m.outputScroll)
+		if m.outputCursor < startIdx {
+			m.outputScroll = m.outputCursor
+			continue
+		}
+		if m.outputCursor >= endIdx {
+			m.outputScroll++
+			if m.outputScroll > len(lines)-1 {
+				m.outputScroll = len(lines) - 1
+			}
+			continue
+		}
+		break
+	}
 }
 
 func truncateForWidth(s string, max int) string {
@@ -1653,6 +1741,9 @@ func (m model) renderOutputPanel() string {
 	// Apply border style dimensions first so content can be clamped to this height.
 	outputWidth, outputHeight := m.getHistoryPanelSize()
 	outputInnerWidth := getPanelInnerWidth(outputWidth)
+	selectedOutputStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#C2185B")).
+		Bold(true)
 
 	var outputContent strings.Builder
 
@@ -1664,45 +1755,16 @@ func (m model) renderOutputPanel() string {
 	outputContent.WriteString(outputHeader)
 	outputContent.WriteString("\n\n")
 
-	// Available lines inside the output frame after header section.
-	contentHeight := outputHeight - panelVerticalPadding
-	availableLines := contentHeight - 2 // "Command Output:" + spacer line
-	if availableLines < 1 {
-		availableLines = 1
-	}
-
 	// Output text or placeholder
 	if m.commandOutput != "" {
-		lines := strings.Split(m.commandOutput, "\n")
-		startIdx := m.outputScroll
-		if startIdx >= len(lines) {
-			startIdx = len(lines) - 1
-			if startIdx < 0 {
-				startIdx = 0
-			}
+		lines := splitOutputLines(m.commandOutput)
+		startIdx, endIdx, showTop, showBottom := outputViewport(len(lines), outputHeight, m.outputScroll)
+		cursor := m.outputCursor
+		if cursor < 0 {
+			cursor = 0
 		}
-
-		showTop := startIdx > 0
-		lineBudget := availableLines
-		if showTop {
-			lineBudget--
-		}
-		if lineBudget < 1 {
-			lineBudget = 1
-		}
-
-		endIdx := startIdx + lineBudget
-		showBottom := false
-		if endIdx < len(lines) {
-			showBottom = true
-			if lineBudget > 1 {
-				endIdx-- // reserve one row for bottom indicator
-			} else {
-				showBottom = false // no room; prioritize content row
-			}
-		}
-		if endIdx > len(lines) {
-			endIdx = len(lines)
+		if len(lines) > 0 && cursor >= len(lines) {
+			cursor = len(lines) - 1
 		}
 
 		// Show scroll indicator at top if scrolled
@@ -1714,8 +1776,13 @@ func (m model) renderOutputPanel() string {
 		// Display visible lines
 		if endIdx > startIdx {
 			visibleLines := lines[startIdx:endIdx]
-			for i := range visibleLines {
-				visibleLines[i] = truncateForWidth(visibleLines[i], outputInnerWidth)
+			for i, line := range visibleLines {
+				lineIdx := startIdx + i
+				if lineIdx == cursor {
+					visibleLines[i] = selectedOutputStyle.Render("▸ " + truncateForWidth(line, outputInnerWidth-2))
+				} else {
+					visibleLines[i] = truncateForWidth(line, outputInnerWidth)
+				}
 			}
 			outputContent.WriteString(strings.Join(visibleLines, "\n"))
 		}
@@ -1977,6 +2044,92 @@ func (m model) executeRemoteCommand(command string) tea.Cmd {
 	}
 }
 
+func (m model) selectedOutputItem() (string, bool) {
+	lines := splitOutputLines(m.commandOutput)
+	if len(lines) == 0 {
+		return "", false
+	}
+
+	cursor := m.outputCursor
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(lines) {
+		cursor = len(lines) - 1
+	}
+
+	entry := strings.TrimSpace(lines[cursor])
+	if entry == "" {
+		return "", false
+	}
+
+	return entry, true
+}
+
+func (m model) copySelectedOutputItem(filenameOnly bool) tea.Cmd {
+	entry, ok := m.selectedOutputItem()
+	if !ok {
+		return func() tea.Msg {
+			return copiedMsg{success: false, text: ""}
+		}
+	}
+
+	textToCopy := entry
+	if filenameOnly {
+		trimmed := strings.TrimRight(entry, "/")
+		base := filepath.Base(trimmed)
+		if base == "." || base == "/" || base == "" {
+			base = trimmed
+		}
+		textToCopy = base
+	} else if !strings.HasPrefix(entry, "/") && !strings.HasPrefix(entry, "~") && !strings.HasPrefix(entry, ".") {
+		// Preserve relative-path semantics when output is just a filename.
+		textToCopy = "./" + entry
+	}
+
+	return copyTextToClipboard(textToCopy)
+}
+
+func copyTextToClipboard(text string) tea.Cmd {
+	return func() tea.Msg {
+		// Determine clipboard command based on OS
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "darwin": // macOS
+			cmd = exec.Command("pbcopy")
+		case "linux":
+			cmd = exec.Command("xclip", "-selection", "clipboard")
+		case "windows":
+			cmd = exec.Command("clip")
+		default:
+			return copiedMsg{success: false, text: ""}
+		}
+
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return copiedMsg{success: false, text: ""}
+		}
+
+		if err := cmd.Start(); err != nil {
+			return copiedMsg{success: false, text: ""}
+		}
+
+		if _, err := stdin.Write([]byte(text)); err != nil {
+			return copiedMsg{success: false, text: ""}
+		}
+
+		if err := stdin.Close(); err != nil {
+			return copiedMsg{success: false, text: ""}
+		}
+
+		if err := cmd.Wait(); err != nil {
+			return copiedMsg{success: false, text: ""}
+		}
+
+		return copiedMsg{success: true, text: text}
+	}
+}
+
 // copySSHCommand copies the SSH command to the clipboard
 func (m model) copySSHCommand(index int) tea.Cmd {
 	device := m.filteredDevices[index]
@@ -1998,47 +2151,7 @@ func (m model) copySSHCommand(index int) tea.Cmd {
 		sshCommand = fmt.Sprintf("ssh %s", address)
 	}
 
-	// Determine clipboard command based on OS
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin": // macOS
-		cmd = exec.Command("pbcopy")
-	case "linux":
-		cmd = exec.Command("xclip", "-selection", "clipboard")
-	case "windows":
-		cmd = exec.Command("clip")
-	default:
-		return func() tea.Msg {
-			return copiedMsg{success: false, text: ""}
-		}
-	}
-
-	// Write command to clipboard
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return func() tea.Msg {
-			return copiedMsg{success: false, text: ""}
-		}
-	}
-
-	if err := cmd.Start(); err != nil {
-		return func() tea.Msg {
-			return copiedMsg{success: false, text: ""}
-		}
-	}
-
-	if _, err := stdin.Write([]byte(sshCommand)); err != nil {
-		return func() tea.Msg {
-			return copiedMsg{success: false, text: ""}
-		}
-	}
-
-	stdin.Close()
-	cmd.Wait()
-
-	return func() tea.Msg {
-		return copiedMsg{success: true, text: sshCommand}
-	}
+	return copyTextToClipboard(sshCommand)
 }
 
 // storeUsername stores the SSH username preference
