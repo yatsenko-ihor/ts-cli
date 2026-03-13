@@ -79,7 +79,7 @@ const (
 	panelBorderWidth       = 2 // left+right or top+bottom border chars
 	panelHorizontalPadding = 4 // horizontal padding from Padding(1,2)
 	panelVerticalPadding   = 2 // vertical padding from Padding(1,2)
-	splitRightSafetyGutter = 1 // keep one spare column to avoid terminal-edge clipping
+	splitRightSafetyGutter = 2 // keep spare columns so right borders remain visible on narrow terminals
 )
 
 type sshMsg struct {
