@@ -1525,6 +1525,9 @@ func (m model) renderDeviceList() string {
 	}
 
 	deviceListStyle = deviceListStyle.Width(m.getMachineListWidth())
+	if m.showHistoryPanel && m.activeFocus == focusList {
+		deviceListStyle = deviceListStyle.BorderForeground(lipgloss.Color("#2D6A8C"))
+	}
 
 	return deviceListStyle.Render(listContent.String())
 }
