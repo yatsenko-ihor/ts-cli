@@ -96,6 +96,7 @@
 - [x] extend "Command Output" width frame to end of terminal
 - [x] add to "Command Output" frame selection for item (when navigate) and commands ("c" - copy file path, n - copy filename)
 - [x] make TUI minimalistic
-- [ ] right borders of frames "Command output" and "Command history" are not rendering
+- [x] right borders of frames "Command output" and "Command history" are not rendering
+- [ ] once frame "List machines" is active(selected) make border color more contrast
 
 ## To be implemented later:
