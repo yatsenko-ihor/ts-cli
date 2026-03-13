@@ -19,10 +19,10 @@ import (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#4C4F9C"))
+			Foreground(lipgloss.Color("#3F3F3F"))
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#C2185B")).
+			Foreground(lipgloss.Color("#2D6A8C")).
 			Bold(true).
 			PaddingLeft(2)
 
@@ -30,49 +30,49 @@ var (
 			PaddingLeft(2)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#4E4E4E"))
+			Foreground(lipgloss.Color("#666666"))
 
 	listStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#4C4F9C")).
+			BorderForeground(lipgloss.Color("#7A7A7A")).
 			Padding(1, 2)
 
 	detailStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#4C4F9C")).
+			BorderForeground(lipgloss.Color("#7A7A7A")).
 			Padding(1).
 			MarginTop(1)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF0000")).
+			Foreground(lipgloss.Color("#B22222")).
 			Bold(true).
 			MarginTop(1)
 
 	searchLabelStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#8A5A00"))
+				Foreground(lipgloss.Color("#5B6B47"))
 
 	searchQueryStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#8A5A00"))
+				Foreground(lipgloss.Color("#5B6B47"))
 
 	grayItalicStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#5A5A5A")).
+			Foreground(lipgloss.Color("#666666")).
 			Italic(true)
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#1B8F3A"))
+			Foreground(lipgloss.Color("#2F6F3A"))
 
 	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFA500"))
+			Foreground(lipgloss.Color("#8A6D3B"))
 
 	promptLabelStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#4C4F9C"))
+				Foreground(lipgloss.Color("#3F3F3F"))
 
 	promptInputStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#0B7A75"))
+				Foreground(lipgloss.Color("#2D6A8C"))
 )
 
 const (
@@ -1093,7 +1093,7 @@ func (m model) View() string {
 		b.WriteString("\n\n")
 		outputStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#00FF00")).
+			BorderForeground(lipgloss.Color("#7A7A7A")).
 			Padding(1).
 			MarginTop(1)
 		b.WriteString(outputStyle.Render("Command Output:\n" + m.commandOutput))
@@ -1140,7 +1140,7 @@ func (m model) View() string {
 	if m.width > 0 && m.height > 0 && (m.width < minWidth || m.height < minHeight) {
 		b.WriteString("\n")
 		warningStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFA500")).
+			Foreground(lipgloss.Color("#8A6D3B")).
 			Bold(true)
 
 		warningMsg := fmt.Sprintf("⚠️  Warning: Terminal size (%dx%d) is too small. Minimum recommended: %dx%d for optimal display.",
@@ -1185,7 +1185,7 @@ func (m model) getHelpText() string {
 func (m model) renderHelpPanel() string {
 	helpPanelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#626262")).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
 		Padding(0, 1)
 
 	if m.width > 0 {
@@ -1435,7 +1435,7 @@ func (m model) renderDeviceList() string {
 	// Frame header with search scope and query input
 	listHeader := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#7D56F4")).
+		Foreground(lipgloss.Color("#3F3F3F")).
 		Render("List machines")
 	listContent.WriteString(listHeader)
 	listContent.WriteString("\n")
@@ -1613,17 +1613,17 @@ func (m model) renderHistoryPanel() string {
 
 	// Check if device is online
 	online := isDeviceOnline(device)
-	statusIcon := "🔴"
+	statusLabel := "offline"
 	if online {
-		statusIcon = "🟢"
+		statusLabel = "online"
 	}
 
 	// Header - 2 lines format
 	// Line 1: Device name with status
-	headerText := truncateForWidth(fmt.Sprintf("🖥️  %s %s", machineName, statusIcon), historyInnerWidth)
+	headerText := truncateForWidth(fmt.Sprintf("%s [%s]", machineName, statusLabel), historyInnerWidth)
 	machineHeader := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#4C4F9C")).
+		Foreground(lipgloss.Color("#3F3F3F")).
 		Render(headerText)
 	historyContent.WriteString(machineHeader)
 	historyContent.WriteString("\n")
@@ -1631,7 +1631,7 @@ func (m model) renderHistoryPanel() string {
 	// Line 2: "Commands over SSH History:"
 	historyTitle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#0B7A75")).
+		Foreground(lipgloss.Color("#666666")).
 		Render("Commands over SSH History:")
 	historyContent.WriteString(historyTitle)
 	historyContent.WriteString("\n")
@@ -1721,14 +1721,14 @@ func (m model) renderHistoryPanel() string {
 
 	historyStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#0B7A75")).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
 		Padding(1, 2).
 		MaxWidth(historyWidth).
 		Width(historyWidth).
 		Height(historyHeight)
 
 	if m.activeFocus == focusHistory {
-		historyStyle = historyStyle.BorderForeground(lipgloss.Color("#C2185B"))
+		historyStyle = historyStyle.BorderForeground(lipgloss.Color("#2D6A8C"))
 	}
 
 	// Height in lipgloss is a minimum, so clamp content to avoid frame growth.
@@ -1742,7 +1742,7 @@ func (m model) renderOutputPanel() string {
 	outputWidth, outputHeight := m.getHistoryPanelSize()
 	outputInnerWidth := getPanelInnerWidth(outputWidth)
 	selectedOutputStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#C2185B")).
+		Foreground(lipgloss.Color("#2D6A8C")).
 		Bold(true)
 
 	var outputContent strings.Builder
@@ -1750,7 +1750,7 @@ func (m model) renderOutputPanel() string {
 	// Header
 	outputHeader := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#1B8F3A")).
+		Foreground(lipgloss.Color("#666666")).
 		Render("Command Output:")
 	outputContent.WriteString(outputHeader)
 	outputContent.WriteString("\n\n")
@@ -1802,14 +1802,14 @@ func (m model) renderOutputPanel() string {
 
 	outputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#1B8F3A")).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
 		Padding(1, 2).
 		MaxWidth(outputWidth).
 		Width(outputWidth).
 		Height(outputHeight)
 
 	if m.activeFocus == focusOutput {
-		outputStyle = outputStyle.BorderForeground(lipgloss.Color("#C2185B"))
+		outputStyle = outputStyle.BorderForeground(lipgloss.Color("#2D6A8C"))
 	}
 
 	// Height in lipgloss is a minimum, so clamp content to avoid frame growth.
@@ -1837,7 +1837,7 @@ func (m model) renderProfileSelection() string {
 
 	profileList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7D56F4")).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
 		Padding(1, 2).
 		Width(listWidth)
 
@@ -1905,7 +1905,7 @@ func (m model) renderAccountManagement() string {
 
 	optionsList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7D56F4")).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
 		Padding(1, 2).
 		Width(listWidth)
 

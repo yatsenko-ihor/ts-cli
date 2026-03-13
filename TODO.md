@@ -95,6 +95,7 @@
 - [x] extend "History command" width frame to end of terminal
 - [x] extend "Command Output" width frame to end of terminal
 - [x] add to "Command Output" frame selection for item (when navigate) and commands ("c" - copy file path, n - copy filename)
-- [ ] make TUI minimalistic
+- [x] make TUI minimalistic
+- [ ] right borders of frames "Command output" and "Command history" are not rendering
 
 ## To be implemented later:
