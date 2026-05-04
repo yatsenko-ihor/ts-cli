@@ -98,7 +98,7 @@ func (m model) renderDeviceList() string {
 
 		line := fmt.Sprintf("%s%s %-28s %s", cursor, statusIcon, name, address)
 		if expiryIcon != "" {
-			line = line + " " + expiryIcon
+			line = line + " " + expiryIcon + "\u0020"
 		}
 		listContent.WriteString(style.Render(line))
 		listContent.WriteString("\n")
