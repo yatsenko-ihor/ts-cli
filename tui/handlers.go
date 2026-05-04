@@ -159,6 +159,12 @@ func (m model) handleUsernamePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, usernamePromptHandlers); handled {
 		return newM, cmd
 	}
+	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
+	// delivers the full text as a single KeyMsg with Paste:true.
+	if msg.Paste {
+		m.usernameInput += sanitizePastedText(string(msg.Runes))
+		return m, nil
+	}
 	// Append printable single-character input
 	if len(msg.String()) == 1 {
 		m.usernameInput += msg.String()
@@ -203,6 +209,13 @@ var searchModeHandlers = map[string]keyHandler{
 func (m model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, searchModeHandlers); handled {
 		return newM, cmd
+	}
+	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
+	// delivers the full text as a single KeyMsg with Paste:true.
+	if msg.Paste {
+		m.searchQuery += sanitizePastedText(string(msg.Runes))
+		m.filterDevices()
+		return m, nil
 	}
 	// Append printable single-character input
 	if len(msg.String()) == 1 {
@@ -251,6 +264,12 @@ var commandModeHandlers = map[string]keyHandler{
 func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, commandModeHandlers); handled {
 		return newM, cmd
+	}
+	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
+	// delivers the full text as a single KeyMsg with Paste:true.
+	if msg.Paste {
+		m.commandInput += sanitizePastedText(string(msg.Runes))
+		return m, nil
 	}
 	// Append printable single-character input
 	if len(msg.String()) == 1 {

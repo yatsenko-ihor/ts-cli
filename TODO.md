@@ -102,15 +102,16 @@
 
 ## To be implemented later:
 
-- [x] show key expiration status 
+- [x] show key expiration status
 - [ ] d - down tailscale
 - [ ] remove from command panel "Enter"
 - [ ] clean up frame (when no command history) duplicate line "Press 'e' to type a new command in this panel"
-- [ ] in search box or in command execute make "Cmd+V" works
+- [x] in search box or in command execute make "Cmd+V" works
 - [ ] add to command panel "d - delete default name"
 - [ ] selected frame - better coloring or selection frame or frame title
 - [ ] check how input fiels done in lazygit or lazy docker
-
+- [ ] add option to fall into termux on remote machine
 
 ## Ideas for future (probably yes, but to keep minimalistic seems like not)
+
 - [ ] add ability to remove/enable key expirtation status

@@ -471,7 +471,7 @@ return applyFrameTitle(listPanel, listFrameTitle, borderColor, m.activeFocus == 
 Lipgloss borders don't natively support titles in the top border. The approach used here:
 
 1. Render the panel with lipgloss (`deviceListStyle.Render(content)`)
-2. Parse the first line of the rendered string  
+2. Parse the first line of the rendered string
 3. Find the `─` characters after `╭` and splice in the title string
 4. Re-join the lines
 
@@ -482,6 +482,7 @@ This gives a clean `╭─[1] List machines──────╮` look.
 **Context**: The TUI originally showed a device details panel below the list when pressing Enter (setting `m.selected`). This added visual noise.
 
 **Decision**: Remove the details pane entirely:
+
 - Deleted `renderDeviceDetails()` from view.go
 - Removed `"enter"` and `" "` key handlers from `normalModeHandlers`
 - `getTargetDevice()` simplified to always return `m.cursor`
@@ -500,6 +501,7 @@ Expires           time.Time `json:"expires"`            // zero = no expiry set
 ```
 
 **Logic**:
+
 - If `KeyExpiryDisabled == true` → no indicator (user chose not to expire)
 - If `Expires.IsZero()` → no indicator (not set)
 - If `Expires` is in the past → `⚠️` (expired)
@@ -516,4 +518,5 @@ line = strings.TrimRight(line, " ") // avoid trailing spaces when no icon
 ```
 
 **Key Lesson**: Keep display helpers in `device_utils.go` alongside the other status helpers (online check, status icon). Keeps `view.go` clean.
+
 - Tailscale API: v2
