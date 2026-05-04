@@ -100,3 +100,15 @@
 - [x] once frame "List machines" is active(selected) make border color more contrast
 
 ## To be implemented later:
+
+- [ ] show key expiration status 
+- [ ] add ability to remove/enable key expirtation status
+- [ ] d - down tailscale
+- [ ] remove from command panel "Enter"
+- [ ] clean up frame (when no command history) duplicate line "Press 'e' to type a new command in this panel"
+- [ ] in search box or in command execute make "Cmd+V" works
+- [ ] add to command panel "d - delete default name"
+- [ ] selected frame - better coloring or selection frame or frame title
+- [ ] check how input fiels done in lazygit or lazy docker
+- [ ] add theme 3 (dark, white, solarize)
+- [ ] remove frame "Selected Device"? (enter click on machine)
