@@ -102,7 +102,7 @@
 
 ## To be implemented later:
 
-- [ ] show key expiration status 
+- [x] show key expiration status 
 - [ ] d - down tailscale
 - [ ] remove from command panel "Enter"
 - [ ] clean up frame (when no command history) duplicate line "Press 'e' to type a new command in this panel"
