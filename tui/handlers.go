@@ -518,16 +518,6 @@ var normalModeHandlers = map[string]keyHandler{
 		m.searchQuery = ""
 		return m, nil
 	},
-	"enter": func(m model) (tea.Model, tea.Cmd) {
-		m.selected = m.cursor
-		m.sshError = nil
-		return m, nil
-	},
-	" ": func(m model) (tea.Model, tea.Cmd) {
-		m.selected = m.cursor
-		m.sshError = nil
-		return m, nil
-	},
 	"c": func(m model) (tea.Model, tea.Cmd) {
 		if m.showHistoryPanel && m.activeFocus == focusOutput {
 			return m, m.copySelectedOutputItem(false)
@@ -600,13 +590,9 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// getTargetDevice returns the index of the target device (selected or cursor)
+// getTargetDevice returns the index of the currently-highlighted device.
 func (m model) getTargetDevice() int {
-	target := m.selected
-	if target < 0 {
-		target = m.cursor
-	}
-	return target
+	return m.cursor
 }
 
 // moveCursorUp moves the cursor up and adjusts viewport if needed
@@ -648,8 +634,8 @@ func (m *model) moveCursorDown() {
 	if m.showHistoryPanel {
 		if m.activeFocus == focusHistory {
 			// Scroll history list
-			if m.history != nil && m.selected >= 0 && m.selected < len(m.filteredDevices) {
-				device := m.filteredDevices[m.selected]
+			if m.history != nil && m.cursor >= 0 && m.cursor < len(m.filteredDevices) {
+				device := m.filteredDevices[m.cursor]
 				machineID := device.ID
 				if machineID == "" {
 					machineID = device.Hostname

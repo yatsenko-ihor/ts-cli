@@ -130,41 +130,7 @@ func (m model) renderDeviceList() string {
 	}
 
 	listPanel := deviceListStyle.Render(listContent.String())
-	return applyFrameTitle(listPanel, listFrameTitle, borderColor)
-}
-
-// renderDeviceDetails renders the selected device details panel
-func (m model) renderDeviceDetails() string {
-	device := m.filteredDevices[m.selected]
-	name := device.Name
-	if name == "" {
-		name = device.Hostname
-	}
-
-	statusText := "🟢 Online"
-	if !isDeviceOnline(device) {
-		statusText = "🔴 Offline"
-	}
-
-	details := fmt.Sprintf(
-		"Selected Device\n\n"+
-			"Name:       %s\n"+
-			"Hostname:   %s\n"+
-			"Status:     %s\n"+
-			"OS:         %s\n"+
-			"Authorized: %t\n"+
-			"Address:    %v\n"+
-			"ID:         %s",
-		name,
-		device.Hostname,
-		statusText,
-		device.OS,
-		device.Authorized,
-		strings.Join(device.Addresses, ", "),
-		device.ID,
-	)
-
-	return detailStyle.Render(details) + "\n"
+	return applyFrameTitle(listPanel, listFrameTitle, borderColor, m.activeFocus == focusList)
 }
 
 // renderHistoryPanel renders the command history panel
@@ -294,7 +260,7 @@ func (m model) renderHistoryPanel() string {
 		borderColor = lipgloss.Color("#2D6A8C")
 	}
 
-	return renderTitledPanel(historyContent.String(), historyFrameTitle, historyWidth, historyHeight, borderColor)
+	return renderTitledPanel(historyContent.String(), historyFrameTitle, historyWidth, historyHeight, borderColor, m.activeFocus == focusHistory)
 }
 
 // renderOutputPanel renders the command output panel
@@ -353,7 +319,7 @@ func (m model) renderOutputPanel() string {
 		borderColor = lipgloss.Color("#2D6A8C")
 	}
 
-	return renderTitledPanel(outputContent.String(), outputFrameTitle, outputWidth, outputHeight, borderColor)
+	return renderTitledPanel(outputContent.String(), outputFrameTitle, outputWidth, outputHeight, borderColor, m.activeFocus == focusOutput)
 }
 
 // renderProfileSelection renders the profile selection view
