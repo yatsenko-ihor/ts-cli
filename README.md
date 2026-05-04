@@ -1,15 +1,19 @@
 # Tailscale CLI (ts-cli)
 
-A command-line interface tool for managing Tailscale devices and resources via the Tailscale REST API.
+A terminal-first CLI for managing Tailscale devices via the Tailscale REST API. Supports multi-account configurations, an interactive TUI with split-screen layout, remote command execution, per-device command history, and clipboard integration.
 
 ## Features
 
-- **Authentication**: Securely validate and store your Tailscale API key
-- **Device Management**: List and view all devices in your Tailscale tailnet
-- **SSH Integration**: Connect to devices via SSH with a single command
-- **Interactive TUI**: Browse devices with an intuitive terminal interface
-- **Shell Completion**: Built-in support for bash, zsh, fish, and powershell
-- Clean and intuitive CLI interface powered by `cobra`
+- **Multi-Account Management**: Store and switch between multiple Tailscale accounts/tailnets
+- **Interactive TUI**: Browse devices with a keyboard-driven split-screen terminal interface
+- **Device Search**: Vim-style incremental search by name, hostname, OS, or IP address
+- **SSH Integration**: Connect to devices via SSH directly from the TUI or CLI
+- **Remote Command Execution**: Run commands on remote devices and capture output in a dedicated panel
+- **Per-Device Command History**: Recall previously executed commands per device with `↑`/`↓`
+- **Output Panel**: View remote command output in a scrollable split panel
+- **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
+- **Profile Filtering**: Filter the device list by account or view all accounts at once
+- **Shell Completion**: Built-in support for bash, zsh, fish, and PowerShell
 
 ## Prerequisites
 
@@ -22,229 +26,170 @@ A command-line interface tool for managing Tailscale devices and resources via t
 ### Build from source
 
 ```bash
-# Clone the repository
-
-# Navigate to project folder
-cd ~/ts-cli
-
-# Download dependencies
+git clone https://github.com/yatsenko-ihor/ts-cli.git
+cd ts-cli
 go mod download
-
-# Build the application
 go build -o ts-cli .
 ```
 
-This will create a `ts-cli` binary in the current directory.
-
-### Install globally (optional)
+### Install globally
 
 ```bash
-go install
+go install github.com/ihor/ts-cli@latest
 ```
 
-This will install `ts-cli` to your `$GOPATH/bin` directory.
+This installs `ts-cli` to your `$GOPATH/bin` directory.
 
 ## Usage
 
 ### Authentication
 
-Before using the CLI, you need to authenticate with your Tailscale API key:
+Authenticate with your Tailscale API key:
 
 ```bash
-# Set the API key as an environment variable
+# Using an environment variable
 export TAILSCALE_API_KEY=tskey-api-xxxxx
-
-# Login and validate the key
 ./ts-cli login --tailnet=example.com
-```
 
-Or provide the API key directly:
-
-```bash
+# Or provide the key directly
 ./ts-cli login --api-key=tskey-api-xxxxx --tailnet=example.com
 ```
 
-**Note**: Replace `example.com` with your actual tailnet name (e.g., `mycompany.com` or `user@example.com`).
+Replace `example.com` with your actual tailnet name (e.g. `mycompany.com` or `user@example.com`).
 
-The login command will:
+The login command validates your API key and stores it in `~/.config/ts-cli/config.json`.
 
-1. Validate your API key against the Tailscale API
-2. Store the configuration locally in `~/.ts-cli/config`
+### Multi-Account Setup
+
+Run `login` multiple times with different tailnet/API key pairs. Each account is stored separately and you can switch between them, or view all devices across all accounts using the **All Accounts** profile in the TUI.
 
 ### List Devices
-
-After authentication, list all devices in your tailnet:
 
 ```bash
 ./ts-cli list
 ```
 
-#### Output format
-
-By default, devices are displayed in a formatted table:
+Output (default table format):
 
 ```
-NAME                HOSTNAME            ADDRESS         OS       LAST SEEN      AUTHORIZED
-----                --------            -------         --       ---------      ----------
-laptop.example.com  laptop              100.64.0.1      linux    2 hours ago    Yes
-phone.example.com   phone               100.64.0.2      iOS      just now       Yes
+NAME                HOSTNAME    ADDRESS       OS     LAST SEEN    AUTHORIZED
+laptop.example.com  laptop      100.64.0.1    linux  2 hours ago  Yes
+phone.example.com   phone       100.64.0.2    iOS    just now     Yes
 
 Total devices: 2
 ```
 
-#### JSON output
-
-For programmatic use, you can output in JSON format:
+JSON output:
 
 ```bash
 ./ts-cli list --format=json
 ```
 
-#### Override tailnet
+### SSH
 
-You can override the stored tailnet configuration:
+Connect directly from the CLI:
 
 ```bash
-./ts-cli list --tailnet=different-tailnet.com
+ts-cli ssh laptop.example.com
+ts-cli ssh laptop.example.com --user=admin
+```
+
+### Interactive TUI
+
+```bash
+ts-cli              # defaults to interactive mode
+ts-cli interactive
+ts-cli i            # short alias
+ts-cli tui          # alternative alias
+```
+
+#### TUI Keyboard Shortcuts
+
+| Key         | Action                                            |
+| ----------- | ------------------------------------------------- |
+| `↑` / `k`   | Move cursor up                                    |
+| `↓` / `j`   | Move cursor down                                  |
+| `/`         | Enter search mode                                 |
+| `s`         | SSH to selected device                            |
+| `c`         | Copy SSH command to clipboard                     |
+| `r`         | Run remote command on selected device             |
+| `p`         | Switch profile (account filter)                   |
+| `m`         | Manage accounts                                   |
+| `u`         | Set SSH username                                  |
+| `d`         | Disconnect / clear output                         |
+| `x`         | Clear command history for selected device         |
+| `Tab`       | Cycle panel focus: list → history → output → list |
+| `Shift+Tab` | Reverse cycle panel focus                         |
+| `1`         | Jump focus to device list panel                   |
+| `2`         | Jump focus to command history panel               |
+| `3`         | Jump focus to output panel                        |
+| `Esc`       | Exit current mode / return to list focus          |
+| `q`         | Quit                                              |
+
+#### Input Mode Shortcuts (search / command / username prompts)
+
+| Key                | Action                 |
+| ------------------ | ---------------------- |
+| `ctrl+v` / `cmd+v` | Paste from clipboard   |
+| `Backspace`        | Delete last character  |
+| `Enter`            | Confirm input          |
+| `Esc` / `ctrl+c`   | Cancel and clear input |
+
+#### Three-Panel Layout
+
+When the terminal is wide enough, the TUI shows three panels:
+
+- **Left — Device List**: Searchable, filterable device list with online/offline status icons (🟢 / 🔴)
+- **Top-Right — Command History**: Per-device command history; navigate with `↑`/`↓` to recall commands
+- **Bottom-Right — Output Panel**: Scrollable output from the last remote command
+
+Focus cycles with `Tab` / `Shift+Tab`, or jump directly with `1`, `2`, `3`.
+
+### Running In tmux
+
+```bash
+# Split horizontally
+tmux split-window -h -c "#{pane_current_path}" "ts-cli"
+
+# Split vertically
+tmux split-window -v -c "#{pane_current_path}" "ts-cli"
 ```
 
 ## Configuration
 
-The CLI stores configuration in `~/.ts-cli/config`. This file contains:
+Configuration is stored in `~/.config/ts-cli/config.json` and contains all saved accounts (API key + tailnet per account) plus the active account selection. The file is created with permissions `0600`; the directory with `0700`.
 
-- Your Tailscale API key
-- Your tailnet name
-
-You can always override these values using command-line flags.
+You can always override stored values using CLI flags (`--api-key`, `--tailnet`).
 
 ## Commands
 
 ### `login`
 
-Validate and store your Tailscale API credentials.
-
 ```bash
 ts-cli login --tailnet=<tailnet-name> [--api-key=<key>]
 ```
 
-**Flags:**
-
-- `--api-key`: Tailscale API key (optional if `TAILSCALE_API_KEY` env var is set)
-- `--tailnet`: Your tailnet name (required)
+Flags: `--api-key`, `--tailnet`
 
 ### `list`
 
-List all devices in your Tailscale tailnet.
-
 ```bash
-ts-cli list [--format=<table|json>] [--tailnet=<name>]
+ts-cli list [--format=<table|json>] [--tailnet=<name>] [--api-key=<key>]
 ```
-
-**Flags:**
-
-- `--format`: Output format - `table` (default) or `json`
-- `--tailnet`: Override the configured tailnet name
-- `--api-key`: Override the configured API key
 
 ### `ssh`
 
-Open an SSH connection to a Tailscale device.
+```bash
+ts-cli ssh <device-name-or-hostname> [--user=<username>] [--tailnet=<name>] [--api-key=<key>]
+```
+
+### `interactive` / `i` / `tui`
 
 ```bash
-ts-cli ssh <device-name-or-hostname> [--user=<username>]
+ts-cli [interactive|i|tui]
 ```
 
-**Arguments:**
-
-- `device-name-or-hostname`: The name or hostname of the device to connect to
-
-**Flags:**
-
-- `--user`: SSH user (default: current user)
-- `--tailnet`: Override the configured tailnet name
-- `--api-key`: Override the configured API key
-
-**Examples:**
-
-```bash
-# SSH to a device by name
-ts-cli ssh laptop.example.com
-
-# SSH with custom user
-ts-cli ssh laptop.example.com --user=admin
-
-# SSH using device hostname
-ts-cli ssh laptop
-```
-
-### `interactive` (or `i`, `tui`)
-
-Launch an interactive terminal UI to browse and manage devices with split-screen support.
-
-```bash
-ts-cli
-ts-cli interactive
-ts-cli i      # Short alias
-ts-cli tui    # Alternative alias
-```
-
-**Interactive Controls:**
-
-- `↑/k`: Move cursor up
-- `↓/j`: Move cursor down
-- `Enter`: Select device to view details
-- `/`: Enter search mode (vim-style)
-- `s`: SSH to selected device (prompts for username if not configured)
-- `c`: Copy SSH command to clipboard
-- `Tab`: Show/cycle frame focus (`list -> history -> output -> list`)
-- `Esc`: Close split panels and return to list focus
-- `q`: Quit
-
-**Features:**
-
-- **Split-Screen Layout**: View device list on the left and SSH details on the right
-- **Vim-Style Search**: Press `/` to search devices by name, hostname, OS, or IP address
-- **Device Status Icons**: 🟢 Online (active within 5 minutes) / 🔴 Offline
-- **Scrollable List**: Navigate through many devices with automatic viewport scrolling
-- **SSH Username Memory**: Configure SSH username once, use automatically for all connections
-- **Clipboard Integration**: Copy SSH commands with `c` key (works on macOS, Linux, Windows)
-
-**Split-Screen Mode:**
-
-When terminal width > 80 columns, the split-screen mode shows:
-
-- **Left Panel**: Device list with search and selection
-- **Right Panel**: SSH connection details including:
-    - Selected device information
-    - Formatted SSH command
-    - Connection instructions
-    - Username configuration status
-
-Press `Tab` to open split panels and cycle focus between frames.
-
-### Running In tmux
-
-Yes, opening another tmux pane while `ts-cli` is running in tmux is possible.
-
-- Split current window horizontally and launch `ts-cli` in the new pane:
-
-```bash
-tmux split-window -h -c "#{pane_current_path}" "ts-cli"
-```
-
-- Split vertically instead:
-
-```bash
-tmux split-window -v -c "#{pane_current_path}" "ts-cli"
-```
-
-- Useful shortcut from inside tmux command prompt (`Ctrl+b` then `:`):
-
-```text
-bind-key T split-window -h -c "#{pane_current_path}" "ts-cli"
-```
-
-**Note**: When you run `ts-cli` without any subcommand, it defaults to interactive mode.
+Launches the interactive TUI (default when no subcommand is given).
 
 ## Project Structure
 
@@ -252,151 +197,79 @@ bind-key T split-window -h -c "#{pane_current_path}" "ts-cli"
 ts-cli/
 ├── main.go              # Application entry point
 ├── go.mod               # Go module definition
-├── go.sum               # Go module checksums
 ├── client/
-│   └── tailscale.go     # Tailscale API client implementation
+│   └── tailscale.go     # Tailscale REST API client
 ├── commands/
-│   ├── root.go          # Root command and CLI setup
-│   ├── login.go         # Login command implementation
-│   ├── list.go          # List devices command implementation
-│   ├── ssh.go           # SSH connection command
-│   └── interactive.go   # Interactive TUI command
+│   ├── root.go          # Root command, CLI setup
+│   ├── login.go         # login subcommand
+│   ├── list.go          # list subcommand
+│   ├── ssh.go           # ssh subcommand
+│   ├── interactive.go   # interactive subcommand
+│   ├── config.go        # Account config persistence
+│   ├── install.go       # Install helpers
+│   ├── up.go            # tailscale up helpers
+│   └── tailscale_check.go
 ├── tui/
-│   └── model.go         # Bubbletea TUI model and view logic
-└── README.md            # This file
+│   ├── model.go         # Bubbletea model, Update/View entry points
+│   ├── handlers.go      # Key dispatch maps (Command pattern)
+│   ├── commands.go      # action type, shared constants
+│   ├── view.go          # Rendering / layout
+│   ├── layout.go        # Panel sizing helpers
+│   ├── styles.go        # Lipgloss styles
+│   ├── messages.go      # tea.Msg types
+│   ├── clipboard.go     # Clipboard read/write (cross-platform)
+│   ├── ssh.go           # SSH / remote command execution
+│   ├── config.go        # TUI config persistence helpers
+│   ├── device_utils.go  # Device filtering, sorting, status
+│   └── utils.go         # Misc helpers
+└── util/
+    ├── history.go       # Per-device command history
+    └── validation.go    # Input sanitization and validation
 ```
 
 ## Architecture
 
-- **main.go**: Initializes the CLI application using Cobra framework
-- **commands/root.go**: Defines the root command and registers subcommands
-- **client/tailscale.go**: Handles all interactions with the Tailscale REST API
-    - HTTP client setup
-    - Authentication
-    - API request/response handling
-    - Error handling and JSON parsing
-- **commands/**: Individual command implementations
-    - Each command is a `*cobra.Command`
-    - Uses Cobra's flag system for argument parsing
-    - Implements RunE for execution with error handling
+The TUI is built on [Bubbletea](https://github.com/charmbracelet/bubbletea) with [Lipgloss](https://github.com/charmbracelet/lipgloss) for styling.
+
+Key-handling uses a **Command pattern**: each input mode (normal, search, username prompt, command input) has its own `map[string]keyHandler` dispatch table where `keyHandler` is `func(model) (tea.Model, tea.Cmd)`. Shared commands (quit, cursor movement, tab cycle) are pre-allocated `var` values reused across maps.
 
 ## Security
 
-- API keys are stored with restricted permissions (0600) in `~/.ts-cli/config`
-- The config directory is created with restricted permissions (0700)
-- API keys can be provided via environment variables to avoid storing them on disk
+- Config file stored with `0600` permissions; directory with `0700`
+- API keys can be supplied via `TAILSCALE_API_KEY` environment variable to avoid writing them to disk
+- All user input in the TUI is sanitized and validated before use in SSH usernames or remote commands
 
 ## Development
 
-### Shell Completion
-
-Cobra provides built-in shell completion. Generate completion scripts for your shell:
-
-```bash
-# Bash
-./ts-cli completion bash > /etc/bash_completion.d/ts-cli
-
-# Zsh
-./ts-cli completion zsh > "${fpath[1]}/_ts-cli"
-
-# Fish
-./ts-cli completion fish > ~/.config/fish/completions/ts-cli.fish
-
-# PowerShell
-./ts-cli completion powershell > ts-cli.ps1
-```
-
 ### Running tests
-
-The project includes comprehensive unit tests for core functionality.
-
-**Run all tests:**
 
 ```bash
 go test ./...
-```
-
-**Run tests for a specific package:**
-
-```bash
-# Test config management
-go test ./commands
-
-# Test TUI model
-go test ./tui
-
-# Test utility functions
-go test ./util
-```
-
-**Run tests with verbose output:**
-
-```bash
 go test -v ./...
-```
-
-**Run tests without cache:**
-
-```bash
-go test -count=1 ./...
-```
-
-**Run tests with coverage:**
-
-```bash
-# Generate coverage report
 go test -cover ./...
-
-# Generate detailed coverage report
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
 ```
 
-**Test files:**
+Test files:
 
-- `commands/config_test.go` - Config management tests (account operations)
-- `tui/model_test.go` - TUI model tests (device filtering, sorting, status)
+- `commands/config_test.go` — account config operations
+- `tui/model_test.go` — device filtering, sorting, status detection
 
-**Test coverage includes:**
+### Shell Completion
 
-- Account activation and retrieval
-- Device online/offline detection
-- Status icon selection
-- Device sorting by status
-- Device filtering by search query and profile
-- Input validation functions
-
-### Adding new commands
-
-1. Create a new file in the `commands/` directory
-2. Create a function that returns `*cobra.Command`
-3. Register the command in `commands/root.go` by adding it to the root command
-
-Example:
-
-```go
-func NewMyCommand() *cobra.Command {
-    cmd := &cobra.Command{
-        Use:   "mycommand",
-        Short: "Short description",
-        RunE: func(cmd *cobra.Command, args []string) error {
-            // Implementation
-            return nil
-        },
-    }
-    return cmd
-}
+```bash
+./ts-cli completion bash   > /etc/bash_completion.d/ts-cli
+./ts-cli completion zsh    > "${fpath[1]}/_ts-cli"
+./ts-cli completion fish   > ~/.config/fish/completions/ts-cli.fish
+./ts-cli completion powershell > ts-cli.ps1
 ```
 
-## API Documentation
+## API Reference
 
-This CLI uses the Tailscale API v2. For more information about available endpoints and capabilities, refer to:
-
-- https://tailscale.com/api
+Uses the [Tailscale API v2](https://tailscale.com/api).
 
 ## License
 
-BSD 3-Clause License (same as Tailscale)
+BSD 3-Clause License
 
 ## Support
 
