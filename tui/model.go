@@ -384,10 +384,6 @@ func (m model) View() string {
 		deviceList := m.renderDeviceList()
 		b.WriteString(deviceList)
 
-		// Device details if selected
-		if m.selected >= 0 && m.selected < len(m.filteredDevices) {
-			b.WriteString(m.renderDeviceDetails())
-		}
 	}
 
 	// Show command output if any (when history panel is not shown)

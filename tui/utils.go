@@ -32,8 +32,9 @@ func clampToLines(content string, maxLines int) string {
 	return strings.Join(lines[:maxLines], "\n")
 }
 
-// applyFrameTitle injects a title into the top border line of a rendered rounded frame
-func applyFrameTitle(frame, title string, borderColor lipgloss.Color) string {
+// applyFrameTitle injects a title into the top border line of a rendered rounded frame.
+// When bold is true the title text is rendered bold.
+func applyFrameTitle(frame, title string, borderColor lipgloss.Color, bold bool) string {
 	lines := strings.Split(frame, "\n")
 	if len(lines) == 0 {
 		return frame
@@ -59,14 +60,19 @@ func applyFrameTitle(frame, title string, borderColor lipgloss.Color) string {
 		fill = 0
 	}
 
-	topLine := "╭" + titleSegment + strings.Repeat("─", fill) + "╮"
-	lines[0] = lipgloss.NewStyle().Foreground(borderColor).Render(topLine)
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	titleStyle := borderStyle
+	if bold {
+		titleStyle = titleStyle.Bold(true)
+	}
+	lines[0] = borderStyle.Render("╭") + titleStyle.Render(titleSegment) + borderStyle.Render(strings.Repeat("─", fill)+"╮")
 
 	return strings.Join(lines, "\n")
 }
 
-// renderTitledPanel renders a panel with a title in the border
-func renderTitledPanel(content, title string, contentWidth, contentHeight int, borderColor lipgloss.Color) string {
+// renderTitledPanel renders a panel with a title in the border.
+// When bold is true the title text is rendered bold.
+func renderTitledPanel(content, title string, contentWidth, contentHeight int, borderColor lipgloss.Color, bold bool) string {
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
@@ -109,8 +115,12 @@ func renderTitledPanel(content, title string, contentWidth, contentHeight int, b
 	}
 
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	titleStyle := borderStyle
+	if bold {
+		titleStyle = titleStyle.Bold(true)
+	}
 	var b strings.Builder
-	b.WriteString(borderStyle.Render("╭" + titleSegment + strings.Repeat("─", fill) + "╮"))
+	b.WriteString(borderStyle.Render("╭") + titleStyle.Render(titleSegment) + borderStyle.Render(strings.Repeat("─", fill)+"╮"))
 	b.WriteString("\n")
 
 	// Top padding row
