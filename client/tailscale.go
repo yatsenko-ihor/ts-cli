@@ -28,10 +28,12 @@ type Device struct {
 	OS                        string    `json:"os"`
 	Created                   time.Time `json:"created"`
 	LastSeen                  time.Time `json:"lastSeen"`
+	Expires                   time.Time `json:"expires"`
 	Authorized                bool      `json:"authorized"`
 	IsExternal                bool      `json:"isExternal"`
 	UpdateAvailable           bool      `json:"updateAvailable"`
 	BlocksIncomingConnections bool      `json:"blocksIncomingConnections"`
+	KeyExpiryDisabled         bool      `json:"keyExpiryDisabled"`
 	Addresses                 []string  `json:"addresses"`
 	Tags                      []string  `json:"tags,omitempty"`
 	// Additional fields for multi-account support

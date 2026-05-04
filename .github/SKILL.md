@@ -219,9 +219,58 @@ app/
 │   └── cmd2.go         # Subcommand 2
 ├── client/
 │   └── api.go          # API client
+├── internal/
+│   ├── constants/      # All magic values (timeouts, URLs, messages)
+│   ├── errors/         # Typed error types with AppError struct
+│   ├── formatters/     # Display formatting utilities
+│   └── services/       # Business logic layer
 ├── tui/
-│   └── model.go        # TUI model
+│   ├── model.go        # Model struct, Init, Update, View (thin orchestration)
+│   ├── view.go         # All rendering functions
+│   ├── handlers.go     # Key event handlers grouped by mode
+│   ├── layout.go       # Size/dimension calculations
+│   ├── device_utils.go # Device filtering, sorting, status helpers
+│   ├── messages.go     # Message types, panelFocus enum
+│   ├── styles.go       # Lipgloss styles, layout constants, frame titles
+│   └── utils.go        # Shared rendering utilities (applyFrameTitle, etc.)
 └── README.md
+```
+
+**Key Rule**: When a TUI file grows past ~300 lines, split by responsibility. All files share the same package, so no import changes needed.
+
+## TUI Patterns Specific to This Project
+
+### Frame Title with Bold on Focus
+
+```go
+// utils.go
+func applyFrameTitle(frame, title string, borderColor lipgloss.Color, bold bool) string {
+    titleStyle := lipgloss.NewStyle().Foreground(borderColor)
+    if bold {
+        titleStyle = titleStyle.Bold(true)
+    }
+    // splice title into first border line
+}
+
+// view.go - caller passes active focus check
+return applyFrameTitle(listPanel, listFrameTitle, borderColor, m.activeFocus == focusList)
+```
+
+### Handler Map Pattern for Key Events
+
+```go
+// handlers.go
+var normalModeHandlers = map[string]func(m model) model{
+    "up": func(m model) model { /* ... */ },
+    "k":  func(m model) model { /* ... */ },
+}
+
+func (m model) handleNormalMode(key string) model {
+    if handler, ok := normalModeHandlers[key]; ok {
+        return handler(m)
+    }
+    return m
+}
 ```
 
 ## Common Patterns

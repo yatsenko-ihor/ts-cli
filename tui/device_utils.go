@@ -44,6 +44,18 @@ func getStatusIcon(device client.Device) string {
 	return "🔴"
 }
 
+// getKeyExpiryIcon returns an expiry indicator icon when a device has key expiry set.
+// Returns empty string when expiry is disabled or not configured.
+func getKeyExpiryIcon(device client.Device) string {
+	if device.KeyExpiryDisabled || device.Expires.IsZero() {
+		return ""
+	}
+	if device.Expires.Before(time.Now()) {
+		return "⚠️"
+	}
+	return "🔑"
+}
+
 // filterDevices filters the device list based on the search query and profile filter
 func (m *model) filterDevices() {
 	// Start with all devices

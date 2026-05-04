@@ -398,4 +398,122 @@ Based on TODO.md, next step is split-screen layout:
 - Cobra: v1.8.1
 - Bubbletea: v1.3.10
 - Lipgloss: v1.1.0
+
+---
+
+## TUI Refactoring: File Decomposition
+
+### Splitting a Large TUI Model File
+
+**Challenge**: `tui/model.go` grew to ~800+ lines containing model definition, update handlers, view rendering, and utilities.
+
+**Approach**: Split by concern into focused files:
+
+```
+tui/
+├── model.go        # Model struct, Init, Update, View (orchestration only)
+├── view.go         # All rendering functions
+├── handlers.go     # Key event handlers and helper methods
+├── layout.go       # Size/dimension calculations
+├── device_utils.go # Device filtering, sorting, status icons
+├── messages.go     # Message types, panelFocus enum
+├── styles.go       # Lipgloss styles, constants, frame title strings
+├── utils.go        # Shared rendering utilities (applyFrameTitle, renderTitledPanel)
+├── ssh.go          # SSH-related TUI logic
+├── clipboard.go    # Clipboard utilities
+├── tailscale.go    # Tailscale TUI integrations
+├── commands.go     # Command execution helpers
+└── config.go       # Config-related TUI state helpers
+```
+
+**Key Lesson**: When a single file exceeds ~300 lines in a TUI package, split by responsibility. All files share the same package (`package tui`), so no import changes are needed.
+
+### Internal Packages for Encapsulation
+
+Created `internal/` subdirectory for non-public packages:
+
+```
+internal/
+├── constants/constants.go  # All magic values in one place
+├── errors/errors.go        # Typed errors with AppError struct
+├── formatters/             # Display formatting utilities
+└── services/               # Business logic layer
+    ├── config_service.go
+    └── device_service.go
+```
+
+**Key Lesson**: Use `internal/` to prevent external packages from importing project internals. Go enforces this at the compiler level.
+
+## Frame Focus Visual Feedback
+
+### Bold Title on Active Frame
+
+**Pattern**: Pass the focus state as a `bold bool` to rendering utilities so the active panel's border title is visually distinct.
+
+```go
+// utils.go - accepts bold flag
+func applyFrameTitle(frame, title string, borderColor lipgloss.Color, bold bool) string {
+    titleStyle := lipgloss.NewStyle().Foreground(borderColor)
+    if bold {
+        titleStyle = titleStyle.Bold(true)
+    }
+    // Inject styled title into the first line of the border
+}
+
+// view.go - callers pass active focus check
+return applyFrameTitle(listPanel, listFrameTitle, borderColor, m.activeFocus == focusList)
+```
+
+**Key Lesson**: Don't duplicate title rendering logic — add a `bold bool` parameter to shared utilities and pass in the condition at each call site.
+
+### Frame Title Injection into Border
+
+Lipgloss borders don't natively support titles in the top border. The approach used here:
+
+1. Render the panel with lipgloss (`deviceListStyle.Render(content)`)
+2. Parse the first line of the rendered string  
+3. Find the `─` characters after `╭` and splice in the title string
+4. Re-join the lines
+
+This gives a clean `╭─[1] List machines──────╮` look.
+
+## UX Simplification: Removing Device Details Pane
+
+**Context**: The TUI originally showed a device details panel below the list when pressing Enter (setting `m.selected`). This added visual noise.
+
+**Decision**: Remove the details pane entirely:
+- Deleted `renderDeviceDetails()` from view.go
+- Removed `"enter"` and `" "` key handlers from `normalModeHandlers`
+- `getTargetDevice()` simplified to always return `m.cursor`
+
+**Key Lesson**: Simpler is better. When a feature adds cognitive overhead without proportional value, remove it. Navigating by cursor is enough — no need to "confirm" selection.
+
+## Key Expiry Display
+
+### Device Key Expiry Fields (Tailscale API)
+
+Two relevant fields from the Device schema:
+
+```go
+KeyExpiryDisabled bool      `json:"keyExpiryDisabled"` // true = expiry disabled
+Expires           time.Time `json:"expires"`            // zero = no expiry set
+```
+
+**Logic**:
+- If `KeyExpiryDisabled == true` → no indicator (user chose not to expire)
+- If `Expires.IsZero()` → no indicator (not set)
+- If `Expires` is in the past → `⚠️` (expired)
+- If `Expires` is in the future → `🔑` (has upcoming expiry)
+
+### Rendering Inline with Device Row
+
+Added a `getKeyExpiryIcon` helper in `device_utils.go` that returns the icon string or empty string. In `view.go`:
+
+```go
+expiryIcon := getKeyExpiryIcon(device)
+line := fmt.Sprintf("%s%s %-28s %s %s", cursor, statusIcon, name, address, expiryIcon)
+line = strings.TrimRight(line, " ") // avoid trailing spaces when no icon
+```
+
+**Key Lesson**: Keep display helpers in `device_utils.go` alongside the other status helpers (online check, status icon). Keeps `view.go` clean.
 - Tailscale API: v2

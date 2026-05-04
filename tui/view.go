@@ -94,8 +94,12 @@ func (m model) renderDeviceList() string {
 		}
 
 		statusIcon := getStatusIcon(device)
+		expiryIcon := getKeyExpiryIcon(device)
 
 		line := fmt.Sprintf("%s%s %-28s %s", cursor, statusIcon, name, address)
+		if expiryIcon != "" {
+			line = line + " " + expiryIcon
+		}
 		listContent.WriteString(style.Render(line))
 		listContent.WriteString("\n")
 	}
