@@ -51,7 +51,7 @@ func getKeyExpiryIcon(device client.Device) string {
 		return ""
 	}
 	if device.Expires.Before(time.Now()) {
-		return "⚠️"
+		return "🔒"
 	}
 	return "🔑"
 }

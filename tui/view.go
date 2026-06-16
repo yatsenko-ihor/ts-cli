@@ -98,10 +98,9 @@ func (m model) renderDeviceList() string {
 
 		line := fmt.Sprintf("%s%s %-28s %s", cursor, statusIcon, name, address)
 		if expiryIcon != "" {
-			line = line + " " + expiryIcon + "\u0020"
+			line += " " + expiryIcon
 		}
-		listContent.WriteString(style.Render(line))
-		listContent.WriteString("\n")
+		listContent.WriteString(style.Render(line) + "\n")
 	}
 
 	// Show scroll indicator at bottom if needed
