@@ -29,6 +29,7 @@ type model struct {
 	activeFocus panelFocus
 	version     string
 	reloading   bool
+	aboutMode   bool
 }
 
 func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, savePasswordEnabled bool, sshPasswordEncrypted string) model {
@@ -317,6 +318,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.opts.active {
 			return m.handleOptionsMenu(msg)
 		}
+		if m.aboutMode {
+			return m.handleAboutMode(msg)
+		}
 		return m.handleNormalMode(msg)
 	}
 
@@ -341,6 +345,11 @@ func (m model) View() string {
 	// Show options menu if in options mode
 	if m.opts.active {
 		return m.renderOptionsMenu()
+	}
+
+	// Show about screen
+	if m.aboutMode {
+		return m.renderAbout()
 	}
 
 	var b strings.Builder

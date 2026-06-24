@@ -16,14 +16,15 @@ vendor/
 
 # Go workspace file
 go.work
+go.work.sum
 
 # Build artifacts
 ts-cli
 ts-cli.exe
+/build/
+/dist/
 
 # IDE specific files
-.github/
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -31,8 +32,32 @@ ts-cli.exe
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
 
-# Config files (contains sensitive data)
+# Linux
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Sensitive files
+*.key
+*.pem
+*.secret
+.env
+.env.*
+
+# Config files (contains API keys)
 .ts-cli/
-config
-ts-api*.key
+
+# Agent/AI config (local only)
+.github/
+.vscode/
+.sixth/
+.copilot/
+
+# Tailscale API spec (large, not needed)
+tailscale-api.json

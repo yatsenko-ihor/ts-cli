@@ -429,6 +429,47 @@ func (m model) renderAccountManagement() string {
 	return b.String()
 }
 
+// renderAbout renders the about/info screen
+func (m model) renderAbout() string {
+	var b strings.Builder
+
+	title := "About ts-cli"
+	b.WriteString(titleStyle.Render(title))
+	b.WriteString("\n\n")
+
+	listWidth := 60
+	if m.width > 0 && m.width < 80 {
+		listWidth = m.width - 10
+		if listWidth < 40 {
+			listWidth = 40
+		}
+	}
+
+	aboutBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
+		Padding(1, 2).
+		Width(listWidth)
+
+	var content strings.Builder
+	content.WriteString(lipgloss.NewStyle().Bold(true).Render("ts-cli"))
+	content.WriteString(fmt.Sprintf(" v%s\n", m.version))
+	content.WriteString("\n")
+	content.WriteString("Terminal-first CLI for managing Tailscale devices\n")
+	content.WriteString("\n")
+	content.WriteString(grayItalicStyle.Render("Author:") + "  Ihor Yatsenko\n")
+	content.WriteString(grayItalicStyle.Render("Email:") + "   yatsenko.ihor@gmail.com\n")
+	content.WriteString(grayItalicStyle.Render("GitHub:") + "  https://github.com/yatsenko-ihor/ts-cli\n")
+	content.WriteString("\n")
+	content.WriteString(grayItalicStyle.Render("License: MIT + Commons Clause"))
+
+	b.WriteString(aboutBox.Render(content.String()))
+	b.WriteString("\n\n")
+	b.WriteString(helpStyle.Render("Press any key to return"))
+
+	return b.String()
+}
+
 // renderOptionsMenu renders the options/settings menu
 func (m model) renderOptionsMenu() string {
 	var b strings.Builder
@@ -500,7 +541,7 @@ func (m model) renderOptionsMenu() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "1/2/3 frame • ↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage • o options"
+	help := "↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • r reload • o options • a about"
 	if m.hist.visible {
 		if m.activeFocus == focusHistory {
 			help = "1/2/3 frame • ↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
