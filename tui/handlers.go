@@ -605,6 +605,10 @@ var normalModeHandlers = map[string]keyHandler{
 		m.opts.cursor = 0
 		return m, nil
 	},
+	"a": func(m model) (tea.Model, tea.Cmd) {
+		m.aboutMode = true
+		return m, nil
+	},
 }
 
 func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -827,6 +831,18 @@ var optionsMenuHandlers = map[string]keyHandler{
 func (m model) handleOptionsMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, optionsMenuHandlers); handled {
 		return newM, cmd
+	}
+	return m, nil
+}
+
+// ─── About mode ───────────────────────────────────────────────────────────────
+
+func (m model) handleAboutMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q", "a", "enter":
+		m.aboutMode = false
+	case "ctrl+c":
+		return m, tea.Quit
 	}
 	return m, nil
 }

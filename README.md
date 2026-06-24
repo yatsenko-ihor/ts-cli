@@ -112,12 +112,14 @@ ts-cli tui          # alternative alias
 | `/`         | Enter search mode                                 |
 | `s`         | SSH to selected device                            |
 | `c`         | Copy SSH command to clipboard                     |
-| `r`         | Run remote command on selected device             |
+| `r`         | Reload devices                                    |
 | `p`         | Switch profile (account filter)                   |
 | `m`         | Manage accounts                                   |
-| `u`         | Set SSH username                                  |
-| `d`         | Disconnect / clear output                         |
-| `x`         | Clear command history for selected device         |
+| `u`         | Tailscale up                                      |
+| `o`         | Options menu (password saving)                    |
+| `a`         | About (version, author info)                      |
+| `d`         | Clear default SSH username                        |
+| `x`         | Dismiss install tip                               |
 | `Tab`       | Cycle panel focus: list → history → output → list |
 | `Shift+Tab` | Reverse cycle panel focus                         |
 | `1`         | Jump focus to device list panel                   |
@@ -197,6 +199,7 @@ Launches the interactive TUI (default when no subcommand is given).
 ts-cli/
 ├── main.go              # Application entry point
 ├── go.mod               # Go module definition
+├── LICENSE              # MIT + Commons Clause
 ├── client/
 │   └── tailscale.go     # Tailscale REST API client
 ├── commands/
@@ -211,6 +214,7 @@ ts-cli/
 │   └── tailscale_check.go
 ├── tui/
 │   ├── model.go         # Bubbletea model, Update/View entry points
+│   ├── state.go         # Sub-state type definitions
 │   ├── handlers.go      # Key dispatch maps (Command pattern)
 │   ├── commands.go      # action type, shared constants
 │   ├── view.go          # Rendering / layout
@@ -223,6 +227,7 @@ ts-cli/
 │   ├── device_utils.go  # Device filtering, sorting, status
 │   └── utils.go         # Misc helpers
 └── util/
+    ├── crypto.go        # AES-256-GCM password encryption
     ├── history.go       # Per-device command history
     └── validation.go    # Input sanitization and validation
 ```
@@ -269,7 +274,11 @@ Uses the [Tailscale API v2](https://tailscale.com/api).
 
 ## License
 
-BSD 3-Clause License
+MIT License + Commons Clause — free to use and modify, but cannot be sold commercially. See [LICENSE](LICENSE) for details.
+
+## Author
+
+Ihor Yatsenko — yatsenko.ihor@gmail.com
 
 ## Support
 
