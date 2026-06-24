@@ -43,6 +43,19 @@ func (m model) switchAccountForSSH(deviceIndex int, accountName string) tea.Cmd 
 	)
 }
 
+// runTailscaleDown runs 'tailscale down' to disconnect from the network
+func (m model) runTailscaleDown() tea.Cmd {
+	return func() tea.Msg {
+		tailscaleCmd := exec.Command("tailscale", "down")
+		return tea.ExecProcess(tailscaleCmd, func(err error) tea.Msg {
+			if err != nil {
+				return tailscaleDownMsg{err: err}
+			}
+			return tailscaleDownMsg{err: nil}
+		})()
+	}
+}
+
 // runTailscaleUp runs 'tailscale up' command
 func (m model) runTailscaleUp() tea.Cmd {
 	return func() tea.Msg {

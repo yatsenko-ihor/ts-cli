@@ -179,6 +179,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tailscaleDownMsg:
+		// Tailscale down command completed
+		if msg.err != nil {
+			m.sshError = fmt.Errorf("tailscale down failed: %w", msg.err)
+		} else {
+			m.tailscaleActiveAccount = "<not connected>"
+		}
+		return m, nil
+
 	case addAccountMsg:
 		// Handle account addition result
 		if msg.err != nil {

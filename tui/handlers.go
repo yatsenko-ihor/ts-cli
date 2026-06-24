@@ -592,7 +592,8 @@ var normalModeHandlers = map[string]keyHandler{
 			m.sshUsername = ""
 			return m, m.clearUsername()
 		}
-		return m, nil
+		// No username set — run tailscale down
+		return m, m.runTailscaleDown()
 	},
 }
 
