@@ -99,19 +99,19 @@
 - [x] right borders of frames "Command output" and "Command history" are not rendering
 - [x] once frame "List machines" is active(selected) make border color more contrast
 - [x] once frame selected - make frame title bold
-
-## To be implemented later:
-
 - [x] show key expiration status
-- [ ] d - down tailscale
-- [ ] remove from command panel "Enter"
-- [ ] clean up frame (when no command history) duplicate line "Press 'e' to type a new command in this panel"
+- [x] d - down tailscale
+- [ ] remove d - down tailscale
+- [x] remove from command panel "Enter"
+- [x] clean up frame (when no command history) duplicate line "Press 'e' to type a new command in this panel"
 - [x] in search box or in command execute make "Cmd+V" works
-- [ ] add to command panel "d - delete default name"
-- [ ] selected frame - better coloring or selection frame or frame title
+- [x] add to command panel "d - delete default name"
+- [x] selected frame - better coloring or selection frame or frame title
+- [ ] add options menu - enable/disable features
+    - [ ] feature 1 - save password (password is saving locally and enctypted like toos e.g. Keepass make
+## To be implemented later:
 - [ ] check how input fiels done in lazygit or lazy docker
 - [ ] add option to fall into termux on remote machine
-
 ## Ideas for future (probably yes, but to keep minimalistic seems like not)
 
 - [ ] add ability to remove/enable key expirtation status

@@ -126,7 +126,7 @@ func (m model) renderDeviceList() string {
 	borderColor := lipgloss.Color("#7A7A7A")
 	deviceListStyle = deviceListStyle.Width(m.getMachineListWidth())
 	if m.showHistoryPanel && m.activeFocus == focusList {
-		borderColor = lipgloss.Color("#2D6A8C")
+		borderColor = lipgloss.Color("#5FAFFF")
 		deviceListStyle = deviceListStyle.BorderForeground(borderColor)
 	} else {
 		deviceListStyle = deviceListStyle.BorderForeground(borderColor)
@@ -183,8 +183,6 @@ func (m model) renderHistoryPanel() string {
 
 	if len(historyCommands) == 0 {
 		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("No command history for this device", historyInnerWidth)))
-		historyContent.WriteString("\n")
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command in this panel", historyInnerWidth)))
 	} else {
 		contentHeight := historyHeight - panelVerticalPadding
 		helpLines := 1
@@ -260,7 +258,7 @@ func (m model) renderHistoryPanel() string {
 
 	borderColor := lipgloss.Color("#4F4F4F")
 	if m.activeFocus == focusHistory {
-		borderColor = lipgloss.Color("#2D6A8C")
+		borderColor = lipgloss.Color("#5FAFFF")
 	}
 
 	return renderTitledPanel(historyContent.String(), historyFrameTitle, historyWidth, historyHeight, borderColor, m.activeFocus == focusHistory)
@@ -319,7 +317,7 @@ func (m model) renderOutputPanel() string {
 
 	borderColor := lipgloss.Color("#4F4F4F")
 	if m.activeFocus == focusOutput {
-		borderColor = lipgloss.Color("#2D6A8C")
+		borderColor = lipgloss.Color("#5FAFFF")
 	}
 
 	return renderTitledPanel(outputContent.String(), outputFrameTitle, outputWidth, outputHeight, borderColor, m.activeFocus == focusOutput)
@@ -433,20 +431,22 @@ func (m model) renderAccountManagement() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "1/2/3 frame • ↑/k up • ↓/j down • / search • enter select • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
+	help := "1/2/3 frame • ↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
 	if m.showHistoryPanel {
 		if m.activeFocus == focusHistory {
 			help = "1/2/3 frame • ↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
 		} else if m.activeFocus == focusOutput {
 			help = "1/2/3 frame • ↑/k up • ↓/j down • c copy-full-path • n copy-name • tab/shift+tab switch • esc close"
 		} else {
-			help = "1/2/3 frame • ↑/k up • ↓/j down • enter select • tab/shift+tab switch • esc close"
+			help = "1/2/3 frame • ↑/k up • ↓/j down • tab/shift+tab switch • esc close"
 		}
 	}
-	if m.sshUsername != "" && !m.showHistoryPanel {
-		help += " • d clear-user"
-	}
 	if !m.showHistoryPanel {
+		if m.sshUsername != "" {
+			help += " • d clear-user"
+		} else {
+			help += " • d tailscale-down"
+		}
 		help += " • q quit"
 	}
 	if m.usernamePrompt {

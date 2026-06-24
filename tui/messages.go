@@ -32,6 +32,11 @@ type tailscaleUpMsg struct {
 	err error
 }
 
+// tailscaleDownMsg is returned when `tailscale down` completes
+type tailscaleDownMsg struct {
+	err error
+}
+
 // addAccountMsg is returned when adding a new account completes
 type addAccountMsg struct {
 	err error
