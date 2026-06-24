@@ -17,9 +17,11 @@ type Account struct {
 
 // Config represents the application configuration
 type Config struct {
-	Accounts      []Account `json:"accounts"`
-	SSHUsername   string    `json:"ssh_username,omitempty"`
-	ConfigVersion string    `json:"config_version"` // For future migrations
+	Accounts         []Account `json:"accounts"`
+	SSHUsername      string    `json:"ssh_username,omitempty"`
+	SSHPassword      string    `json:"ssh_password,omitempty"`      // Encrypted SSH password
+	SavePasswordEnabled bool  `json:"save_password_enabled"`       // Whether password saving is enabled
+	ConfigVersion    string    `json:"config_version"`              // For future migrations
 }
 
 // GetConfigPath returns the path to the config file

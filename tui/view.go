@@ -429,9 +429,78 @@ func (m model) renderAccountManagement() string {
 	return b.String()
 }
 
+// renderOptionsMenu renders the options/settings menu
+func (m model) renderOptionsMenu() string {
+	var b strings.Builder
+
+	title := fmt.Sprintf("Options (ts-cli v%s)", m.version)
+	b.WriteString(titleStyle.Render(title))
+	b.WriteString("\n\n")
+
+	listWidth := 60
+	if m.width > 0 && m.width < 80 {
+		listWidth = m.width - 10
+		if listWidth < 40 {
+			listWidth = 40
+		}
+	}
+
+	optionsList := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
+		Padding(1, 2).
+		Width(listWidth)
+
+	var listContent strings.Builder
+
+	// Option 1: Save password toggle
+	saveLabel := "Save SSH password"
+	if m.savePasswordEnabled {
+		saveLabel += " ✓"
+	}
+	if m.optionsCursor == 0 {
+		listContent.WriteString(selectedStyle.Render("▸ " + saveLabel))
+	} else {
+		listContent.WriteString(normalStyle.Render("  " + saveLabel))
+	}
+	listContent.WriteString("\n")
+
+	// Option 2: Clear saved password
+	clearLabel := "Clear saved password"
+	if m.sshPasswordEncrypted == "" {
+		clearLabel += " (none saved)"
+	}
+	if m.optionsCursor == 1 {
+		listContent.WriteString(selectedStyle.Render("▸ " + clearLabel))
+	} else {
+		listContent.WriteString(normalStyle.Render("  " + clearLabel))
+	}
+
+	b.WriteString(optionsList.Render(listContent.String()))
+	b.WriteString("\n\n")
+
+	// Info text
+	if m.savePasswordEnabled {
+		b.WriteString(grayItalicStyle.Render("Password is encrypted locally using AES-256-GCM"))
+		b.WriteString("\n")
+		if m.sshPasswordEncrypted != "" {
+			b.WriteString(successStyle.Render("✓ Password saved"))
+		} else {
+			b.WriteString(grayItalicStyle.Render("Password will be saved on next SSH connection"))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	help := "↑/k up • ↓/j down • enter toggle/select • esc/q back"
+	b.WriteString(helpStyle.Render(help))
+
+	return b.String()
+}
+
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "1/2/3 frame • ↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage"
+	help := "1/2/3 frame • ↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage • o options"
 	if m.showHistoryPanel {
 		if m.activeFocus == focusHistory {
 			help = "1/2/3 frame • ↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
@@ -444,13 +513,13 @@ func (m model) getHelpText() string {
 	if !m.showHistoryPanel {
 		if m.sshUsername != "" {
 			help += " • d clear-user"
-		} else {
-			help += " • d tailscale-down"
 		}
 		help += " • q quit"
 	}
 	if m.usernamePrompt {
 		help = "Enter SSH username • esc cancel • enter confirm"
+	} else if m.passwordPrompt {
+		help = "Enter SSH password • esc cancel • enter save"
 	} else if m.commandMode {
 		help = "Type command to execute • esc cancel • enter execute"
 	} else if m.searchMode {

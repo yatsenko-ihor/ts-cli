@@ -137,6 +137,12 @@ var usernamePromptHandlers = map[string]keyHandler{
 		cmd := m.storeUsername(m.sshUsername)
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.filteredDevices) {
+			// If password saving is enabled and no password saved yet, prompt for it
+			if m.savePasswordEnabled && m.sshPasswordEncrypted == "" {
+				m.passwordPrompt = true
+				m.passwordInput = ""
+				return m, cmd
+			}
 			return m, tea.Batch(cmd, m.sshToDevice(target))
 		}
 		return m, cmd
@@ -592,8 +598,12 @@ var normalModeHandlers = map[string]keyHandler{
 			m.sshUsername = ""
 			return m, m.clearUsername()
 		}
-		// No username set — run tailscale down
-		return m, m.runTailscaleDown()
+		return m, nil
+	},
+	"o": func(m model) (tea.Model, tea.Cmd) {
+		m.optionsMode = true
+		m.optionsCursor = 0
+		return m, nil
 	},
 }
 
@@ -745,4 +755,134 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	}
 	// Username exists, start SSH session
 	return m, m.sshToDevice(target)
+}
+
+// ─── Options menu constants ───────────────────────────────────────────────────
+
+const (
+	optionSavePassword = 0 // Toggle save-password feature
+	optionClearPassword = 1 // Clear saved password
+	optionCount         = 2 // Total number of options
+)
+
+// ─── Options menu mode ────────────────────────────────────────────────────────
+
+var optionsMenuHandlers = map[string]keyHandler{
+	"esc": func(m model) (tea.Model, tea.Cmd) {
+		m.optionsMode = false
+		return m, nil
+	},
+	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
+		m.optionsMode = false
+		return m, nil
+	},
+	"q": func(m model) (tea.Model, tea.Cmd) {
+		m.optionsMode = false
+		return m, nil
+	},
+	"up": func(m model) (tea.Model, tea.Cmd) {
+		if m.optionsCursor > 0 {
+			m.optionsCursor--
+		}
+		return m, nil
+	},
+	"k": func(m model) (tea.Model, tea.Cmd) {
+		if m.optionsCursor > 0 {
+			m.optionsCursor--
+		}
+		return m, nil
+	},
+	"down": func(m model) (tea.Model, tea.Cmd) {
+		if m.optionsCursor < optionCount-1 {
+			m.optionsCursor++
+		}
+		return m, nil
+	},
+	"j": func(m model) (tea.Model, tea.Cmd) {
+		if m.optionsCursor < optionCount-1 {
+			m.optionsCursor++
+		}
+		return m, nil
+	},
+	"enter": func(m model) (tea.Model, tea.Cmd) {
+		switch m.optionsCursor {
+		case optionSavePassword:
+			m.savePasswordEnabled = !m.savePasswordEnabled
+			if !m.savePasswordEnabled {
+				// When disabling, also clear saved password
+				m.sshPasswordEncrypted = ""
+			}
+			return m, m.toggleSavePassword(m.savePasswordEnabled)
+		case optionClearPassword:
+			if m.sshPasswordEncrypted != "" {
+				m.sshPasswordEncrypted = ""
+				return m, m.clearSavedPassword()
+			}
+			return m, nil
+		}
+		return m, nil
+	},
+}
+
+func (m model) handleOptionsMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if newM, cmd, handled := dispatchKey(msg.String(), m, optionsMenuHandlers); handled {
+		return newM, cmd
+	}
+	return m, nil
+}
+
+// ─── Password prompt mode ─────────────────────────────────────────────────────
+
+var passwordPromptHandlers = map[string]keyHandler{
+	"esc": func(m model) (tea.Model, tea.Cmd) {
+		m.passwordPrompt = false
+		m.passwordInput = ""
+		return m, nil
+	},
+	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
+		m.passwordPrompt = false
+		m.passwordInput = ""
+		return m, nil
+	},
+	"enter": func(m model) (tea.Model, tea.Cmd) {
+		if m.passwordInput == "" {
+			return m, nil
+		}
+		password := m.passwordInput
+		m.passwordPrompt = false
+		m.passwordInput = ""
+		storeCmd := m.storePassword(password)
+		// Proceed with SSH after storing password
+		target := m.getTargetDevice()
+		if target >= 0 && target < len(m.filteredDevices) {
+			return m, tea.Batch(storeCmd, m.sshToDevice(target))
+		}
+		return m, storeCmd
+	},
+	"backspace": func(m model) (tea.Model, tea.Cmd) {
+		if len(m.passwordInput) > 0 {
+			m.passwordInput = m.passwordInput[:len(m.passwordInput)-1]
+		}
+		return m, nil
+	},
+	"ctrl+v": func(m model) (tea.Model, tea.Cmd) {
+		return m, readClipboard(pasteTargetPassword)
+	},
+	keyPasteAlt: func(m model) (tea.Model, tea.Cmd) {
+		return m, readClipboard(pasteTargetPassword)
+	},
+}
+
+func (m model) handlePasswordPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if newM, cmd, handled := dispatchKey(msg.String(), m, passwordPromptHandlers); handled {
+		return newM, cmd
+	}
+	if msg.Paste {
+		m.passwordInput += sanitizePastedText(string(msg.Runes))
+		return m, nil
+	}
+	if len(msg.String()) == 1 {
+		m.passwordInput += msg.String()
+	}
+	return m, nil
 }

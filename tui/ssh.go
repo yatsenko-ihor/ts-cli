@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ihor/ts-cli/util"
 )
 
 // SSH operation functions for connecting to and executing commands on remote devices
@@ -49,8 +50,21 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		tea.Println(fmt.Sprintf("\n🔌 Connecting to %s : %s", name, accountLabel)),
 		tea.Println(fmt.Sprintf("📡 SSH command: ssh %s\n", sshTarget)),
 		func() tea.Msg {
-			// Use tea.ExecProcess to suspend TUI and run SSH
-			sshCmd := exec.Command("ssh", sshTarget)
+			// Check if we have a saved password and sshpass is available
+			var sshCmd *exec.Cmd
+			if m.sshPasswordEncrypted != "" {
+				decrypted, err := util.DecryptPassword(m.sshPasswordEncrypted)
+				if err == nil {
+					// Check if sshpass is available
+					if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
+						sshCmd = exec.Command("sshpass", "-p", decrypted, "ssh",
+							"-o", "StrictHostKeyChecking=accept-new", sshTarget)
+					}
+				}
+			}
+			if sshCmd == nil {
+				sshCmd = exec.Command("ssh", sshTarget)
+			}
 			return tea.ExecProcess(sshCmd, func(err error) tea.Msg {
 				if err != nil {
 					return sshMsg{err: err}

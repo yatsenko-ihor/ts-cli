@@ -41,6 +41,12 @@ type model struct {
 	installationBroken     bool                 // Whether existing PATH installation is broken
 	accountManageMode      bool                 // Whether we're in account management mode
 	manageCursor           int                  // Cursor position in account management menu
+	optionsMode            bool                 // Whether we're in options menu mode
+	optionsCursor          int                  // Cursor position in options menu
+	savePasswordEnabled    bool                 // Whether password saving is enabled
+	sshPasswordEncrypted   string               // Encrypted SSH password from config
+	passwordPrompt         bool                 // Whether we're prompting for SSH password
+	passwordInput          string               // Current password being typed
 	commandMode            bool                 // Whether we're in command input mode
 	commandInput           string               // Current command being typed
 	commandOutput          string               // Output from last command execution
@@ -51,7 +57,7 @@ type model struct {
 	outputCursor           int                  // Selected line in output panel
 }
 
-func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo) model {
+func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo, savePasswordEnabled bool, sshPasswordEncrypted string) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -101,6 +107,12 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		installationBroken:     installationBroken,
 		accountManageMode:      false,
 		manageCursor:           0,
+		optionsMode:            false,
+		optionsCursor:          0,
+		savePasswordEnabled:    savePasswordEnabled,
+		sshPasswordEncrypted:   sshPasswordEncrypted,
+		passwordPrompt:         false,
+		passwordInput:          "",
 		commandMode:            false,
 		commandInput:           "",
 		commandOutput:          "",
@@ -276,6 +288,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case passwordStoredMsg:
+		if msg.err != nil {
+			m.sshError = msg.err
+		}
+		return m, nil
+
+	case optionToggledMsg:
+		if msg.err != nil {
+			m.sshError = msg.err
+		}
+		return m, nil
+
 	case pasteMsg:
 		// Silently ignore paste errors (clipboard tool missing, etc.)
 		if msg.err != nil || msg.text == "" {
@@ -289,11 +313,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.filterDevices()
 		case pasteTargetCommand:
 			m.commandInput += msg.text
+		case pasteTargetPassword:
+			m.passwordInput += msg.text
 		}
 		return m, nil
 
 	case tea.KeyMsg:
 		// Dispatch to appropriate mode handler
+		if m.passwordPrompt {
+			return m.handlePasswordPrompt(msg)
+		}
 		if m.usernamePrompt {
 			return m.handleUsernamePrompt(msg)
 		}
@@ -308,6 +337,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.accountManageMode {
 			return m.handleAccountManagement(msg)
+		}
+		if m.optionsMode {
+			return m.handleOptionsMenu(msg)
 		}
 		return m.handleNormalMode(msg)
 	}
@@ -330,12 +362,20 @@ func (m model) View() string {
 		return m.renderAccountManagement()
 	}
 
+	// Show options menu if in options mode
+	if m.optionsMode {
+		return m.renderOptionsMenu()
+	}
+
 	var b strings.Builder
 
 	// Title
 	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
 	if m.reloading {
 		title += " - Reloading..."
+		b.WriteString(titleStyle.Render(title))
+	} else if m.passwordPrompt {
+		title += " - SSH Password: " + strings.Repeat("*", len(m.passwordInput)) + "_"
 		b.WriteString(titleStyle.Render(title))
 	} else if m.usernamePrompt {
 		title += " - SSH Username: " + m.usernameInput + "_"

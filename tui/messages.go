@@ -73,6 +73,7 @@ const (
 	pasteTargetUsername pasteTarget = iota // usernameInput
 	pasteTargetSearch                      // searchQuery
 	pasteTargetCommand                     // commandInput
+	pasteTargetPassword                    // passwordInput
 )
 
 // pasteMsg is returned when a clipboard read completes.
@@ -80,6 +81,16 @@ type pasteMsg struct {
 	text   string
 	target pasteTarget
 	err    error
+}
+
+// passwordStoredMsg is returned when SSH password storage completes
+type passwordStoredMsg struct {
+	err error
+}
+
+// optionToggledMsg is returned when an option toggle is saved
+type optionToggledMsg struct {
+	err error
 }
 
 // panelFocus represents which panel currently has focus
