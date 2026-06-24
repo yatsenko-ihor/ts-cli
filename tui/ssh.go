@@ -14,7 +14,7 @@ import (
 
 // sshToDevice initiates an interactive SSH connection to a device
 func (m model) sshToDevice(index int) tea.Cmd {
-	device := m.filteredDevices[index]
+	device := m.list.filteredDevices[index]
 
 	// Note: Account switching is handled by handleSSHRequest before calling this function
 
@@ -33,8 +33,8 @@ func (m model) sshToDevice(index int) tea.Cmd {
 
 	// Build SSH command with username if available
 	var sshTarget string
-	if m.sshUsername != "" {
-		sshTarget = fmt.Sprintf("%s@%s", m.sshUsername, address)
+	if m.ssh.username != "" {
+		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
 	} else {
 		sshTarget = address
 	}
@@ -52,8 +52,8 @@ func (m model) sshToDevice(index int) tea.Cmd {
 		func() tea.Msg {
 			// Check if we have a saved password and sshpass is available
 			var sshCmd *exec.Cmd
-			if m.sshPasswordEncrypted != "" {
-				decrypted, err := util.DecryptPassword(m.sshPasswordEncrypted)
+			if m.ssh.passwordEncrypted != "" {
+				decrypted, err := util.DecryptPassword(m.ssh.passwordEncrypted)
 				if err == nil {
 					// Check if sshpass is available
 					if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
@@ -78,13 +78,13 @@ func (m model) sshToDevice(index int) tea.Cmd {
 // executeRemoteCommand executes a command on a remote device via SSH
 func (m model) executeRemoteCommand(command string) tea.Cmd {
 	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.filteredDevices) {
+	if target < 0 || target >= len(m.list.filteredDevices) {
 		return func() tea.Msg {
 			return commandExecutedMsg{err: fmt.Errorf("no device selected")}
 		}
 	}
 
-	device := m.filteredDevices[target]
+	device := m.list.filteredDevices[target]
 
 	// Get the primary IP address
 	if len(device.Addresses) == 0 {
@@ -101,8 +101,8 @@ func (m model) executeRemoteCommand(command string) tea.Cmd {
 
 	// Build SSH target
 	var sshTarget string
-	if m.sshUsername != "" {
-		sshTarget = fmt.Sprintf("%s@%s", m.sshUsername, address)
+	if m.ssh.username != "" {
+		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
 	} else {
 		sshTarget = address
 	}
@@ -127,9 +127,9 @@ func (m model) executeRemoteCommand(command string) tea.Cmd {
 		}
 
 		// Save to history if history store is available
-		if m.history != nil {
-			m.history.AddCommand(machineID, name, command, exitCode, string(output))
-			_ = m.history.Save() // Ignore save errors
+		if m.hist.history != nil {
+			m.hist.history.AddCommand(machineID, name, command, exitCode, string(output))
+			_ = m.hist.history.Save() // Ignore save errors
 		}
 
 		return commandExecutedMsg{
@@ -143,19 +143,19 @@ func (m model) executeRemoteCommand(command string) tea.Cmd {
 // resolveRemoteOutputPath resolves a relative path in command output to an absolute remote path
 func (m model) resolveRemoteOutputPath(entry string) (string, error) {
 	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.filteredDevices) {
+	if target < 0 || target >= len(m.list.filteredDevices) {
 		return "", fmt.Errorf("no device selected")
 	}
 
-	device := m.filteredDevices[target]
+	device := m.list.filteredDevices[target]
 	if len(device.Addresses) == 0 {
 		return "", fmt.Errorf("device has no IP addresses")
 	}
 
 	address := device.Addresses[0]
 	sshTarget := address
-	if m.sshUsername != "" {
-		sshTarget = fmt.Sprintf("%s@%s", m.sshUsername, address)
+	if m.ssh.username != "" {
+		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
 	}
 
 	pwdCmd := exec.Command("ssh", sshTarget, "pwd")
@@ -174,7 +174,7 @@ func (m model) resolveRemoteOutputPath(entry string) (string, error) {
 
 // copySSHCommand copies the SSH command to the clipboard
 func (m model) copySSHCommand(index int) tea.Cmd {
-	device := m.filteredDevices[index]
+	device := m.list.filteredDevices[index]
 
 	// Get the primary IP address
 	if len(device.Addresses) == 0 {
@@ -187,8 +187,8 @@ func (m model) copySSHCommand(index int) tea.Cmd {
 
 	// Build SSH command with username if available
 	var sshCommand string
-	if m.sshUsername != "" {
-		sshCommand = fmt.Sprintf("ssh %s@%s", m.sshUsername, address)
+	if m.ssh.username != "" {
+		sshCommand = fmt.Sprintf("ssh %s@%s", m.ssh.username, address)
 	} else {
 		sshCommand = fmt.Sprintf("ssh %s", address)
 	}

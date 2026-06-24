@@ -59,21 +59,21 @@ var (
 	})
 
 	cmdTabForward = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		if !m.showHistoryPanel {
-			m.showHistoryPanel = true
+		if !m.hist.visible {
+			m.hist.visible = true
 			m.activeFocus = focusHistory
-			m.historyCursor = 0
-			m.outputScroll = 0
-			m.outputCursor = 0
+			m.hist.cursor = 0
+			m.hist.outputScroll = 0
+			m.hist.outputCursor = 0
 		} else {
 			switch m.activeFocus {
 			case focusList:
 				m.activeFocus = focusHistory
-				m.historyCursor = 0
+				m.hist.cursor = 0
 			case focusHistory:
 				m.activeFocus = focusOutput
-				m.outputScroll = 0
-				m.outputCursor = 0
+				m.hist.outputScroll = 0
+				m.hist.outputCursor = 0
 			case focusOutput:
 				m.activeFocus = focusList
 			default:
@@ -84,23 +84,23 @@ var (
 	})
 
 	cmdTabBackward = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		if !m.showHistoryPanel {
-			m.showHistoryPanel = true
+		if !m.hist.visible {
+			m.hist.visible = true
 			m.activeFocus = focusOutput
-			m.historyCursor = 0
-			m.outputScroll = 0
-			m.outputCursor = 0
+			m.hist.cursor = 0
+			m.hist.outputScroll = 0
+			m.hist.outputCursor = 0
 		} else {
 			switch m.activeFocus {
 			case focusList:
 				m.activeFocus = focusOutput
-				m.outputScroll = 0
-				m.outputCursor = 0
+				m.hist.outputScroll = 0
+				m.hist.outputCursor = 0
 			case focusHistory:
 				m.activeFocus = focusList
 			case focusOutput:
 				m.activeFocus = focusHistory
-				m.historyCursor = 0
+				m.hist.cursor = 0
 			default:
 				m.activeFocus = focusList
 			}
@@ -113,34 +113,34 @@ var (
 
 var usernamePromptHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.usernamePrompt = false
-		m.usernameInput = ""
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		return m, nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.usernamePrompt = false
-		m.usernameInput = ""
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		return m, nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
-		if m.usernameInput == "" {
+		if m.input.value == "" {
 			return m, nil
 		}
-		sanitized := util.SanitizeInput(m.usernameInput)
+		sanitized := util.SanitizeInput(m.input.value)
 		if err := util.ValidateSSHUsername(sanitized); err != nil {
-			m.usernameInput = ""
+			m.input.value = ""
 			return m, nil
 		}
-		m.sshUsername = sanitized
-		m.usernamePrompt = false
-		m.usernameInput = ""
-		cmd := m.storeUsername(m.sshUsername)
+		m.ssh.username = sanitized
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
+		cmd := m.storeUsername(m.ssh.username)
 		target := m.getTargetDevice()
-		if target >= 0 && target < len(m.filteredDevices) {
+		if target >= 0 && target < len(m.list.filteredDevices) {
 			// If password saving is enabled and no password saved yet, prompt for it
-			if m.savePasswordEnabled && m.sshPasswordEncrypted == "" {
-				m.passwordPrompt = true
-				m.passwordInput = ""
+			if m.ssh.savePasswordEnabled && m.ssh.passwordEncrypted == "" {
+				m.input = textInput{mode: inputPassword}
+				m.input.value = ""
 				return m, cmd
 			}
 			return m, tea.Batch(cmd, m.sshToDevice(target))
@@ -148,8 +148,8 @@ var usernamePromptHandlers = map[string]keyHandler{
 		return m, cmd
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.usernameInput) > 0 {
-			m.usernameInput = m.usernameInput[:len(m.usernameInput)-1]
+		if len(m.input.value) > 0 {
+			m.input.value = m.input.value[:len(m.input.value)-1]
 		}
 		return m, nil
 	},
@@ -168,12 +168,12 @@ func (m model) handleUsernamePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
 	// delivers the full text as a single KeyMsg with Paste:true.
 	if msg.Paste {
-		m.usernameInput += sanitizePastedText(string(msg.Runes))
+		m.input.value += sanitizePastedText(string(msg.Runes))
 		return m, nil
 	}
 	// Append printable single-character input
 	if len(msg.String()) == 1 {
-		m.usernameInput += msg.String()
+		m.input.value += msg.String()
 	}
 	return m, nil
 }
@@ -182,24 +182,24 @@ func (m model) handleUsernamePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 var searchModeHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.searchMode = false
-		m.searchQuery = ""
+		m.input = textInput{mode: inputNone}
+		m.list.searchQuery = ""
 		m.filterDevices()
 		return m, nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.searchMode = false
-		m.searchQuery = ""
+		m.input = textInput{mode: inputNone}
+		m.list.searchQuery = ""
 		m.filterDevices()
 		return m, nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
-		m.searchMode = false
+		m.input = textInput{mode: inputNone}
 		return m, nil
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.searchQuery) > 0 {
-			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+		if len(m.list.searchQuery) > 0 {
+			m.list.searchQuery = m.list.searchQuery[:len(m.list.searchQuery)-1]
 			m.filterDevices()
 		}
 		return m, nil
@@ -219,13 +219,13 @@ func (m model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
 	// delivers the full text as a single KeyMsg with Paste:true.
 	if msg.Paste {
-		m.searchQuery += sanitizePastedText(string(msg.Runes))
+		m.list.searchQuery += sanitizePastedText(string(msg.Runes))
 		m.filterDevices()
 		return m, nil
 	}
 	// Append printable single-character input
 	if len(msg.String()) == 1 {
-		m.searchQuery += msg.String()
+		m.list.searchQuery += msg.String()
 		m.filterDevices()
 	}
 	return m, nil
@@ -235,27 +235,27 @@ func (m model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 var commandModeHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.commandMode = false
-		m.commandInput = ""
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		return m, nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.commandMode = false
-		m.commandInput = ""
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		return m, nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
-		if m.commandInput == "" {
+		if m.input.value == "" {
 			return m, nil
 		}
-		command := util.SanitizeInput(m.commandInput)
-		m.commandMode = false
-		m.commandInput = ""
+		command := util.SanitizeInput(m.input.value)
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		return m, m.executeRemoteCommand(command)
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.commandInput) > 0 {
-			m.commandInput = m.commandInput[:len(m.commandInput)-1]
+		if len(m.input.value) > 0 {
+			m.input.value = m.input.value[:len(m.input.value)-1]
 		}
 		return m, nil
 	},
@@ -274,12 +274,12 @@ func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
 	// delivers the full text as a single KeyMsg with Paste:true.
 	if msg.Paste {
-		m.commandInput += sanitizePastedText(string(msg.Runes))
+		m.input.value += sanitizePastedText(string(msg.Runes))
 		return m, nil
 	}
 	// Append printable single-character input
 	if len(msg.String()) == 1 {
-		m.commandInput += msg.String()
+		m.input.value += msg.String()
 	}
 	return m, nil
 }
@@ -290,24 +290,24 @@ func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // currently-targeted device. valid is false when no device can be resolved.
 func historyDeviceContext(m model) (machineID string, commands []string, valid bool) {
 	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.filteredDevices) {
+	if target < 0 || target >= len(m.list.filteredDevices) {
 		return "", nil, false
 	}
-	device := m.filteredDevices[target]
+	device := m.list.filteredDevices[target]
 	machineID = device.ID
 	if machineID == "" {
 		machineID = device.Hostname
 	}
-	if m.history != nil {
-		commands = m.history.GetUniqueCommands(machineID)
+	if m.hist.history != nil {
+		commands = m.hist.history.GetUniqueCommands(machineID)
 	}
 	return machineID, commands, true
 }
 
 var (
 	cmdHistoryCursorUp = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		if m.historyCursor > 0 {
-			m.historyCursor--
+		if m.hist.cursor > 0 {
+			m.hist.cursor--
 		}
 		return m, nil
 	})
@@ -317,29 +317,29 @@ var (
 		if !ok {
 			return m, nil
 		}
-		if m.historyCursor < len(cmds)-1 {
-			m.historyCursor++
+		if m.hist.cursor < len(cmds)-1 {
+			m.hist.cursor++
 		}
 		return m, nil
 	})
 
 	cmdHistoryDelete = keyHandler(func(m model) (tea.Model, tea.Cmd) {
 		machineID, cmds, ok := historyDeviceContext(m)
-		if !ok || m.history == nil || len(cmds) == 0 || m.historyCursor >= len(cmds) {
+		if !ok || m.hist.history == nil || len(cmds) == 0 || m.hist.cursor >= len(cmds) {
 			return m, nil
 		}
-		selected := cmds[m.historyCursor]
-		removed, err := m.history.DeleteCommandForMachine(machineID, selected)
+		selected := cmds[m.hist.cursor]
+		removed, err := m.hist.history.DeleteCommandForMachine(machineID, selected)
 		if err != nil {
-			m.sshError = fmt.Errorf("failed to delete command from history: %w", err)
+			m.notify.sshError = fmt.Errorf("failed to delete command from history: %w", err)
 			return m, nil
 		}
 		if removed > 0 {
-			updated := m.history.GetUniqueCommands(machineID)
+			updated := m.hist.history.GetUniqueCommands(machineID)
 			if len(updated) == 0 {
-				m.historyCursor = 0
-			} else if m.historyCursor >= len(updated) {
-				m.historyCursor = len(updated) - 1
+				m.hist.cursor = 0
+			} else if m.hist.cursor >= len(updated) {
+				m.hist.cursor = len(updated) - 1
 			}
 		}
 		return m, nil
@@ -347,38 +347,38 @@ var (
 
 	cmdHistoryEnterCommandMode = keyHandler(func(m model) (tea.Model, tea.Cmd) {
 		target := m.getTargetDevice()
-		if target < 0 || target >= len(m.filteredDevices) {
+		if target < 0 || target >= len(m.list.filteredDevices) {
 			return m, nil
 		}
-		device := m.filteredDevices[target]
+		device := m.list.filteredDevices[target]
 		if !isDeviceOnline(device) {
 			deviceName := device.Name
 			if deviceName == "" {
 				deviceName = device.Hostname
 			}
-			m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+			m.notify.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
 			return m, nil
 		}
-		m.commandMode = true
-		m.commandInput = ""
-		m.sshError = nil
+		m.input = textInput{mode: inputCommand}
+		m.input.value = ""
+		m.notify.sshError = nil
 		return m, nil
 	})
 
 	cmdHistoryExecute = keyHandler(func(m model) (tea.Model, tea.Cmd) {
 		_, cmds, ok := historyDeviceContext(m)
-		if !ok || len(cmds) == 0 || m.historyCursor >= len(cmds) {
+		if !ok || len(cmds) == 0 || m.hist.cursor >= len(cmds) {
 			return m, nil
 		}
-		return m, m.executeRemoteCommand(cmds[m.historyCursor])
+		return m, m.executeRemoteCommand(cmds[m.hist.cursor])
 	})
 )
 
 var historyNavHandlers = map[string]keyHandler{
 	"tab": func(m model) (tea.Model, tea.Cmd) {
 		m.activeFocus = focusOutput
-		m.outputScroll = 0
-		m.outputCursor = 0
+		m.hist.outputScroll = 0
+		m.hist.outputCursor = 0
 		return m, nil
 	},
 	"shift+tab": func(m model) (tea.Model, tea.Cmd) {
@@ -390,7 +390,7 @@ var historyNavHandlers = map[string]keyHandler{
 		return m, nil
 	},
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.showHistoryPanel = false
+		m.hist.visible = false
 		m.activeFocus = focusList
 		return m, nil
 	},
@@ -416,49 +416,49 @@ func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 var profileSelectHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.profileSelectMode = false
+		m.acct.profileSelectMode = false
 		return m, nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.profileSelectMode = false
+		m.acct.profileSelectMode = false
 		return m, nil
 	},
 	"q": func(m model) (tea.Model, tea.Cmd) {
-		m.profileSelectMode = false
+		m.acct.profileSelectMode = false
 		return m, nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
-		if m.profileCursor == profileAllAccountsIndex {
-			m.selectedProfile = ""
-		} else if m.profileCursor <= len(m.accounts) {
-			m.selectedProfile = m.accounts[m.profileCursor-profileAccountOffset].Name
+		if m.acct.profileCursor == profileAllAccountsIndex {
+			m.list.selectedProfile = ""
+		} else if m.acct.profileCursor <= len(m.acct.list) {
+			m.list.selectedProfile = m.acct.list[m.acct.profileCursor-profileAccountOffset].Name
 		}
-		m.profileSelectMode = false
+		m.acct.profileSelectMode = false
 		m.filterDevices()
 		return m, nil
 	},
 	"up": func(m model) (tea.Model, tea.Cmd) {
-		if m.profileCursor > profileAllAccountsIndex {
-			m.profileCursor--
+		if m.acct.profileCursor > profileAllAccountsIndex {
+			m.acct.profileCursor--
 		}
 		return m, nil
 	},
 	"k": func(m model) (tea.Model, tea.Cmd) {
-		if m.profileCursor > profileAllAccountsIndex {
-			m.profileCursor--
+		if m.acct.profileCursor > profileAllAccountsIndex {
+			m.acct.profileCursor--
 		}
 		return m, nil
 	},
 	"down": func(m model) (tea.Model, tea.Cmd) {
-		// len(m.accounts) is the maximum valid cursor: accounts occupy slots 1..n
-		if m.profileCursor < len(m.accounts) {
-			m.profileCursor++
+		// len(m.acct.list) is the maximum valid cursor: accounts occupy slots 1..n
+		if m.acct.profileCursor < len(m.acct.list) {
+			m.acct.profileCursor++
 		}
 		return m, nil
 	},
 	"j": func(m model) (tea.Model, tea.Cmd) {
-		if m.profileCursor < len(m.accounts) {
-			m.profileCursor++
+		if m.acct.profileCursor < len(m.acct.list) {
+			m.acct.profileCursor++
 		}
 		return m, nil
 	},
@@ -475,45 +475,45 @@ func (m model) handleProfileSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 var accountManageHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.accountManageMode = false
+		m.acct.accountManageMode = false
 		return m, nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.accountManageMode = false
+		m.acct.accountManageMode = false
 		return m, nil
 	},
 	"q": func(m model) (tea.Model, tea.Cmd) {
-		m.accountManageMode = false
+		m.acct.accountManageMode = false
 		return m, nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
-		m.accountManageMode = false
-		if m.manageCursor == addAccountMenuIndex {
+		m.acct.accountManageMode = false
+		if m.acct.manageCursor == addAccountMenuIndex {
 			return m, m.runAddAccount()
 		}
 		return m, nil
 	},
 	"up": func(m model) (tea.Model, tea.Cmd) {
-		if m.manageCursor > addAccountMenuIndex {
-			m.manageCursor--
+		if m.acct.manageCursor > addAccountMenuIndex {
+			m.acct.manageCursor--
 		}
 		return m, nil
 	},
 	"k": func(m model) (tea.Model, tea.Cmd) {
-		if m.manageCursor > addAccountMenuIndex {
-			m.manageCursor--
+		if m.acct.manageCursor > addAccountMenuIndex {
+			m.acct.manageCursor--
 		}
 		return m, nil
 	},
 	"down": func(m model) (tea.Model, tea.Cmd) {
-		if m.manageCursor < accountManageOptionCount-1 {
-			m.manageCursor++
+		if m.acct.manageCursor < accountManageOptionCount-1 {
+			m.acct.manageCursor++
 		}
 		return m, nil
 	},
 	"j": func(m model) (tea.Model, tea.Cmd) {
-		if m.manageCursor < accountManageOptionCount-1 {
-			m.manageCursor++
+		if m.acct.manageCursor < accountManageOptionCount-1 {
+			m.acct.manageCursor++
 		}
 		return m, nil
 	},
@@ -539,22 +539,22 @@ var normalModeHandlers = map[string]keyHandler{
 	"down":      cmdMoveCursorDown,
 	"j":         cmdMoveCursorDown,
 	"/": func(m model) (tea.Model, tea.Cmd) {
-		m.searchMode = true
-		m.searchQuery = ""
+		m.input = textInput{mode: inputSearch}
+		m.list.searchQuery = ""
 		return m, nil
 	},
 	"c": func(m model) (tea.Model, tea.Cmd) {
-		if m.showHistoryPanel && m.activeFocus == focusOutput {
+		if m.hist.visible && m.activeFocus == focusOutput {
 			return m, m.copySelectedOutputItem(false)
 		}
 		target := m.getTargetDevice()
-		if target >= 0 && target < len(m.filteredDevices) {
+		if target >= 0 && target < len(m.list.filteredDevices) {
 			return m, m.copySSHCommand(target)
 		}
 		return m, nil
 	},
 	"n": func(m model) (tea.Model, tea.Cmd) {
-		if m.showHistoryPanel && m.activeFocus == focusOutput {
+		if m.hist.visible && m.activeFocus == focusOutput {
 			return m, m.copySelectedOutputItem(true)
 		}
 		return m, nil
@@ -566,8 +566,8 @@ var normalModeHandlers = map[string]keyHandler{
 		return m, m.runTailscaleUp()
 	},
 	"m": func(m model) (tea.Model, tea.Cmd) {
-		m.accountManageMode = true
-		m.manageCursor = addAccountMenuIndex
+		m.acct.accountManageMode = true
+		m.acct.manageCursor = addAccountMenuIndex
 		return m, nil
 	},
 	"r": func(m model) (tea.Model, tea.Cmd) {
@@ -575,34 +575,34 @@ var normalModeHandlers = map[string]keyHandler{
 			return m, nil
 		}
 		m.reloading = true
-		m.sshError = nil
+		m.notify.sshError = nil
 		return m, m.reloadDevices()
 	},
 	"p": func(m model) (tea.Model, tea.Cmd) {
-		m.profileSelectMode = true
-		m.profileCursor = profileAllAccountsIndex
-		for i, acc := range m.accounts {
-			if acc.Name == m.selectedProfile {
-				m.profileCursor = i + profileAccountOffset
+		m.acct.profileSelectMode = true
+		m.acct.profileCursor = profileAllAccountsIndex
+		for i, acc := range m.acct.list {
+			if acc.Name == m.list.selectedProfile {
+				m.acct.profileCursor = i + profileAccountOffset
 				break
 			}
 		}
 		return m, nil
 	},
 	"x": func(m model) (tea.Model, tea.Cmd) {
-		m.showInstallSuggestion = false
+		m.inst.showSuggestion = false
 		return m, nil
 	},
 	"d": func(m model) (tea.Model, tea.Cmd) {
-		if m.sshUsername != "" {
-			m.sshUsername = ""
+		if m.ssh.username != "" {
+			m.ssh.username = ""
 			return m, m.clearUsername()
 		}
 		return m, nil
 	},
 	"o": func(m model) (tea.Model, tea.Cmd) {
-		m.optionsMode = true
-		m.optionsCursor = 0
+		m.opts.active = true
+		m.opts.cursor = 0
 		return m, nil
 	},
 }
@@ -611,7 +611,7 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.handleFrameShortcut(msg.String()) {
 		return m, nil
 	}
-	if m.showHistoryPanel && m.activeFocus == focusHistory {
+	if m.hist.visible && m.activeFocus == focusHistory {
 		return m.handleHistoryNavigation(msg)
 	}
 	if newM, cmd, handled := dispatchKey(msg.String(), m, normalModeHandlers); handled {
@@ -622,24 +622,24 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // getTargetDevice returns the index of the currently-highlighted device.
 func (m model) getTargetDevice() int {
-	return m.cursor
+	return m.list.cursor
 }
 
 // moveCursorUp moves the cursor up and adjusts viewport if needed
 func (m *model) moveCursorUp() {
 	// Handle different panels based on focus
-	if m.showHistoryPanel {
+	if m.hist.visible {
 		if m.activeFocus == focusHistory {
 			// Scroll history list
-			if m.historyCursor > 0 {
-				m.historyCursor--
+			if m.hist.cursor > 0 {
+				m.hist.cursor--
 			}
 			return
 		} else if m.activeFocus == focusOutput {
 			// Move selection in output panel
-			lines := splitOutputLines(m.commandOutput)
-			if len(lines) > 0 && m.outputCursor > 0 {
-				m.outputCursor--
+			lines := splitOutputLines(m.hist.commandOutput)
+			if len(lines) > 0 && m.hist.outputCursor > 0 {
+				m.hist.outputCursor--
 				m.ensureOutputCursorVisible()
 			}
 			return
@@ -647,40 +647,40 @@ func (m *model) moveCursorUp() {
 	}
 
 	// Default: scroll device list
-	if m.cursor > 0 {
-		m.cursor--
+	if m.list.cursor > 0 {
+		m.list.cursor--
 		// Scroll up if cursor goes above viewport
-		if m.cursor < m.viewportTop {
-			m.viewportTop = m.cursor
+		if m.list.cursor < m.list.viewportTop {
+			m.list.viewportTop = m.list.cursor
 		}
 		// Clear SSH error when moving cursor
-		m.sshError = nil
+		m.notify.sshError = nil
 	}
 }
 
 // moveCursorDown moves the cursor down and adjusts viewport if needed
 func (m *model) moveCursorDown() {
 	// Handle different panels based on focus
-	if m.showHistoryPanel {
+	if m.hist.visible {
 		if m.activeFocus == focusHistory {
 			// Scroll history list
-			if m.history != nil && m.cursor >= 0 && m.cursor < len(m.filteredDevices) {
-				device := m.filteredDevices[m.cursor]
+			if m.hist.history != nil && m.list.cursor >= 0 && m.list.cursor < len(m.list.filteredDevices) {
+				device := m.list.filteredDevices[m.list.cursor]
 				machineID := device.ID
 				if machineID == "" {
 					machineID = device.Hostname
 				}
-				historyCommands := m.history.GetUniqueCommands(machineID)
-				if m.historyCursor < len(historyCommands)-1 {
-					m.historyCursor++
+				historyCommands := m.hist.history.GetUniqueCommands(machineID)
+				if m.hist.cursor < len(historyCommands)-1 {
+					m.hist.cursor++
 				}
 			}
 			return
 		} else if m.activeFocus == focusOutput {
 			// Move selection in output panel
-			lines := splitOutputLines(m.commandOutput)
-			if len(lines) > 0 && m.outputCursor < len(lines)-1 {
-				m.outputCursor++
+			lines := splitOutputLines(m.hist.commandOutput)
+			if len(lines) > 0 && m.hist.outputCursor < len(lines)-1 {
+				m.hist.outputCursor++
 				m.ensureOutputCursorVisible()
 			}
 			return
@@ -688,26 +688,26 @@ func (m *model) moveCursorDown() {
 	}
 
 	// Default: scroll device list
-	if m.cursor < len(m.filteredDevices)-1 {
-		m.cursor++
+	if m.list.cursor < len(m.list.filteredDevices)-1 {
+		m.list.cursor++
 		// Scroll down if cursor goes below viewport
 		maxVisible := m.getMaxVisibleItems()
-		if m.cursor >= m.viewportTop+maxVisible {
-			m.viewportTop = m.cursor - maxVisible + 1
+		if m.list.cursor >= m.list.viewportTop+maxVisible {
+			m.list.viewportTop = m.list.cursor - maxVisible + 1
 		}
 		// Clear SSH error when moving cursor
-		m.sshError = nil
+		m.notify.sshError = nil
 	}
 }
 
 // handleSSHRequest handles the SSH request logic
 func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.filteredDevices) {
+	if target < 0 || target >= len(m.list.filteredDevices) {
 		return m, nil
 	}
 
-	device := m.filteredDevices[target]
+	device := m.list.filteredDevices[target]
 
 	// Check if device is offline
 	if !isDeviceOnline(device) {
@@ -715,25 +715,25 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 		if deviceName == "" {
 			deviceName = device.Hostname
 		}
-		m.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+		m.notify.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
 		return m, nil
 	}
 
 	// Check if Tailscale is running locally before attempting SSH
 	if isRunning, message := checkLocalTailscaleStatus(); !isRunning {
-		m.sshError = fmt.Errorf("Tailscale is not running locally: %s\nPress 'u' to run 'tailscale up' or start Tailscale manually", message)
+		m.notify.sshError = fmt.Errorf("Tailscale is not running locally: %s\nPress 'u' to run 'tailscale up' or start Tailscale manually", message)
 		return m, nil
 	}
 
 	// Clear any previous SSH errors
-	m.sshError = nil
+	m.notify.sshError = nil
 
 	// Check if we need to switch accounts first
 	// Compare device's account tailnet against the real Tailscale active account
-	if device.AccountTailnet != "" && m.tailscaleActiveAccount != "" {
+	if device.AccountTailnet != "" && m.acct.tailscaleActiveAccount != "" {
 		// Normalize both for comparison (handle truncated accounts like "user@" vs "user@domain.com")
 		deviceAccount := strings.ToLower(device.AccountTailnet)
-		activeAccount := strings.ToLower(m.tailscaleActiveAccount)
+		activeAccount := strings.ToLower(m.acct.tailscaleActiveAccount)
 
 		// Check if they're different accounts
 		// Account in status might be truncated, so check if one starts with the other
@@ -747,10 +747,10 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	}
 
 	// Check if username is stored
-	if m.sshUsername == "" {
+	if m.ssh.username == "" {
 		// Prompt for username
-		m.usernamePrompt = true
-		m.usernameInput = ""
+		m.input = textInput{mode: inputUsername}
+		m.input.value = ""
 		return m, nil
 	}
 	// Username exists, start SSH session
@@ -760,7 +760,7 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 // ─── Options menu constants ───────────────────────────────────────────────────
 
 const (
-	optionSavePassword = 0 // Toggle save-password feature
+	optionSavePassword  = 0 // Toggle save-password feature
 	optionClearPassword = 1 // Clear saved password
 	optionCount         = 2 // Total number of options
 )
@@ -769,53 +769,53 @@ const (
 
 var optionsMenuHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.optionsMode = false
+		m.opts.active = false
 		return m, nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.optionsMode = false
+		m.opts.active = false
 		return m, nil
 	},
 	"q": func(m model) (tea.Model, tea.Cmd) {
-		m.optionsMode = false
+		m.opts.active = false
 		return m, nil
 	},
 	"up": func(m model) (tea.Model, tea.Cmd) {
-		if m.optionsCursor > 0 {
-			m.optionsCursor--
+		if m.opts.cursor > 0 {
+			m.opts.cursor--
 		}
 		return m, nil
 	},
 	"k": func(m model) (tea.Model, tea.Cmd) {
-		if m.optionsCursor > 0 {
-			m.optionsCursor--
+		if m.opts.cursor > 0 {
+			m.opts.cursor--
 		}
 		return m, nil
 	},
 	"down": func(m model) (tea.Model, tea.Cmd) {
-		if m.optionsCursor < optionCount-1 {
-			m.optionsCursor++
+		if m.opts.cursor < optionCount-1 {
+			m.opts.cursor++
 		}
 		return m, nil
 	},
 	"j": func(m model) (tea.Model, tea.Cmd) {
-		if m.optionsCursor < optionCount-1 {
-			m.optionsCursor++
+		if m.opts.cursor < optionCount-1 {
+			m.opts.cursor++
 		}
 		return m, nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
-		switch m.optionsCursor {
+		switch m.opts.cursor {
 		case optionSavePassword:
-			m.savePasswordEnabled = !m.savePasswordEnabled
-			if !m.savePasswordEnabled {
+			m.ssh.savePasswordEnabled = !m.ssh.savePasswordEnabled
+			if !m.ssh.savePasswordEnabled {
 				// When disabling, also clear saved password
-				m.sshPasswordEncrypted = ""
+				m.ssh.passwordEncrypted = ""
 			}
-			return m, m.toggleSavePassword(m.savePasswordEnabled)
+			return m, m.toggleSavePassword(m.ssh.savePasswordEnabled)
 		case optionClearPassword:
-			if m.sshPasswordEncrypted != "" {
-				m.sshPasswordEncrypted = ""
+			if m.ssh.passwordEncrypted != "" {
+				m.ssh.passwordEncrypted = ""
 				return m, m.clearSavedPassword()
 			}
 			return m, nil
@@ -835,33 +835,33 @@ func (m model) handleOptionsMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 var passwordPromptHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.passwordPrompt = false
-		m.passwordInput = ""
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		return m, nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.passwordPrompt = false
-		m.passwordInput = ""
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		return m, nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
-		if m.passwordInput == "" {
+		if m.input.value == "" {
 			return m, nil
 		}
-		password := m.passwordInput
-		m.passwordPrompt = false
-		m.passwordInput = ""
+		password := m.input.value
+		m.input = textInput{mode: inputNone}
+		m.input.value = ""
 		storeCmd := m.storePassword(password)
 		// Proceed with SSH after storing password
 		target := m.getTargetDevice()
-		if target >= 0 && target < len(m.filteredDevices) {
+		if target >= 0 && target < len(m.list.filteredDevices) {
 			return m, tea.Batch(storeCmd, m.sshToDevice(target))
 		}
 		return m, storeCmd
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.passwordInput) > 0 {
-			m.passwordInput = m.passwordInput[:len(m.passwordInput)-1]
+		if len(m.input.value) > 0 {
+			m.input.value = m.input.value[:len(m.input.value)-1]
 		}
 		return m, nil
 	},
@@ -878,11 +878,11 @@ func (m model) handlePasswordPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return newM, cmd
 	}
 	if msg.Paste {
-		m.passwordInput += sanitizePastedText(string(msg.Runes))
+		m.input.value += sanitizePastedText(string(msg.Runes))
 		return m, nil
 	}
 	if len(msg.String()) == 1 {
-		m.passwordInput += msg.String()
+		m.input.value += msg.String()
 	}
 	return m, nil
 }

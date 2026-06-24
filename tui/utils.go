@@ -253,14 +253,14 @@ func (m *model) handleFrameShortcut(key string) bool {
 		m.activeFocus = focusList
 		return true
 	case keyFocusHistory:
-		if m.showHistoryPanel {
+		if m.hist.visible {
 			m.activeFocus = focusHistory
 			return true
 		}
 	case keyFocusOutput:
-		if m.showHistoryPanel {
+		if m.hist.visible {
 			m.activeFocus = focusOutput
-			m.outputScroll = 0
+			m.hist.outputScroll = 0
 			return true
 		}
 	}
@@ -269,7 +269,7 @@ func (m *model) handleFrameShortcut(key string) bool {
 
 // ensureOutputCursorVisible adjusts outputScroll so the cursor line is visible.
 func (m *model) ensureOutputCursorVisible() {
-	lines := splitOutputLines(m.commandOutput)
+	lines := splitOutputLines(m.hist.commandOutput)
 	if len(lines) == 0 {
 		return
 	}
@@ -277,9 +277,9 @@ func (m *model) ensureOutputCursorVisible() {
 	if outputHeight <= 0 {
 		return
 	}
-	if m.outputCursor < m.outputScroll {
-		m.outputScroll = m.outputCursor
-	} else if m.outputCursor >= m.outputScroll+outputHeight {
-		m.outputScroll = m.outputCursor - outputHeight + 1
+	if m.hist.outputCursor < m.hist.outputScroll {
+		m.hist.outputScroll = m.hist.outputCursor
+	} else if m.hist.outputCursor >= m.hist.outputScroll+outputHeight {
+		m.hist.outputScroll = m.hist.outputCursor - outputHeight + 1
 	}
 }

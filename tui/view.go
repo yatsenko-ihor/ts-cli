@@ -16,7 +16,7 @@ func (m model) renderDeviceList() string {
 	maxVisible := m.getMaxVisibleItems()
 	splitTargetHeight := 0
 
-	if m.showHistoryPanel {
+	if m.hist.visible {
 		_, panelHeight := m.getHistoryPanelSize()
 
 		// Match stacked right panel height (including border compensation)
@@ -25,11 +25,11 @@ func (m model) renderDeviceList() string {
 		// Reserve lines for in-frame header/search so device rows fill remaining space.
 		listContentHeight := splitTargetHeight - panelVerticalPadding
 		headerLines := 2 // "Search in" + spacer line (title is in border)
-		if m.searchMode || m.searchQuery != "" {
+		if m.input.mode == inputSearch || m.list.searchQuery != "" {
 			headerLines++
 		}
 		maxVisible = listContentHeight - headerLines
-		if m.viewportTop > 0 {
+		if m.list.viewportTop > 0 {
 			maxVisible-- // top "more above" indicator
 		}
 		if maxVisible < 1 {
@@ -39,46 +39,46 @@ func (m model) renderDeviceList() string {
 
 	// In-frame content starts with scope/search. Title is rendered on the border.
 	searchScope := "all"
-	if m.selectedProfile != "" {
-		searchScope = m.selectedProfile
+	if m.list.selectedProfile != "" {
+		searchScope = m.list.selectedProfile
 	}
 	listContent.WriteString(grayItalicStyle.Render(fmt.Sprintf("Search in: %s", searchScope)))
 	listContent.WriteString("\n")
 
-	if m.searchMode {
-		listContent.WriteString(searchLabelStyle.Render("> Search: ") + searchQueryStyle.Render(m.searchQuery+"_"))
+	if m.input.mode == inputSearch {
+		listContent.WriteString(searchLabelStyle.Render("> Search: ") + searchQueryStyle.Render(m.list.searchQuery+"_"))
 		listContent.WriteString("\n")
-	} else if m.searchQuery != "" {
-		listContent.WriteString(searchLabelStyle.Render("Search: ") + searchQueryStyle.Render(m.searchQuery))
+	} else if m.list.searchQuery != "" {
+		listContent.WriteString(searchLabelStyle.Render("Search: ") + searchQueryStyle.Render(m.list.searchQuery))
 		listContent.WriteString("\n")
 	}
 
 	listContent.WriteString("\n")
 
 	// Calculate visible range
-	visibleStart := m.viewportTop
-	visibleEnd := m.viewportTop + maxVisible
-	if visibleEnd > len(m.filteredDevices) {
-		visibleEnd = len(m.filteredDevices)
+	visibleStart := m.list.viewportTop
+	visibleEnd := m.list.viewportTop + maxVisible
+	if visibleEnd > len(m.list.filteredDevices) {
+		visibleEnd = len(m.list.filteredDevices)
 	}
-	if m.showHistoryPanel && visibleEnd < len(m.filteredDevices) && visibleEnd > visibleStart {
+	if m.hist.visible && visibleEnd < len(m.list.filteredDevices) && visibleEnd > visibleStart {
 		// Reserve one line for bottom "more below" indicator in split view.
 		visibleEnd--
 	}
 
 	// Show scroll indicator at top if needed
-	if m.viewportTop > 0 {
+	if m.list.viewportTop > 0 {
 		listContent.WriteString(normalStyle.Render("  ↑ more above ↑"))
 		listContent.WriteString("\n")
 	}
 
 	// Render visible devices
 	for i := visibleStart; i < visibleEnd; i++ {
-		device := m.filteredDevices[i]
+		device := m.list.filteredDevices[i]
 		cursor := "  "
 		style := normalStyle
 
-		if m.cursor == i {
+		if m.list.cursor == i {
 			cursor = "▶ "
 			style = selectedStyle
 		}
@@ -104,14 +104,14 @@ func (m model) renderDeviceList() string {
 	}
 
 	// Show scroll indicator at bottom if needed
-	if visibleEnd < len(m.filteredDevices) {
+	if visibleEnd < len(m.list.filteredDevices) {
 		listContent.WriteString(normalStyle.Render("  ↓ more below ↓"))
 	}
 
 	// Render the list in a frame
 	deviceListStyle := listStyle
 
-	if m.showHistoryPanel {
+	if m.hist.visible {
 		if splitTargetHeight > 0 {
 			deviceListStyle = deviceListStyle.Height(splitTargetHeight)
 		}
@@ -125,7 +125,7 @@ func (m model) renderDeviceList() string {
 
 	borderColor := lipgloss.Color("#7A7A7A")
 	deviceListStyle = deviceListStyle.Width(m.getMachineListWidth())
-	if m.showHistoryPanel && m.activeFocus == focusList {
+	if m.hist.visible && m.activeFocus == focusList {
 		borderColor = lipgloss.Color("#5FAFFF")
 		deviceListStyle = deviceListStyle.BorderForeground(borderColor)
 	} else {
@@ -144,11 +144,11 @@ func (m model) renderHistoryPanel() string {
 
 	// Get history for current device
 	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.filteredDevices) {
+	if target < 0 || target >= len(m.list.filteredDevices) {
 		return ""
 	}
 
-	device := m.filteredDevices[target]
+	device := m.list.filteredDevices[target]
 	machineID := device.ID
 	if machineID == "" {
 		machineID = device.Hostname
@@ -177,8 +177,8 @@ func (m model) renderHistoryPanel() string {
 
 	// Get unique commands from history
 	var historyCommands []string
-	if m.history != nil {
-		historyCommands = m.history.GetUniqueCommands(machineID)
+	if m.hist.history != nil {
+		historyCommands = m.hist.history.GetUniqueCommands(machineID)
 	}
 
 	if len(historyCommands) == 0 {
@@ -186,7 +186,7 @@ func (m model) renderHistoryPanel() string {
 	} else {
 		contentHeight := historyHeight - panelVerticalPadding
 		helpLines := 1
-		if m.commandMode {
+		if m.input.mode == inputCommand {
 			helpLines = 2
 		}
 		reservedLines := 1 + 1 + helpLines + 1          // header + total + separator + help/input
@@ -197,8 +197,8 @@ func (m model) renderHistoryPanel() string {
 
 		// Render command list
 		startIdx := 0
-		if len(historyCommands) > maxVisible && m.historyCursor >= maxVisible {
-			startIdx = m.historyCursor - maxVisible + 1
+		if len(historyCommands) > maxVisible && m.hist.cursor >= maxVisible {
+			startIdx = m.hist.cursor - maxVisible + 1
 		}
 
 		endIdx := startIdx + maxVisible
@@ -224,7 +224,7 @@ func (m model) renderHistoryPanel() string {
 			cursor := "  "
 			style := lipgloss.NewStyle()
 
-			if i == m.historyCursor && m.activeFocus == focusHistory {
+			if i == m.hist.cursor && m.activeFocus == focusHistory {
 				cursor = "▸ "
 				style = lipgloss.NewStyle().Foreground(lipgloss.Color("#2D6A8C")).Bold(true)
 			}
@@ -244,14 +244,14 @@ func (m model) renderHistoryPanel() string {
 	}
 
 	historyContent.WriteString("\n")
-	if m.commandMode {
+	if m.input.mode == inputCommand {
 		historyContent.WriteString(grayItalicStyle.Render("New command:"))
 		historyContent.WriteString("\n")
 		maxInputWidth := historyInnerWidth - 2
 		if maxInputWidth < 1 {
 			maxInputWidth = 1
 		}
-		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(truncateForWidth(m.commandInput+"_", maxInputWidth)))
+		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(truncateForWidth(m.input.value+"_", maxInputWidth)))
 	} else {
 		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command • 'd' delete selected", historyInnerWidth)))
 	}
@@ -274,10 +274,10 @@ func (m model) renderOutputPanel() string {
 
 	var outputContent strings.Builder
 
-	if m.commandOutput != "" {
-		lines := splitOutputLines(m.commandOutput)
-		startIdx, endIdx, showTop, showBottom := outputViewport(len(lines), outputHeight, m.outputScroll)
-		cursor := m.outputCursor
+	if m.hist.commandOutput != "" {
+		lines := splitOutputLines(m.hist.commandOutput)
+		startIdx, endIdx, showTop, showBottom := outputViewport(len(lines), outputHeight, m.hist.outputScroll)
+		cursor := m.hist.outputCursor
 		if cursor < 0 {
 			cursor = 0
 		}
@@ -349,10 +349,10 @@ func (m model) renderProfileSelection() string {
 
 	// Add "All Accounts" option
 	allAccountsLabel := "All Accounts"
-	if m.selectedProfile == "" {
+	if m.list.selectedProfile == "" {
 		allAccountsLabel += " ✓"
 	}
-	if m.profileCursor == 0 {
+	if m.acct.profileCursor == 0 {
 		listContent.WriteString(selectedStyle.Render("▸ " + allAccountsLabel))
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + allAccountsLabel))
@@ -360,21 +360,21 @@ func (m model) renderProfileSelection() string {
 	listContent.WriteString("\n")
 
 	// Add individual accounts
-	for i, acc := range m.accounts {
+	for i, acc := range m.acct.list {
 		label := acc.Name
 		if acc.Tailnet != acc.Name {
 			label += fmt.Sprintf(" (%s)", acc.Tailnet)
 		}
-		if m.selectedProfile == acc.Name {
+		if m.list.selectedProfile == acc.Name {
 			label += " ✓"
 		}
 
-		if m.profileCursor == i+1 {
+		if m.acct.profileCursor == i+1 {
 			listContent.WriteString(selectedStyle.Render("▸ " + label))
 		} else {
 			listContent.WriteString(normalStyle.Render("  " + label))
 		}
-		if i < len(m.accounts)-1 {
+		if i < len(m.acct.list)-1 {
 			listContent.WriteString("\n")
 		}
 	}
@@ -414,7 +414,7 @@ func (m model) renderAccountManagement() string {
 
 	// Add account option
 	addLabel := "Add Account"
-	if m.manageCursor == 0 {
+	if m.acct.manageCursor == 0 {
 		listContent.WriteString(selectedStyle.Render("▸ " + addLabel))
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + addLabel))
@@ -455,10 +455,10 @@ func (m model) renderOptionsMenu() string {
 
 	// Option 1: Save password toggle
 	saveLabel := "Save SSH password"
-	if m.savePasswordEnabled {
+	if m.ssh.savePasswordEnabled {
 		saveLabel += " ✓"
 	}
-	if m.optionsCursor == 0 {
+	if m.opts.cursor == 0 {
 		listContent.WriteString(selectedStyle.Render("▸ " + saveLabel))
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + saveLabel))
@@ -467,10 +467,10 @@ func (m model) renderOptionsMenu() string {
 
 	// Option 2: Clear saved password
 	clearLabel := "Clear saved password"
-	if m.sshPasswordEncrypted == "" {
+	if m.ssh.passwordEncrypted == "" {
 		clearLabel += " (none saved)"
 	}
-	if m.optionsCursor == 1 {
+	if m.opts.cursor == 1 {
 		listContent.WriteString(selectedStyle.Render("▸ " + clearLabel))
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + clearLabel))
@@ -480,10 +480,10 @@ func (m model) renderOptionsMenu() string {
 	b.WriteString("\n\n")
 
 	// Info text
-	if m.savePasswordEnabled {
+	if m.ssh.savePasswordEnabled {
 		b.WriteString(grayItalicStyle.Render("Password is encrypted locally using AES-256-GCM"))
 		b.WriteString("\n")
-		if m.sshPasswordEncrypted != "" {
+		if m.ssh.passwordEncrypted != "" {
 			b.WriteString(successStyle.Render("✓ Password saved"))
 		} else {
 			b.WriteString(grayItalicStyle.Render("Password will be saved on next SSH connection"))
@@ -501,7 +501,7 @@ func (m model) renderOptionsMenu() string {
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
 	help := "1/2/3 frame • ↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • r reload • u tailscale-up • m manage • o options"
-	if m.showHistoryPanel {
+	if m.hist.visible {
 		if m.activeFocus == focusHistory {
 			help = "1/2/3 frame • ↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
 		} else if m.activeFocus == focusOutput {
@@ -510,19 +510,19 @@ func (m model) getHelpText() string {
 			help = "1/2/3 frame • ↑/k up • ↓/j down • tab/shift+tab switch • esc close"
 		}
 	}
-	if !m.showHistoryPanel {
-		if m.sshUsername != "" {
+	if !m.hist.visible {
+		if m.ssh.username != "" {
 			help += " • d clear-user"
 		}
 		help += " • q quit"
 	}
-	if m.usernamePrompt {
+	if m.input.mode == inputUsername {
 		help = "Enter SSH username • esc cancel • enter confirm"
-	} else if m.passwordPrompt {
+	} else if m.input.mode == inputPassword {
 		help = "Enter SSH password • esc cancel • enter save"
-	} else if m.commandMode {
+	} else if m.input.mode == inputCommand {
 		help = "Type command to execute • esc cancel • enter execute"
-	} else if m.searchMode {
+	} else if m.input.mode == inputSearch {
 		help = "Type to search • esc cancel • enter confirm"
 	}
 
