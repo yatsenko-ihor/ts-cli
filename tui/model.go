@@ -12,58 +12,32 @@ import (
 )
 
 type model struct {
-	devices                []client.Device
-	filteredDevices        []client.Device
-	cursor                 int
-	selected               int
-	err                    error
-	width                  int
-	height                 int
-	sshError               error
-	viewportTop            int // First visible item in the list
-	searchMode             bool
-	searchQuery            string
-	activeFocus            panelFocus
-	copiedText             string
-	reloadSuccess          string // Success message for reload
-	version                string
-	usernamePrompt         bool                 // Whether we're prompting for username
-	usernameInput          string               // Current username being typed
-	sshUsername            string               // Stored SSH username
-	accounts               []client.AccountInfo // Store accounts for reload functionality
-	reloading              bool                 // Whether we're currently reloading
-	profileSelectMode      bool                 // Whether we're in profile selection mode
-	profileCursor          int                  // Cursor position in profile list
-	selectedProfile        string               // Currently selected profile (empty = all)
-	activeAccount          string               // Currently active Tailscale account from config
-	tailscaleActiveAccount string               // Real active account from Tailscale daemon
-	showInstallSuggestion  bool                 // Whether to show PATH installation suggestion
-	installationBroken     bool                 // Whether existing PATH installation is broken
-	accountManageMode      bool                 // Whether we're in account management mode
-	manageCursor           int                  // Cursor position in account management menu
-	optionsMode            bool                 // Whether we're in options menu mode
-	optionsCursor          int                  // Cursor position in options menu
-	savePasswordEnabled    bool                 // Whether password saving is enabled
-	sshPasswordEncrypted   string               // Encrypted SSH password from config
-	passwordPrompt         bool                 // Whether we're prompting for SSH password
-	passwordInput          string               // Current password being typed
-	commandMode            bool                 // Whether we're in command input mode
-	commandInput           string               // Current command being typed
-	commandOutput          string               // Output from last command execution
-	history                *util.HistoryStore   // Command history store
-	historyCursor          int                  // Cursor position in history list
-	showHistoryPanel       bool                 // Whether to show the history panel
-	outputScroll           int                  // Scroll position in output panel
-	outputCursor           int                  // Selected line in output panel
+	// ─── Composed sub-states ──────────────────────────────────────────────────
+	list   deviceList    // Device list panel state
+	hist   historyPanel  // Command history + output panels
+	acct   accounts      // Account/profile management
+	ssh    ssh           // SSH connection state
+	opts   options       // Options menu
+	notify notifications // Transient messages
+	inst   install       // PATH installation suggestion
+	input  textInput     // Active text input prompt
+
+	// ─── Global state ─────────────────────────────────────────────────────────
+	err         error
+	width       int
+	height      int
+	activeFocus panelFocus
+	version     string
+	reloading   bool
 }
 
-func NewModel(devices []client.Device, version string, sshUsername string, accounts []client.AccountInfo, savePasswordEnabled bool, sshPasswordEncrypted string) model {
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, savePasswordEnabled bool, sshPasswordEncrypted string) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
 	// Find active account
 	activeAccount := ""
-	for _, acc := range accounts {
+	for _, acc := range accountList {
 		if acc.Active {
 			activeAccount = acc.Name
 			break
@@ -77,49 +51,53 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	tailscaleActiveAccount := getRealTailscaleAccount()
 
 	// Initialize history store
-	history, err := util.NewHistoryStore()
-	if err != nil {
-		// If history fails to load, continue without it
-		history = nil
-	}
+	history, _ := util.NewHistoryStore()
 
 	return model{
-		devices:                devices,
-		filteredDevices:        devices, // Initially show all devices
-		cursor:                 0,
-		selected:               -1,
-		viewportTop:            0,
-		searchMode:             false,
-		searchQuery:            "",
-		activeFocus:            focusList,
-		version:                version,
-		usernamePrompt:         false,
-		usernameInput:          "",
-		accounts:               accounts,
-		reloading:              false,
-		sshUsername:            sshUsername,
-		profileSelectMode:      false,
-		profileCursor:          0,
-		selectedProfile:        "", // Empty means show all
-		activeAccount:          activeAccount,
-		tailscaleActiveAccount: tailscaleActiveAccount,
-		showInstallSuggestion:  showInstallSuggestion,
-		installationBroken:     installationBroken,
-		accountManageMode:      false,
-		manageCursor:           0,
-		optionsMode:            false,
-		optionsCursor:          0,
-		savePasswordEnabled:    savePasswordEnabled,
-		sshPasswordEncrypted:   sshPasswordEncrypted,
-		passwordPrompt:         false,
-		passwordInput:          "",
-		commandMode:            false,
-		commandInput:           "",
-		commandOutput:          "",
-		history:                history,
-		historyCursor:          0,
-		showHistoryPanel:       false,
-		outputCursor:           0,
+		list: deviceList{
+			devices:         devices,
+			filteredDevices: devices,
+			cursor:          0,
+			selected:        -1,
+			viewportTop:     0,
+			searchQuery:     "",
+			selectedProfile: "",
+		},
+		hist: historyPanel{
+			visible:       false,
+			cursor:        0,
+			history:       history,
+			commandOutput: "",
+			outputScroll:  0,
+			outputCursor:  0,
+		},
+		acct: accounts{
+			list:                   accountList,
+			activeAccount:          activeAccount,
+			tailscaleActiveAccount: tailscaleActiveAccount,
+			profileSelectMode:      false,
+			profileCursor:          0,
+			accountManageMode:      false,
+			manageCursor:           0,
+		},
+		ssh: ssh{
+			username:            sshUsername,
+			passwordEncrypted:   sshPasswordEncrypted,
+			savePasswordEnabled: savePasswordEnabled,
+		},
+		opts: options{
+			active: false,
+			cursor: 0,
+		},
+		notify: notifications{},
+		inst: install{
+			showSuggestion: showInstallSuggestion,
+			broken:         installationBroken,
+		},
+		input:       textInput{mode: inputNone},
+		activeFocus: focusList,
+		version:     version,
+		reloading:   false,
 	}
 }
 
@@ -130,7 +108,7 @@ func (m model) Init() tea.Cmd {
 // reloadDevices fetches fresh device list from all accounts
 func (m model) reloadDevices() tea.Cmd {
 	return func() tea.Msg {
-		if len(m.accounts) == 0 {
+		if len(m.acct.list) == 0 {
 			return reloadMsg{
 				devices: nil,
 				err:     fmt.Errorf("no accounts configured for reload"),
@@ -138,7 +116,7 @@ func (m model) reloadDevices() tea.Cmd {
 		}
 
 		// Fetch devices from all accounts
-		devices := client.ListDevicesFromAccounts(m.accounts)
+		devices := client.ListDevicesFromAccounts(m.acct.list)
 
 		return reloadMsg{
 			devices: devices,
@@ -156,13 +134,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sshMsg:
 		if msg.err != nil {
-			m.sshError = msg.err
+			m.notify.sshError = msg.err
 		}
 		return m, nil
 
 	case copiedMsg:
 		if msg.success {
-			m.copiedText = msg.text
+			m.notify.copiedText = msg.text
 			// Clear the message after 3 seconds
 			return m, tea.Tick(time.Second*3, func(time.Time) tea.Msg {
 				return clearCopiedMsg{}
@@ -171,63 +149,63 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case clearCopiedMsg:
-		m.copiedText = ""
+		m.notify.copiedText = ""
 		return m, nil
 
 	case clearReloadMsg:
-		m.reloadSuccess = ""
+		m.notify.reloadSuccess = ""
 		return m, nil
 
 	case usernameStoredMsg:
 		if msg.err != nil {
-			m.sshError = msg.err
+			m.notify.sshError = msg.err
 		}
 		return m, nil
 
 	case tailscaleUpMsg:
 		// Tailscale up command completed
 		if msg.err != nil {
-			m.sshError = fmt.Errorf("tailscale up failed: %w", msg.err)
+			m.notify.sshError = fmt.Errorf("tailscale up failed: %w", msg.err)
 		}
 		return m, nil
 
 	case tailscaleDownMsg:
 		// Tailscale down command completed
 		if msg.err != nil {
-			m.sshError = fmt.Errorf("tailscale down failed: %w", msg.err)
+			m.notify.sshError = fmt.Errorf("tailscale down failed: %w", msg.err)
 		} else {
-			m.tailscaleActiveAccount = "<not connected>"
+			m.acct.tailscaleActiveAccount = "<not connected>"
 		}
 		return m, nil
 
 	case addAccountMsg:
 		// Handle account addition result
 		if msg.err != nil {
-			m.sshError = fmt.Errorf("failed to add account: %w", msg.err)
+			m.notify.sshError = fmt.Errorf("failed to add account: %w", msg.err)
 		} else {
 			// Account added successfully, could reload devices here
 			// For now, just clear any previous errors
-			m.sshError = nil
+			m.notify.sshError = nil
 		}
 		return m, nil
 
 	case accountSwitchedMsg:
 		// Handle account switch result
 		if msg.err != nil {
-			m.sshError = fmt.Errorf("failed to switch to account %s: %w", msg.accountName, msg.err)
+			m.notify.sshError = fmt.Errorf("failed to switch to account %s: %w", msg.accountName, msg.err)
 			return m, nil
 		}
 		// Account switched successfully, update active account
-		m.activeAccount = msg.accountName
+		m.acct.activeAccount = msg.accountName
 		// Update the real Tailscale active account
-		m.tailscaleActiveAccount = getRealTailscaleAccount()
+		m.acct.tailscaleActiveAccount = getRealTailscaleAccount()
 		// If we should proceed with SSH, do it now
 		if msg.proceedWithSSH {
 			// Check if username is stored
-			if m.sshUsername == "" {
+			if m.ssh.username == "" {
 				// Prompt for username
-				m.usernamePrompt = true
-				m.usernameInput = ""
+				m.input = textInput{mode: inputUsername}
+				m.input.value = ""
 				return m, nil
 			}
 			// Username exists, start SSH session
@@ -239,34 +217,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle reload result
 		m.reloading = false
 		if msg.err != nil {
-			m.sshError = fmt.Errorf("failed to reload devices: %w", msg.err)
+			m.notify.sshError = fmt.Errorf("failed to reload devices: %w", msg.err)
 			return m, nil
 		}
 
 		// Sort devices before storing
 		sortDevicesByStatus(msg.devices)
-		m.devices = msg.devices
+		m.list.devices = msg.devices
 
 		// Re-apply filters if any are active
-		if m.searchQuery != "" || m.selectedProfile != "" {
+		if m.list.searchQuery != "" || m.list.selectedProfile != "" {
 			m.filterDevices()
 		} else {
-			m.filteredDevices = msg.devices
+			m.list.filteredDevices = msg.devices
 		}
 
 		// Reset cursor if out of bounds
-		if m.cursor >= len(m.filteredDevices) {
-			m.cursor = 0
+		if m.list.cursor >= len(m.list.filteredDevices) {
+			m.list.cursor = 0
 		}
-		if m.selected >= len(m.filteredDevices) {
-			m.selected = -1
+		if m.list.selected >= len(m.list.filteredDevices) {
+			m.list.selected = -1
 		}
 
 		// Clear any previous SSH error
-		m.sshError = nil
+		m.notify.sshError = nil
 
 		// Show reload success message
-		m.reloadSuccess = fmt.Sprintf("Reloaded %d device(s) from %d account(s)", len(msg.devices), len(m.accounts))
+		m.notify.reloadSuccess = fmt.Sprintf("Reloaded %d device(s) from %d account(s)", len(msg.devices), len(m.acct.list))
 
 		// Clear the success message after 3 seconds
 		return m, tea.Tick(time.Second*3, func(time.Time) tea.Msg {
@@ -276,27 +254,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commandExecutedMsg:
 		// Handle command execution result
 		if msg.err != nil {
-			m.sshError = fmt.Errorf("command failed: %w", msg.err)
-			m.commandOutput = ""
-			m.outputCursor = 0
-			m.outputScroll = 0
+			m.notify.sshError = fmt.Errorf("command failed: %w", msg.err)
+			m.hist.commandOutput = ""
+			m.hist.outputCursor = 0
+			m.hist.outputScroll = 0
 		} else {
-			m.commandOutput = msg.output
-			m.outputScroll = 0 // Reset scroll when new output arrives
-			m.outputCursor = 0
-			m.sshError = nil
+			m.hist.commandOutput = msg.output
+			m.hist.outputScroll = 0 // Reset scroll when new output arrives
+			m.hist.outputCursor = 0
+			m.notify.sshError = nil
 		}
 		return m, nil
 
 	case passwordStoredMsg:
 		if msg.err != nil {
-			m.sshError = msg.err
+			m.notify.sshError = msg.err
 		}
 		return m, nil
 
 	case optionToggledMsg:
 		if msg.err != nil {
-			m.sshError = msg.err
+			m.notify.sshError = msg.err
 		}
 		return m, nil
 
@@ -307,38 +285,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.target {
 		case pasteTargetUsername:
-			m.usernameInput += msg.text
+			m.input.value += msg.text
 		case pasteTargetSearch:
-			m.searchQuery += msg.text
+			m.list.searchQuery += msg.text
 			m.filterDevices()
 		case pasteTargetCommand:
-			m.commandInput += msg.text
+			m.input.value += msg.text
 		case pasteTargetPassword:
-			m.passwordInput += msg.text
+			m.input.value += msg.text
 		}
 		return m, nil
 
 	case tea.KeyMsg:
 		// Dispatch to appropriate mode handler
-		if m.passwordPrompt {
+		switch m.input.mode {
+		case inputPassword:
 			return m.handlePasswordPrompt(msg)
-		}
-		if m.usernamePrompt {
+		case inputUsername:
 			return m.handleUsernamePrompt(msg)
-		}
-		if m.commandMode {
+		case inputCommand:
 			return m.handleCommandMode(msg)
-		}
-		if m.searchMode {
+		case inputSearch:
 			return m.handleSearchMode(msg)
 		}
-		if m.profileSelectMode {
+		if m.acct.profileSelectMode {
 			return m.handleProfileSelection(msg)
 		}
-		if m.accountManageMode {
+		if m.acct.accountManageMode {
 			return m.handleAccountManagement(msg)
 		}
-		if m.optionsMode {
+		if m.opts.active {
 			return m.handleOptionsMenu(msg)
 		}
 		return m.handleNormalMode(msg)
@@ -353,17 +329,17 @@ func (m model) View() string {
 	}
 
 	// Show profile selection view if in profile selection mode
-	if m.profileSelectMode {
+	if m.acct.profileSelectMode {
 		return m.renderProfileSelection()
 	}
 
 	// Show account management view if in account management mode
-	if m.accountManageMode {
+	if m.acct.accountManageMode {
 		return m.renderAccountManagement()
 	}
 
 	// Show options menu if in options mode
-	if m.optionsMode {
+	if m.opts.active {
 		return m.renderOptionsMenu()
 	}
 
@@ -374,17 +350,17 @@ func (m model) View() string {
 	if m.reloading {
 		title += " - Reloading..."
 		b.WriteString(titleStyle.Render(title))
-	} else if m.passwordPrompt {
-		title += " - SSH Password: " + strings.Repeat("*", len(m.passwordInput)) + "_"
+	} else if m.input.mode == inputPassword {
+		title += " - SSH Password: " + strings.Repeat("*", len(m.input.value)) + "_"
 		b.WriteString(titleStyle.Render(title))
-	} else if m.usernamePrompt {
-		title += " - SSH Username: " + m.usernameInput + "_"
+	} else if m.input.mode == inputUsername {
+		title += " - SSH Username: " + m.input.value + "_"
 		b.WriteString(titleStyle.Render(title))
-	} else if m.searchQuery != "" {
-		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.filteredDevices), len(m.devices))
+	} else if m.list.searchQuery != "" {
+		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.list.filteredDevices), len(m.list.devices))
 		b.WriteString(titleStyle.Render(title))
-	} else if m.selectedProfile != "" {
-		title += fmt.Sprintf(" - Profile: %s", m.selectedProfile)
+	} else if m.list.selectedProfile != "" {
+		title += fmt.Sprintf(" - Profile: %s", m.list.selectedProfile)
 		b.WriteString(titleStyle.Render(title))
 	} else {
 		b.WriteString(titleStyle.Render(title))
@@ -392,21 +368,21 @@ func (m model) View() string {
 	b.WriteString("\n")
 
 	// Show real active Tailscale account at the top
-	if m.tailscaleActiveAccount != "" {
-		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Active account: %s", m.tailscaleActiveAccount)))
+	if m.acct.tailscaleActiveAccount != "" {
+		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Active account: %s", m.acct.tailscaleActiveAccount)))
 		b.WriteString("\n")
 	}
 
 	// Show default SSH username
-	if m.sshUsername != "" {
-		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Default username: %s", m.sshUsername)))
+	if m.ssh.username != "" {
+		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Default username: %s", m.ssh.username)))
 	} else {
 		b.WriteString(grayItalicStyle.Render("Default username: <none>"))
 	}
 	b.WriteString("\n")
 
 	// Render split view if history panel is shown
-	if m.showHistoryPanel {
+	if m.hist.visible {
 		// Split view: device list on left, history + output on right
 		deviceList := m.renderDeviceList()
 		historyPanel := m.renderHistoryPanel()
@@ -436,39 +412,39 @@ func (m model) View() string {
 	}
 
 	// Show command output if any (when history panel is not shown)
-	if m.commandOutput != "" && !m.showHistoryPanel {
+	if m.hist.commandOutput != "" && !m.hist.visible {
 		b.WriteString("\n\n")
 		outputStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#7A7A7A")).
 			Padding(1).
 			MarginTop(1)
-		b.WriteString(outputStyle.Render("Command Output:\n" + m.commandOutput))
+		b.WriteString(outputStyle.Render("Command Output:\n" + m.hist.commandOutput))
 	}
 
 	// Show copy success message if any
-	if m.copiedText != "" {
+	if m.notify.copiedText != "" {
 		b.WriteString("\n")
-		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.copiedText)))
+		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.notify.copiedText)))
 	}
 
 	// Show reload success message if any
-	if m.reloadSuccess != "" {
+	if m.notify.reloadSuccess != "" {
 		b.WriteString("\n")
-		b.WriteString(successStyle.Render(fmt.Sprintf("✓ %s", m.reloadSuccess)))
+		b.WriteString(successStyle.Render(fmt.Sprintf("✓ %s", m.notify.reloadSuccess)))
 	}
 
 	// Show SSH error if any
-	if m.sshError != nil {
+	if m.notify.sshError != nil {
 		b.WriteString("\n")
-		b.WriteString(errorStyle.Render(fmt.Sprintf("SSH Error: %v", m.sshError)))
+		b.WriteString(errorStyle.Render(fmt.Sprintf("SSH Error: %v", m.notify.sshError)))
 	}
 
 	// Show installation suggestion if not in PATH
-	if m.showInstallSuggestion && !m.usernamePrompt && !m.searchMode && !m.profileSelectMode && !m.accountManageMode {
+	if m.inst.showSuggestion && m.input.mode != inputUsername && m.input.mode != inputSearch && !m.acct.profileSelectMode && !m.acct.accountManageMode {
 		b.WriteString("\n")
 		var message string
-		if m.installationBroken {
+		if m.inst.broken {
 			message = "💡 Tip: Run 'ts-cli install' to reinstall ts-cli (current PATH installation is broken). Press 'x' to dismiss."
 		} else {
 			message = "💡 Tip: Run 'ts-cli install' to add ts-cli to your PATH for easier access. Press 'x' to dismiss."
@@ -479,7 +455,7 @@ func (m model) View() string {
 	// Show terminal size warning if too small
 	minWidth := 80
 	minHeight := 24
-	if m.showHistoryPanel {
+	if m.hist.visible {
 		minWidth = 110 // Need extra width for split view
 		minHeight = 30 // Need extra height for stacked panels
 	}

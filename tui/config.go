@@ -213,8 +213,8 @@ func saveConfigJSON(config *configJSON) error {
 // configJSON mirrors the relevant fields from commands.Config to avoid import cycles
 type configJSON struct {
 	Accounts            json.RawMessage `json:"accounts,omitempty"`
-	SSHUsername          string          `json:"ssh_username,omitempty"`
-	SSHPassword          string          `json:"ssh_password,omitempty"`
-	SavePasswordEnabled  bool            `json:"save_password_enabled"`
-	ConfigVersion        string          `json:"config_version,omitempty"`
+	SSHUsername         string          `json:"ssh_username,omitempty"`
+	SSHPassword         string          `json:"ssh_password,omitempty"`
+	SavePasswordEnabled bool            `json:"save_password_enabled"`
+	ConfigVersion       string          `json:"config_version,omitempty"`
 }

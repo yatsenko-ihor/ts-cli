@@ -55,12 +55,12 @@ func copyTextToClipboard(text string) tea.Cmd {
 
 // selectedOutputItem returns the currently selected line from command output
 func (m model) selectedOutputItem() (string, bool) {
-	lines := splitOutputLines(m.commandOutput)
+	lines := splitOutputLines(m.hist.commandOutput)
 	if len(lines) == 0 {
 		return "", false
 	}
 
-	cursor := m.outputCursor
+	cursor := m.hist.outputCursor
 	if cursor < 0 {
 		cursor = 0
 	}

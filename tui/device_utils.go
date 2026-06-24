@@ -59,13 +59,13 @@ func getKeyExpiryIcon(device client.Device) string {
 // filterDevices filters the device list based on the search query and profile filter
 func (m *model) filterDevices() {
 	// Start with all devices
-	filtered := m.devices
+	filtered := m.list.devices
 
 	// Apply profile filter first
-	if m.selectedProfile != "" {
+	if m.list.selectedProfile != "" {
 		profileFiltered := []client.Device{}
 		for _, device := range filtered {
-			if device.AccountName == m.selectedProfile {
+			if device.AccountName == m.list.selectedProfile {
 				profileFiltered = append(profileFiltered, device)
 			}
 		}
@@ -73,8 +73,8 @@ func (m *model) filterDevices() {
 	}
 
 	// Apply search filter if query exists
-	if m.searchQuery != "" {
-		query := strings.ToLower(m.searchQuery)
+	if m.list.searchQuery != "" {
+		query := strings.ToLower(m.list.searchQuery)
 		searchFiltered := []client.Device{}
 
 		for _, device := range filtered {
@@ -104,8 +104,8 @@ func (m *model) filterDevices() {
 	// Sort devices with online devices first
 	sortDevicesByStatus(filtered)
 
-	m.filteredDevices = filtered
+	m.list.filteredDevices = filtered
 	// Reset cursor to top of filtered list
-	m.cursor = 0
-	m.viewportTop = 0
+	m.list.cursor = 0
+	m.list.viewportTop = 0
 }

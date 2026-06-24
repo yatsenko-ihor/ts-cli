@@ -198,19 +198,21 @@ func TestFilterDevices(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := model{
-				devices:         devices,
-				searchQuery:     tt.searchQuery,
-				selectedProfile: tt.selectedProfile,
+				list: deviceList{
+					devices:         devices,
+					searchQuery:     tt.searchQuery,
+					selectedProfile: tt.selectedProfile,
+				},
 			}
 			m.filterDevices()
 
-			if len(m.filteredDevices) != tt.expectedCount {
-				t.Errorf("Expected %d filtered devices, got %d", tt.expectedCount, len(m.filteredDevices))
+			if len(m.list.filteredDevices) != tt.expectedCount {
+				t.Errorf("Expected %d filtered devices, got %d", tt.expectedCount, len(m.list.filteredDevices))
 			}
 
 			for i, expectedID := range tt.expectedIDs {
-				if i < len(m.filteredDevices) && m.filteredDevices[i].ID != expectedID {
-					t.Errorf("Expected device ID %s at position %d, got %s", expectedID, i, m.filteredDevices[i].ID)
+				if i < len(m.list.filteredDevices) && m.list.filteredDevices[i].ID != expectedID {
+					t.Errorf("Expected device ID %s at position %d, got %s", expectedID, i, m.list.filteredDevices[i].ID)
 				}
 			}
 		})
@@ -227,22 +229,22 @@ func TestGetHelpText(t *testing.T) {
 		{
 			name: "normal mode includes search and ssh controls",
 			m: model{
-				showHistoryPanel: false,
+				hist: historyPanel{visible: false},
 			},
 			mustContain: "s ssh",
 		},
 		{
 			name: "history focus includes delete and reverse tab",
 			m: model{
-				showHistoryPanel: true,
-				activeFocus:      focusHistory,
+				hist:        historyPanel{visible: true},
+				activeFocus: focusHistory,
 			},
 			mustContain: "tab/shift+tab switch",
 		},
 		{
 			name: "search mode shows dedicated prompt",
 			m: model{
-				searchMode: true,
+				input: textInput{mode: inputSearch},
 			},
 			mustContain:    "Type to search",
 			mustNotContain: "s ssh",
@@ -264,14 +266,14 @@ func TestGetHelpText(t *testing.T) {
 
 func TestHandleNormalModeShiftTabReverseNavigation(t *testing.T) {
 	m := model{
-		showHistoryPanel: false,
-		activeFocus:      focusList,
+		hist:        historyPanel{visible: false},
+		activeFocus: focusList,
 	}
 
 	updated, _ := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyShiftTab})
 	m2 := updated.(model)
 
-	if !m2.showHistoryPanel {
+	if !m2.hist.visible {
 		t.Fatalf("expected history panel to open on shift+tab")
 	}
 	if m2.activeFocus != focusOutput {
@@ -293,11 +295,13 @@ func TestHandleNormalModeShiftTabReverseNavigation(t *testing.T) {
 
 func TestHandleHistoryNavigationShiftTabToList(t *testing.T) {
 	m := model{
-		showHistoryPanel: true,
-		activeFocus:      focusHistory,
-		devices:          []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
-		filteredDevices:  []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
-		selected:         0,
+		hist:        historyPanel{visible: true},
+		activeFocus: focusHistory,
+		list: deviceList{
+			devices:         []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
+			filteredDevices: []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
+			cursor:          0,
+		},
 	}
 
 	updated, _ := m.handleHistoryNavigation(tea.KeyMsg{Type: tea.KeyShiftTab})
