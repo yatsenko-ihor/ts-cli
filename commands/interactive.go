@@ -71,7 +71,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 				}
 
 				// Launch TUI
-				m := tui.NewModel(devices, Version, config.SSHUsername, accounts)
+				m := tui.NewModel(devices, Version, config.SSHUsername, accounts, config.SavePasswordEnabled, config.SSHPassword)
 				p := tea.NewProgram(m, tea.WithAltScreen())
 				if _, err := p.Run(); err != nil {
 					return fmt.Errorf("TUI error: %w", err)
@@ -103,7 +103,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 			fmt.Printf("Found %d device(s) from %d account(s)\n", len(devices), len(config.Accounts))
 
 			// Launch TUI
-			m := tui.NewModel(devices, Version, config.SSHUsername, accounts)
+			m := tui.NewModel(devices, Version, config.SSHUsername, accounts, config.SavePasswordEnabled, config.SSHPassword)
 			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				return fmt.Errorf("TUI error: %w", err)
