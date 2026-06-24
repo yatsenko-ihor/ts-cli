@@ -90,43 +90,53 @@ func storeConfig(apiKey, value string) error {
 
 ### 4. Interactive TUI with Bubbletea
 
-Implement the Elm architecture pattern:
+Implement the Elm architecture with composed sub-states:
 
 ```go
-// tui/model.go
-type model struct {
-    items    []Item
-    cursor   int
-    selected int
+// tui/state.go - sub-state types
+type inputMode int
+const (
+    inputNone inputMode = iota
+    inputSearch
+    inputUsername
+    inputPassword
+    inputCommand
+)
+
+type deviceList struct {
+    devices         []client.Device
+    filteredDevices []client.Device
+    cursor          int
+    searchQuery     string
+    selectedProfile string
 }
 
-func (m model) Init() tea.Cmd {
-    return nil
+// tui/model.go - composed model
+type model struct {
+    list   deviceList
+    hist   historyPanel
+    acct   accounts
+    ssh    ssh
+    opts   options
+    notify notifications
+    input  textInput
+    // shared: width, height, activeFocus, aboutMode
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
     case tea.KeyMsg:
-        switch msg.String() {
-        case "up", "k":
-            if m.cursor > 0 {
-                m.cursor--
-            }
-        case "down", "j":
-            if m.cursor < len(m.items)-1 {
-                m.cursor++
-            }
-        case "enter":
-            m.selected = m.cursor
+        // Dispatch to mode-specific handler
+        if m.input.mode != inputNone {
+            return m.handleInputMode(msg)
         }
+        return m.handleNormalMode(msg)
     }
     return m, nil
 }
-
-func (m model) View() string {
-    // Render the UI using lipgloss for styling
-}
 ```
+
+**Key Pattern**: Use a unified `inputMode` enum instead of multiple boolean flags. Sub-states group related fields (e.g., `m.list.cursor` not `m.cursor`).
 
 ### 5. SSH Integration with TUI
 
@@ -210,33 +220,50 @@ func NewCommandName() *cobra.Command {
 ## Project Structure
 
 ```
-app/
+ts-cli/
 ├── main.go              # Entry point
 ├── go.mod               # Dependencies
 ├── commands/
-│   ├── root.go         # Root command
-│   ├── cmd1.go         # Subcommand 1
-│   └── cmd2.go         # Subcommand 2
+│   ├── root.go         # Root command (delegates to interactive)
+│   ├── interactive.go  # Interactive TUI launcher
+│   ├── config.go       # Account config, JSON persistence, migration
+│   ├── list.go         # List devices command
+│   ├── ssh.go          # SSH command
+│   └── up.go           # Tailscale up command
 ├── client/
-│   └── api.go          # API client
+│   └── tailscale.go    # API client (multi-account, device/account types)
 ├── internal/
 │   ├── constants/      # All magic values (timeouts, URLs, messages)
-│   ├── errors/         # Typed error types with AppError struct
+│   ├── errors/         # Typed errors with AppError struct
 │   ├── formatters/     # Display formatting utilities
 │   └── services/       # Business logic layer
 ├── tui/
 │   ├── model.go        # Model struct, Init, Update, View (thin orchestration)
-│   ├── view.go         # All rendering functions
+│   ├── state.go        # Sub-state type definitions (deviceList, historyPanel, etc.)
+│   ├── view.go         # All rendering functions (list, history, output, about, options)
 │   ├── handlers.go     # Key event handlers grouped by mode
 │   ├── layout.go       # Size/dimension calculations
-│   ├── device_utils.go # Device filtering, sorting, status helpers
+│   ├── device_utils.go # Device filtering, sorting, status/expiry helpers
 │   ├── messages.go     # Message types, panelFocus enum
 │   ├── styles.go       # Lipgloss styles, layout constants, frame titles
-│   └── utils.go        # Shared rendering utilities (applyFrameTitle, etc.)
+│   ├── utils.go        # Shared rendering utilities (applyFrameTitle, etc.)
+│   ├── ssh.go          # SSH with sshpass integration
+│   ├── clipboard.go    # Clipboard utilities
+│   ├── tailscale.go    # Tailscale TUI integrations (up, account switch)
+│   ├── commands.go     # Remote command execution
+│   ├── config.go       # TUI-side config (username, password, options)
+│   └── model_test.go   # Unit tests
+├── util/
+│   ├── history.go      # Command history file store
+│   └── crypto.go       # AES-256-GCM password encryption
 └── README.md
 ```
 
-**Key Rule**: When a TUI file grows past ~300 lines, split by responsibility. All files share the same package, so no import changes needed.
+**Key Rules**:
+- When a TUI file grows past ~300 lines, split by responsibility
+- All TUI files share `package tui`, no import changes needed
+- Use `internal/` to prevent external access to project internals
+- Sub-state pattern: group related model fields into typed structs in `state.go`
 
 ## TUI Patterns Specific to This Project
 

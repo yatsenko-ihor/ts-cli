@@ -114,8 +114,19 @@ func (m model) executeRemoteCommand(command string) tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		// Execute command via SSH
-		cmd := exec.Command("ssh", sshTarget, command)
+		// Execute command via SSH, using sshpass if password is saved
+		var cmd *exec.Cmd
+		if m.ssh.passwordEncrypted != "" {
+			if decrypted, err := util.DecryptPassword(m.ssh.passwordEncrypted); err == nil {
+				if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
+					cmd = exec.Command("sshpass", "-p", decrypted, "ssh",
+						"-o", "StrictHostKeyChecking=accept-new", sshTarget, command)
+				}
+			}
+		}
+		if cmd == nil {
+			cmd = exec.Command("ssh", sshTarget, command)
+		}
 		output, err := cmd.CombinedOutput()
 
 		exitCode := 0
@@ -158,7 +169,19 @@ func (m model) resolveRemoteOutputPath(entry string) (string, error) {
 		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
 	}
 
-	pwdCmd := exec.Command("ssh", sshTarget, "pwd")
+	// Use sshpass if password is saved
+	var pwdCmd *exec.Cmd
+	if m.ssh.passwordEncrypted != "" {
+		if decrypted, err := util.DecryptPassword(m.ssh.passwordEncrypted); err == nil {
+			if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
+				pwdCmd = exec.Command("sshpass", "-p", decrypted, "ssh",
+					"-o", "StrictHostKeyChecking=accept-new", sshTarget, "pwd")
+			}
+		}
+	}
+	if pwdCmd == nil {
+		pwdCmd = exec.Command("ssh", sshTarget, "pwd")
+	}
 	output, err := pwdCmd.Output()
 	if err != nil {
 		return "", err

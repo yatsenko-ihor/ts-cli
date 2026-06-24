@@ -367,19 +367,112 @@ httpClient: &http.Client{
 
 **Key Lesson**: Prevent indefinite hangs with reasonable timeouts.
 
-## Future Improvements
+## Model Composition: Sub-States Pattern
 
-Based on TODO.md, next step is split-screen layout:
+### Problem: Monolithic Model Struct
 
-- Left panel: device list with search (top) + details (bottom)
-- Right panel: SSH session view
-- Vim-style search navigation
+When the model grew to 45+ fields, it became hard to reason about state ownership and which fields relate to which feature.
 
-**Implementation Notes**:
+### Solution: Composed Sub-States
 
-- Will need to refactor model to support multiple panels
-- Consider using bubbletea's `tea.WindowSizeMsg` for responsive layout
-- May need to track panel focus state
+Split the model into typed sub-state groups in `tui/state.go`:
+
+```go
+type model struct {
+    list   deviceList    // Device list panel state
+    hist   historyPanel  // Command history + output
+    acct   accounts      // Multi-account management
+    ssh    ssh           // SSH connection state
+    opts   options       // Options menu
+    notify notifications // Transient UI messages
+    inst   install       // PATH installation state
+    input  textInput     // Unified text input state
+    // ...shared fields (width, height, focus, etc.)
+}
+```
+
+**Key Benefits**:
+- Access patterns become self-documenting: `m.list.cursor` vs `m.cursor`
+- Related fields are co-located
+- Easy to add new features as new sub-states
+- No import cycle issues (all in same package)
+
+### Unified Input Mode
+
+Replaced 5 boolean flags (`searchMode`, `usernameMode`, `passwordMode`, etc.) with an enum:
+
+```go
+type inputMode int
+const (
+    inputNone inputMode = iota
+    inputSearch
+    inputUsername
+    inputPassword
+    inputCommand
+)
+```
+
+**Key Lesson**: When multiple booleans are mutually exclusive, replace with an enum. Eliminates impossible states.
+
+## Encrypted Password Storage (AES-256-GCM)
+
+### Machine-Bound Key Derivation
+
+```go
+// Key derived from machine identity — no master password needed
+raw := fmt.Sprintf("ts-cli:%s:%d:%s", username, uid, hostname)
+key := sha256.Sum256([]byte(raw))
+```
+
+**Encryption**: AES-256-GCM with random nonce prepended to ciphertext, stored as base64.
+
+**Trade-off**: Not hardware-backed (no keychain), but adequate for convenience passwords. Transparent to user.
+
+**Key Lesson**: For machine-local password storage, SHA-256 of machine identifiers as key + AES-GCM is simple and sufficient. Don't over-engineer with keychain APIs unless cross-device sync is needed.
+
+## Config Migration Pattern
+
+### Old Format → JSON
+
+Handled two config formats seamlessly:
+```go
+// Try JSON first, fall back to key=value, migrate on write
+func loadConfigJSON() (*configJSON, error) { /* ... */ }
+func migrateOldConfig() { /* ... */ }
+```
+
+**Key Lesson**: When evolving config formats, always try new format first, fall back to old, and migrate on next write. Users never notice the transition.
+
+## Git History Cleanup
+
+### Removing Leaked Secrets with git-filter-repo
+
+```bash
+# Create replacements file (literal==>replacement format)
+echo 'tskey-api-SECRET==>REDACTED_API_KEY' > /tmp/replacements.txt
+git filter-repo --replace-text /tmp/replacements.txt --force
+```
+
+**Key Lesson**: 
+- `git filter-repo` removes the origin remote (by design) — re-add it after
+- All commit hashes change — force push required
+- Always revoke leaked keys regardless of history cleanup
+- Add `.gitignore` entries for key files BEFORE committing anything
+
+## Publication Checklist
+
+### Pre-GitHub Push
+
+1. ✅ LICENSE file (chose MIT + Commons Clause for "free but don't resell")
+2. ✅ Comprehensive .gitignore (keys, IDE, OS files, .github/)
+3. ✅ README with accurate shortcuts, install instructions, license
+4. ✅ About screen in app (`a` key)
+5. ✅ No secrets in git history (git-filter-repo)
+6. ✅ No large binary/spec files (tailscale-api.json removed)
+7. ✅ Build passes, tests pass
+8. ⚠️ Revoke leaked keys on provider's dashboard
+
+**Key Lesson**: Always `git log --all -p | grep -oE 'pattern'` to scan full history before publishing. Deleted files still live in git objects.
 
 ## Key Takeaways
 
