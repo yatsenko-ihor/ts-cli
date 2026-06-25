@@ -137,8 +137,8 @@ var usernamePromptHandlers = map[string]keyHandler{
 		cmd := m.storeUsername(m.ssh.username)
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.list.filteredDevices) {
-			// If password saving is enabled and no password saved yet, prompt for it
-			if m.ssh.savePasswordEnabled && m.ssh.passwordEncrypted == "" {
+			// If no password available, prompt for it
+			if m.ssh.passwordEncrypted == "" {
 				m.input = textInput{mode: inputPassword}
 				m.input.value = ""
 				return m, cmd
@@ -757,7 +757,13 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 		m.input.value = ""
 		return m, nil
 	}
-	// Username exists, start SSH session
+	// Username exists — check if we need to prompt for password
+	if m.ssh.passwordEncrypted == "" {
+		m.input = textInput{mode: inputPassword}
+		m.input.value = ""
+		return m, nil
+	}
+	// Username and password ready, start SSH session
 	return m, m.sshToDevice(target)
 }
 
@@ -867,13 +873,21 @@ var passwordPromptHandlers = map[string]keyHandler{
 		password := m.input.value
 		m.input = textInput{mode: inputNone}
 		m.input.value = ""
-		storeCmd := m.storePassword(password)
-		// Proceed with SSH after storing password
+		// Encrypt for immediate use via sshpass
+		encrypted, err := util.EncryptPassword(password)
+		if err == nil {
+			m.ssh.passwordEncrypted = encrypted
+			// Only mark as pending save if the save option is enabled
+			if m.ssh.savePasswordEnabled {
+				m.ssh.pendingPassword = password
+			}
+		}
+		// Proceed with SSH
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.list.filteredDevices) {
-			return m, tea.Batch(storeCmd, m.sshToDevice(target))
+			return m, m.sshToDevice(target)
 		}
-		return m, storeCmd
+		return m, nil
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.input.value) > 0 {

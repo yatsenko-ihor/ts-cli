@@ -455,7 +455,7 @@ func (m model) renderAbout() string {
 	content.WriteString(lipgloss.NewStyle().Bold(true).Render("ts-cli"))
 	content.WriteString(fmt.Sprintf(" v%s\n", m.version))
 	content.WriteString("\n")
-	content.WriteString("Terminal-first CLI for managing Tailscale devices\n")
+	content.WriteString("CLI tool for managing Tailscale devices\n")
 	content.WriteString("\n")
 	content.WriteString(grayItalicStyle.Render("Author:") + "  Ihor Yatsenko\n")
 	content.WriteString(grayItalicStyle.Render("Email:") + "   yatsenko.ihor@gmail.com\n")
@@ -466,6 +466,51 @@ func (m model) renderAbout() string {
 	b.WriteString(aboutBox.Render(content.String()))
 	b.WriteString("\n\n")
 	b.WriteString(helpStyle.Render("Press any key to return"))
+
+	return b.String()
+}
+
+// renderInputPopup renders a centered popup for username/password input
+func (m model) renderInputPopup(label string, value string, masked bool) string {
+	var b strings.Builder
+
+	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
+	b.WriteString(titleStyle.Render(title))
+	b.WriteString("\n\n")
+
+	popupWidth := 50
+	if m.width > 0 && m.width < 70 {
+		popupWidth = m.width - 10
+		if popupWidth < 35 {
+			popupWidth = 35
+		}
+	}
+
+	popupStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#5FAFFF")).
+		Padding(1, 2).
+		Width(popupWidth)
+
+	var content strings.Builder
+	content.WriteString(lipgloss.NewStyle().Bold(true).Render(label))
+	content.WriteString("\n\n")
+
+	// Show the input value (masked for password)
+	displayValue := value
+	if masked {
+		displayValue = strings.Repeat("•", len(value))
+	}
+	inputStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#333333")).
+		Padding(0, 1).
+		Width(popupWidth - 8)
+	content.WriteString(inputStyle.Render(displayValue + "▌"))
+	content.WriteString("\n\n")
+	content.WriteString(grayItalicStyle.Render("enter confirm • esc cancel • ctrl+v paste"))
+
+	b.WriteString(popupStyle.Render(content.String()))
 
 	return b.String()
 }
@@ -495,7 +540,7 @@ func (m model) renderOptionsMenu() string {
 	var listContent strings.Builder
 
 	// Option 1: Save password toggle
-	saveLabel := "Save SSH password"
+	saveLabel := "Enable saving SSH password"
 	if m.ssh.savePasswordEnabled {
 		saveLabel += " ✓"
 	}

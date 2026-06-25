@@ -123,7 +123,7 @@ func (m model) storePassword(password string) tea.Cmd {
 			return passwordStoredMsg{err: err}
 		}
 
-		return passwordStoredMsg{err: nil}
+		return passwordStoredMsg{err: nil, encrypted: encrypted}
 	}
 }
 
