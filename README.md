@@ -1,6 +1,6 @@
 # Tailscale CLI (ts-cli)
 
-A terminal-first CLI for managing Tailscale devices via the Tailscale REST API. Supports multi-account configurations, an interactive TUI with split-screen layout, remote command execution, per-device command history, and clipboard integration.
+A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports multi-account configurations, an interactive TUI with split-screen layout, remote command execution, per-device command history, and clipboard integration.
 
 ## Features
 
@@ -162,6 +162,24 @@ tmux split-window -v -c "#{pane_current_path}" "ts-cli"
 Configuration is stored in `~/.config/ts-cli/config.json` and contains all saved accounts (API key + tailnet per account) plus the active account selection. The file is created with permissions `0600`; the directory with `0700`.
 
 You can always override stored values using CLI flags (`--api-key`, `--tailnet`).
+
+### SSH Password Storage
+
+ts-cli can save your SSH password locally (encrypted) to skip password prompts on every connection.
+
+**How to use:**
+1. Press `o` → select "Save SSH password" → Enter
+2. Next time you SSH (`s`), enter password once — it's encrypted and saved
+3. All subsequent SSH connections and remote commands (`e`) use the saved password automatically
+
+**Security:**
+- Encryption: AES-256-GCM (authenticated encryption)
+- Key derivation: SHA-256 of `"ts-cli:{username}:{uid}:{hostname}"` — machine-bound
+- Storage: base64-encoded ciphertext in `~/.ts-cli/config.json` (permissions 0600)
+- The password cannot be decrypted on another machine or by another user
+- Requires `sshpass` in PATH (`brew install hudochenkov/sshpass/sshpass`)
+
+**Manage:** Press `o` → "Clear saved password" to remove it.
 
 ## Commands
 

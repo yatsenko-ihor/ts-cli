@@ -136,7 +136,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sshMsg:
 		if msg.err != nil {
 			m.notify.sshError = msg.err
+			// SSH failed — clear pending password (don't save bad credentials)
+			m.ssh.pendingPassword = ""
+			m.ssh.passwordEncrypted = ""
+			return m, nil
 		}
+		// SSH succeeded — persist password if save is enabled and pending
+		if m.ssh.pendingPassword != "" && m.ssh.savePasswordEnabled {
+			password := m.ssh.pendingPassword
+			m.ssh.pendingPassword = ""
+			return m, m.storePassword(password)
+		}
+		// If save is disabled, clear the in-memory password (one-time use)
+		if !m.ssh.savePasswordEnabled {
+			m.ssh.passwordEncrypted = ""
+		}
+		m.ssh.pendingPassword = ""
 		return m, nil
 
 	case copiedMsg:
@@ -209,7 +224,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.value = ""
 				return m, nil
 			}
-			// Username exists, start SSH session
+			// Check if we need to prompt for password
+			if m.ssh.passwordEncrypted == "" {
+				m.input = textInput{mode: inputPassword}
+				m.input.value = ""
+				return m, nil
+			}
+			// Username and password ready, start SSH session
 			return m, m.sshToDevice(msg.deviceIndex)
 		}
 		return m, nil
@@ -270,6 +291,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case passwordStoredMsg:
 		if msg.err != nil {
 			m.notify.sshError = msg.err
+		} else if msg.encrypted != "" {
+			m.ssh.passwordEncrypted = msg.encrypted
 		}
 		return m, nil
 
@@ -352,18 +375,20 @@ func (m model) View() string {
 		return m.renderAbout()
 	}
 
+	// Show SSH input prompts as popups
+	if m.input.mode == inputUsername {
+		return m.renderInputPopup("SSH Username", m.input.value, false)
+	}
+	if m.input.mode == inputPassword {
+		return m.renderInputPopup("SSH Password", m.input.value, true)
+	}
+
 	var b strings.Builder
 
 	// Title
 	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
 	if m.reloading {
 		title += " - Reloading..."
-		b.WriteString(titleStyle.Render(title))
-	} else if m.input.mode == inputPassword {
-		title += " - SSH Password: " + strings.Repeat("*", len(m.input.value)) + "_"
-		b.WriteString(titleStyle.Render(title))
-	} else if m.input.mode == inputUsername {
-		title += " - SSH Username: " + m.input.value + "_"
 		b.WriteString(titleStyle.Render(title))
 	} else if m.list.searchQuery != "" {
 		title += fmt.Sprintf(" - Filtered: %d/%d", len(m.list.filteredDevices), len(m.list.devices))

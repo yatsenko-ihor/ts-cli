@@ -61,9 +61,10 @@ type accounts struct {
 
 // ssh groups SSH connection related state.
 type ssh struct {
-	username          string
-	passwordEncrypted string
+	username            string
+	passwordEncrypted   string
 	savePasswordEnabled bool
+	pendingPassword     string // Plaintext password awaiting successful SSH before saving
 }
 
 // options groups the options menu state.

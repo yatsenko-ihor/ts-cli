@@ -85,7 +85,8 @@ type pasteMsg struct {
 
 // passwordStoredMsg is returned when SSH password storage completes
 type passwordStoredMsg struct {
-	err error
+	err       error
+	encrypted string // The encrypted password to update in model
 }
 
 // optionToggledMsg is returned when an option toggle is saved
