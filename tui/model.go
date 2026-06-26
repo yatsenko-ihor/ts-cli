@@ -135,23 +135,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sshMsg:
 		if msg.err != nil {
-			m.notify.sshError = msg.err
-			// SSH failed — clear pending password (don't save bad credentials)
+			// SSH failed — show retry menu to let user fix credentials
 			m.ssh.pendingPassword = ""
 			m.ssh.passwordEncrypted = ""
+			m.ssh.retryMode = true
+			m.ssh.retryCursor = 0
+			m.notify.sshError = msg.err
 			return m, nil
 		}
-		// SSH succeeded — persist password if save is enabled and pending
+		// SSH succeeded — persist credentials
+		var cmds []tea.Cmd
+		// Save username
+		if m.ssh.pendingUsername != "" {
+			m.ssh.username = m.ssh.pendingUsername
+			cmds = append(cmds, m.storeUsername(m.ssh.pendingUsername))
+			m.ssh.pendingUsername = ""
+		}
+		// Save password if enabled
 		if m.ssh.pendingPassword != "" && m.ssh.savePasswordEnabled {
-			password := m.ssh.pendingPassword
+			cmds = append(cmds, m.storePassword(m.ssh.pendingPassword))
 			m.ssh.pendingPassword = ""
-			return m, m.storePassword(password)
-		}
-		// If save is disabled, clear the in-memory password (one-time use)
-		if !m.ssh.savePasswordEnabled {
+		} else if !m.ssh.savePasswordEnabled {
+			// One-time use — clear from memory
 			m.ssh.passwordEncrypted = ""
+			m.ssh.pendingPassword = ""
+		} else {
+			m.ssh.pendingPassword = ""
 		}
-		m.ssh.pendingPassword = ""
+		if len(cmds) > 0 {
+			return m, tea.Batch(cmds...)
+		}
 		return m, nil
 
 	case copiedMsg:
@@ -332,6 +345,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case inputSearch:
 			return m.handleSearchMode(msg)
 		}
+		if m.ssh.retryMode {
+			return m.handleSSHRetryMenu(msg)
+		}
 		if m.acct.profileSelectMode {
 			return m.handleProfileSelection(msg)
 		}
@@ -373,6 +389,11 @@ func (m model) View() string {
 	// Show about screen
 	if m.aboutMode {
 		return m.renderAbout()
+	}
+
+	// Show SSH retry menu after failed connection
+	if m.ssh.retryMode {
+		return m.renderSSHRetryMenu()
 	}
 
 	// Show SSH input prompts as popups

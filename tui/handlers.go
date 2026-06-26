@@ -132,20 +132,20 @@ var usernamePromptHandlers = map[string]keyHandler{
 			return m, nil
 		}
 		m.ssh.username = sanitized
+		m.ssh.pendingUsername = sanitized
 		m.input = textInput{mode: inputNone}
 		m.input.value = ""
-		cmd := m.storeUsername(m.ssh.username)
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.list.filteredDevices) {
 			// If no password available, prompt for it
 			if m.ssh.passwordEncrypted == "" {
 				m.input = textInput{mode: inputPassword}
 				m.input.value = ""
-				return m, cmd
+				return m, nil
 			}
-			return m, tea.Batch(cmd, m.sshToDevice(target))
+			return m, m.sshToDevice(target)
 		}
-		return m, cmd
+		return m, nil
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.input.value) > 0 {
@@ -853,6 +853,59 @@ func (m model) handleAboutMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// ─── SSH retry menu ───────────────────────────────────────────────────────────
+
+const (
+	sshRetryUsername = 0
+	sshRetryPassword = 1
+	sshRetryBoth     = 2
+	sshRetryCancel   = 3
+	sshRetryCount    = 4
+)
+
+func (m model) handleSSHRetryMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.ssh.retryMode = false
+		m.notify.sshError = nil
+		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
+	case "up", "k":
+		if m.ssh.retryCursor > 0 {
+			m.ssh.retryCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.ssh.retryCursor < sshRetryCount-1 {
+			m.ssh.retryCursor++
+		}
+		return m, nil
+	case "enter":
+		m.ssh.retryMode = false
+		m.notify.sshError = nil
+		switch m.ssh.retryCursor {
+		case sshRetryUsername:
+			m.ssh.username = ""
+			m.input = textInput{mode: inputUsername}
+			m.input.value = ""
+		case sshRetryPassword:
+			m.ssh.passwordEncrypted = ""
+			m.input = textInput{mode: inputPassword}
+			m.input.value = ""
+		case sshRetryBoth:
+			m.ssh.username = ""
+			m.ssh.passwordEncrypted = ""
+			m.input = textInput{mode: inputUsername}
+			m.input.value = ""
+		case sshRetryCancel:
+			// Just close
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
 // ─── Password prompt mode ─────────────────────────────────────────────────────
 
 var passwordPromptHandlers = map[string]keyHandler{
@@ -877,10 +930,11 @@ var passwordPromptHandlers = map[string]keyHandler{
 		encrypted, err := util.EncryptPassword(password)
 		if err == nil {
 			m.ssh.passwordEncrypted = encrypted
-			// Only mark as pending save if the save option is enabled
-			if m.ssh.savePasswordEnabled {
-				m.ssh.pendingPassword = password
-			}
+			m.ssh.pendingPassword = password
+		}
+		// Set pendingUsername if not already set (covers case when username was already saved)
+		if m.ssh.pendingUsername == "" && m.ssh.username != "" {
+			m.ssh.pendingUsername = m.ssh.username
 		}
 		// Proceed with SSH
 		target := m.getTargetDevice()
