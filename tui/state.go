@@ -65,6 +65,9 @@ type ssh struct {
 	passwordEncrypted   string
 	savePasswordEnabled bool
 	pendingPassword     string // Plaintext password awaiting successful SSH before saving
+	pendingUsername     string // Username awaiting successful SSH before saving
+	retryMode           bool   // Show retry menu after SSH failure
+	retryCursor         int    // Cursor position in retry menu
 }
 
 // options groups the options menu state.

@@ -515,6 +515,62 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 	return b.String()
 }
 
+// renderSSHRetryMenu renders the retry menu after SSH connection failure
+func (m model) renderSSHRetryMenu() string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("SSH Connection Failed"))
+	b.WriteString("\n\n")
+
+	// Show the error
+	if m.notify.sshError != nil {
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+		b.WriteString(errStyle.Render(fmt.Sprintf("  ✗ %v", m.notify.sshError)))
+		b.WriteString("\n\n")
+	}
+
+	popupWidth := 50
+	if m.width > 0 && m.width < 70 {
+		popupWidth = m.width - 10
+		if popupWidth < 35 {
+			popupWidth = 35
+		}
+	}
+
+	popupStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#FFAF00")).
+		Padding(1, 2).
+		Width(popupWidth)
+
+	items := []string{
+		"Change username",
+		"Change password",
+		"Change both",
+		"Cancel",
+	}
+
+	var content strings.Builder
+	content.WriteString(lipgloss.NewStyle().Bold(true).Render("What would you like to change?"))
+	content.WriteString("\n\n")
+	for i, item := range items {
+		if i == m.ssh.retryCursor {
+			content.WriteString(selectedStyle.Render("▸ " + item))
+		} else {
+			content.WriteString(normalStyle.Render("  " + item))
+		}
+		if i < len(items)-1 {
+			content.WriteString("\n")
+		}
+	}
+
+	b.WriteString(popupStyle.Render(content.String()))
+	b.WriteString("\n\n")
+	b.WriteString(helpStyle.Render("↑/k up • ↓/j down • enter select • esc cancel"))
+
+	return b.String()
+}
+
 // renderOptionsMenu renders the options/settings menu
 func (m model) renderOptionsMenu() string {
 	var b strings.Builder
