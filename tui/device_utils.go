@@ -17,7 +17,7 @@ func isDeviceOnline(device client.Device) bool {
 	return time.Since(device.LastSeen) < 5*time.Minute
 }
 
-// sortDevicesByStatus sorts devices with online devices first
+// sortDevicesByStatus sorts devices: online first, then alphabetically by name
 func sortDevicesByStatus(devices []client.Device) {
 	sort.SliceStable(devices, func(i, j int) bool {
 		onlineI := isDeviceOnline(devices[i])
@@ -31,8 +31,16 @@ func sortDevicesByStatus(devices []client.Device) {
 			return false
 		}
 
-		// If both have same online status, maintain original order (stable sort)
-		return false
+		// Same status — sort alphabetically by name
+		nameI := devices[i].Name
+		if nameI == "" {
+			nameI = devices[i].Hostname
+		}
+		nameJ := devices[j].Name
+		if nameJ == "" {
+			nameJ = devices[j].Hostname
+		}
+		return strings.ToLower(nameI) < strings.ToLower(nameJ)
 	})
 }
 

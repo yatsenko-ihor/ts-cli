@@ -163,7 +163,7 @@ func TestFilterDevices(t *testing.T) {
 			searchQuery:     "",
 			selectedProfile: "",
 			expectedCount:   3,
-			expectedIDs:     []string{"device1", "device2", "device3"},
+			expectedIDs:     []string{"device3", "device1", "device2"}, // alphabetical: desktop, laptop, server
 		},
 		{
 			name:            "filter by hostname search",
@@ -177,14 +177,14 @@ func TestFilterDevices(t *testing.T) {
 			searchQuery:     "linux",
 			selectedProfile: "",
 			expectedCount:   2,
-			expectedIDs:     []string{"device2", "device3"},
+			expectedIDs:     []string{"device3", "device2"}, // alphabetical: desktop, server
 		},
 		{
 			name:            "filter by profile",
 			searchQuery:     "",
 			selectedProfile: "personal",
 			expectedCount:   2,
-			expectedIDs:     []string{"device1", "device3"},
+			expectedIDs:     []string{"device3", "device1"}, // alphabetical: desktop, laptop
 		},
 		{
 			name:            "filter by profile and search",
