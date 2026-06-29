@@ -133,7 +133,16 @@ func (m model) renderDeviceList() string {
 	}
 
 	listPanel := deviceListStyle.Render(listContent.String())
-	return applyFrameTitle(listPanel, listFrameTitle, borderColor, m.activeFocus == focusList)
+	// Dynamic title with online/offline count
+	online := 0
+	for _, d := range m.list.filteredDevices {
+		if isDeviceOnline(d) {
+			online++
+		}
+	}
+	offline := len(m.list.filteredDevices) - online
+	title := fmt.Sprintf("[1] Machines 🟢 %d 🔴 %d", online, offline)
+	return applyFrameTitle(listPanel, title, borderColor, m.activeFocus == focusList)
 }
 
 // renderHistoryPanel renders the command history panel
