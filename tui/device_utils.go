@@ -9,7 +9,28 @@ import (
 )
 
 // Device utility functions for filtering, sorting, and managing devices
-// These functions handle device-related operations that don't require full model state
+
+// sortMode defines how devices are sorted
+type sortMode int
+
+const (
+	sortByName     sortMode = iota // Online first, then alphabetical
+	sortByLastSeen                 // Online first, then by last seen (most recent first)
+	sortByCreated                  // Online first, then by created date (newest first)
+	sortModeCount                  // Total number of sort modes
+)
+
+func (s sortMode) String() string {
+	switch s {
+	case sortByName:
+		return "Name"
+	case sortByLastSeen:
+		return "Last seen"
+	case sortByCreated:
+		return "Added"
+	}
+	return "Unknown"
+}
 
 // isDeviceOnline checks if a device is considered online based on LastSeen time
 func isDeviceOnline(device client.Device) bool {
@@ -17,8 +38,9 @@ func isDeviceOnline(device client.Device) bool {
 	return time.Since(device.LastSeen) < 5*time.Minute
 }
 
-// sortDevicesByStatus sorts devices: online first, then alphabetically by name
-func sortDevicesByStatus(devices []client.Device) {
+// sortDevices sorts devices based on the given sort mode.
+// Online devices always come first regardless of mode.
+func sortDevices(devices []client.Device, mode sortMode) {
 	sort.SliceStable(devices, func(i, j int) bool {
 		onlineI := isDeviceOnline(devices[i])
 		onlineJ := isDeviceOnline(devices[j])
@@ -31,17 +53,29 @@ func sortDevicesByStatus(devices []client.Device) {
 			return false
 		}
 
-		// Same status — sort alphabetically by name
-		nameI := devices[i].Name
-		if nameI == "" {
-			nameI = devices[i].Hostname
+		// Same online status — apply sort mode
+		switch mode {
+		case sortByLastSeen:
+			return devices[i].LastSeen.After(devices[j].LastSeen)
+		case sortByCreated:
+			return devices[i].Created.After(devices[j].Created)
+		default: // sortByName
+			nameI := devices[i].Name
+			if nameI == "" {
+				nameI = devices[i].Hostname
+			}
+			nameJ := devices[j].Name
+			if nameJ == "" {
+				nameJ = devices[j].Hostname
+			}
+			return strings.ToLower(nameI) < strings.ToLower(nameJ)
 		}
-		nameJ := devices[j].Name
-		if nameJ == "" {
-			nameJ = devices[j].Hostname
-		}
-		return strings.ToLower(nameI) < strings.ToLower(nameJ)
 	})
+}
+
+// sortDevicesByStatus is a convenience wrapper using the default name sort
+func sortDevicesByStatus(devices []client.Device) {
+	sortDevices(devices, sortByName)
 }
 
 // getStatusIcon returns the appropriate status icon for a device
@@ -109,8 +143,8 @@ func (m *model) filterDevices() {
 		filtered = searchFiltered
 	}
 
-	// Sort devices with online devices first
-	sortDevicesByStatus(filtered)
+	// Sort devices based on current sort mode
+	sortDevices(filtered, m.list.sort)
 
 	m.list.filteredDevices = filtered
 	// Reset cursor to top of filtered list

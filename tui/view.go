@@ -133,7 +133,7 @@ func (m model) renderDeviceList() string {
 	}
 
 	listPanel := deviceListStyle.Render(listContent.String())
-	// Dynamic title with online/offline count
+	// Dynamic title with online/offline count and sort mode
 	online := 0
 	for _, d := range m.list.filteredDevices {
 		if isDeviceOnline(d) {
@@ -141,7 +141,7 @@ func (m model) renderDeviceList() string {
 		}
 	}
 	offline := len(m.list.filteredDevices) - online
-	title := fmt.Sprintf("[1] Machines 🟢 %d 🔴 %d", online, offline)
+	title := fmt.Sprintf("[1] Machines 🟢 %d 🔴 %d ⇅ %s", online, offline, m.list.sort.String())
 	return applyFrameTitle(listPanel, title, borderColor, m.activeFocus == focusList)
 }
 
@@ -651,7 +651,7 @@ func (m model) renderOptionsMenu() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • r reload • o options • a about"
+	help := "↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • S sort • r reload • o options • a about"
 	if m.hist.visible {
 		if m.activeFocus == focusHistory {
 			help = "1/2/3 frame • ↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"

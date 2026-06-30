@@ -109,9 +109,9 @@
 - [x] selected frame - better coloring or selection frame or frame title
 - [x] add options menu - enable/disable features
     - [x] feature 1 - save password (password is saving locally and enctypted like toos e.g. Keepass make
-    - [ ] reuse encrypted pass for new ssh session
+    - [x] reuse encrypted pass for new ssh session
 - [x] label how much online/offline
-- [ ] sort by added/last connected/etc.
+- [x] sort by added/last connected/etc.
 ## To be implemented later:
 - [ ] check how input fiels done in lazygit or lazy docker
 - [ ] add option to fall into termux on remote machine
