@@ -609,6 +609,12 @@ var normalModeHandlers = map[string]keyHandler{
 		m.aboutMode = true
 		return m, nil
 	},
+	"S": func(m model) (tea.Model, tea.Cmd) {
+		// Cycle sort mode
+		m.list.sort = (m.list.sort + 1) % sortModeCount
+		m.filterDevices()
+		return m, nil
+	},
 }
 
 func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

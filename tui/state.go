@@ -34,8 +34,9 @@ type deviceList struct {
 	cursor          int
 	selected        int
 	viewportTop     int
-	searchQuery     string // Persisted search filter
-	selectedProfile string // Active profile filter (empty = all)
+	searchQuery     string   // Persisted search filter
+	selectedProfile string   // Active profile filter (empty = all)
+	sort            sortMode // Current sort mode
 }
 
 // historyPanel groups state for the command history + output panels.
