@@ -133,13 +133,9 @@ var usernamePromptHandlers = map[string]keyHandler{
 		}
 		m.ssh.username = sanitized
 		m.ssh.pendingUsername = sanitized
-		m.input = textInput{mode: inputNone}
+		// After username, prompt for password
+		m.input = textInput{mode: inputPassword}
 		m.input.value = ""
-		target := m.getTargetDevice()
-		if target >= 0 && target < len(m.list.filteredDevices) {
-			// Try connecting — if it fails, retry menu will appear
-			return m, m.sshToDevice(target)
-		}
 		return m, nil
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
@@ -765,16 +761,18 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 		return m, m.sshToDevice(target)
 	}
 
-	// Check if username is stored (global fallback)
+	// No per-machine credentials — need to collect them
 	if m.ssh.username == "" {
-		// No saved username at all — prompt
+		// No saved username at all — prompt for username first
 		m.input = textInput{mode: inputUsername}
 		m.input.value = ""
 		return m, nil
 	}
-	// Username exists (global default) — attempt connection without password
-	// If it fails, retry menu will appear for user to adjust credentials
-	return m, m.sshToDevice(target)
+	// Username exists but no per-machine password — prompt for password
+	m.ssh.pendingUsername = m.ssh.username
+	m.input = textInput{mode: inputPassword}
+	m.input.value = ""
+	return m, nil
 }
 
 // ─── Options menu constants ───────────────────────────────────────────────────
