@@ -593,6 +593,10 @@ func (m model) renderSSHRetryMenu() string {
 
 // renderOptionsMenu renders the options/settings menu
 func (m model) renderOptionsMenu() string {
+	if m.opts.showMachineCreds {
+		return m.renderMachineCredsView()
+	}
+
 	var b strings.Builder
 
 	title := fmt.Sprintf("Options (ts-cli v%s)", m.version)
@@ -637,6 +641,15 @@ func (m model) renderOptionsMenu() string {
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + clearLabel))
 	}
+	listContent.WriteString("\n")
+
+	// Option 3: View machines with saved passwords
+	machineCredsLabel := fmt.Sprintf("Machines with saved passwords (%d)", len(m.ssh.machineCreds))
+	if m.opts.cursor == 2 {
+		listContent.WriteString(selectedStyle.Render("▸ " + machineCredsLabel))
+	} else {
+		listContent.WriteString(normalStyle.Render("  " + machineCredsLabel))
+	}
 
 	b.WriteString(optionsList.Render(listContent.String()))
 	b.WriteString("\n\n")
@@ -655,6 +668,57 @@ func (m model) renderOptionsMenu() string {
 
 	b.WriteString("\n")
 	help := "↑/k up • ↓/j down • enter toggle/select • esc/q back"
+	b.WriteString(helpStyle.Render(help))
+
+	return b.String()
+}
+
+// renderMachineCredsView renders the list of machines with saved credentials
+func (m model) renderMachineCredsView() string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("Machines with saved passwords"))
+	b.WriteString("\n\n")
+
+	listWidth := 60
+	if m.width > 0 && m.width < 80 {
+		listWidth = m.width - 10
+		if listWidth < 40 {
+			listWidth = 40
+		}
+	}
+
+	optionsList := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7A7A7A")).
+		Padding(1, 2).
+		Width(listWidth)
+
+	var listContent strings.Builder
+
+	machineIDs := m.getSortedMachineCredIDs()
+
+	if len(machineIDs) == 0 {
+		listContent.WriteString(grayItalicStyle.Render("  No machines with saved passwords"))
+	} else {
+		for i, id := range machineIDs {
+			cred := m.ssh.machineCreds[id]
+			label := fmt.Sprintf("%s (user: %s)", id, cred.username)
+			if i == m.opts.machineCredsCursor {
+				listContent.WriteString(selectedStyle.Render("▸ " + label))
+			} else {
+				listContent.WriteString(normalStyle.Render("  " + label))
+			}
+			if i < len(machineIDs)-1 {
+				listContent.WriteString("\n")
+			}
+		}
+	}
+
+	b.WriteString(optionsList.Render(listContent.String()))
+	b.WriteString("\n\n")
+
+	help := "↑/k up • ↓/j down • d delete • esc/q back"
 	b.WriteString(helpStyle.Render(help))
 
 	return b.String()

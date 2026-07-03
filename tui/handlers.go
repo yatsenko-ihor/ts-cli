@@ -792,9 +792,10 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 // ─── Options menu constants ───────────────────────────────────────────────────
 
 const (
-	optionSavePassword  = 0 // Toggle save-password feature
-	optionClearPassword = 1 // Clear saved password
-	optionCount         = 2 // Total number of options
+	optionSavePassword       = 0 // Toggle save-password feature
+	optionClearPassword      = 1 // Clear saved password
+	optionMachineCredentials = 2 // View machines with saved passwords
+	optionCount              = 3 // Total number of options
 )
 
 // ─── Options menu mode ────────────────────────────────────────────────────────
@@ -851,14 +852,58 @@ var optionsMenuHandlers = map[string]keyHandler{
 				return m, m.clearSavedPassword()
 			}
 			return m, nil
+		case optionMachineCredentials:
+			m.opts.showMachineCreds = true
+			m.opts.machineCredsCursor = 0
+			return m, nil
 		}
 		return m, nil
 	},
 }
 
 func (m model) handleOptionsMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.opts.showMachineCreds {
+		return m.handleMachineCredsView(msg)
+	}
 	if newM, cmd, handled := dispatchKey(msg.String(), m, optionsMenuHandlers); handled {
 		return newM, cmd
+	}
+	return m, nil
+}
+
+// handleMachineCredsView handles keys in the "machines with saved passwords" sub-view
+func (m model) handleMachineCredsView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	machineIDs := m.getSortedMachineCredIDs()
+	maxCursor := len(machineIDs) - 1
+	if maxCursor < 0 {
+		maxCursor = 0
+	}
+
+	switch msg.String() {
+	case "esc", "q":
+		m.opts.showMachineCreds = false
+		return m, nil
+	case "up", "k":
+		if m.opts.machineCredsCursor > 0 {
+			m.opts.machineCredsCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.opts.machineCredsCursor < maxCursor {
+			m.opts.machineCredsCursor++
+		}
+		return m, nil
+	case "d", "delete", "backspace":
+		// Delete selected machine credentials
+		if len(machineIDs) > 0 && m.opts.machineCredsCursor < len(machineIDs) {
+			id := machineIDs[m.opts.machineCredsCursor]
+			delete(m.ssh.machineCreds, id)
+			if m.opts.machineCredsCursor > 0 && m.opts.machineCredsCursor >= len(machineIDs)-1 {
+				m.opts.machineCredsCursor--
+			}
+			return m, m.deleteMachineCredentials(id)
+		}
+		return m, nil
 	}
 	return m, nil
 }
