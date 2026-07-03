@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ihor/ts-cli/util"
@@ -189,4 +190,27 @@ func storeMachineCredentials(machineID, username, passwordEncrypted string) tea.
 		err = saveConfigJSON(cfg)
 		return machineCredsSavedMsg{err: err}
 	}
+}
+
+// deleteMachineCredentials removes per-machine SSH credentials from config
+func (m model) deleteMachineCredentials(machineID string) tea.Cmd {
+	return func() tea.Msg {
+		cfg, err := loadConfigJSON()
+		if err != nil {
+			return machineCredsSavedMsg{err: err}
+		}
+		delete(cfg.MachineCredentials, machineID)
+		err = saveConfigJSON(cfg)
+		return machineCredsSavedMsg{err: err}
+	}
+}
+
+// getSortedMachineCredIDs returns machine IDs sorted alphabetically
+func (m model) getSortedMachineCredIDs() []string {
+	ids := make([]string, 0, len(m.ssh.machineCreds))
+	for id := range m.ssh.machineCreds {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }

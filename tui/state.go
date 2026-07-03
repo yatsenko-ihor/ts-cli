@@ -81,8 +81,10 @@ type machineCredential struct {
 
 // options groups the options menu state.
 type options struct {
-	active bool
-	cursor int
+	active           bool
+	cursor           int
+	showMachineCreds bool // Sub-view: list of machines with saved credentials
+	machineCredsCursor int
 }
 
 // notifications groups transient UI messages.
