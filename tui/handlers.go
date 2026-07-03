@@ -755,13 +755,19 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	m.ssh.pendingMachineID = machineID
 
 	// Check per-machine credentials first
-	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" {
+	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" && cred.passwordEncrypted != "" {
 		m.ssh.username = cred.username
-		// Per-machine creds found — try connecting (password looked up in buildSSHCommand)
+		// Full per-machine creds (username + password) — connect directly
 		return m, m.sshToDevice(target)
 	}
 
-	// No per-machine credentials — need to collect them
+	// No complete per-machine credentials — need to collect them
+	if m.ssh.username == "" {
+		// Check if per-machine has just a username
+		if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" {
+			m.ssh.username = cred.username
+		}
+	}
 	if m.ssh.username == "" {
 		// No saved username at all — prompt for username first
 		m.input = textInput{mode: inputUsername}
