@@ -80,9 +80,9 @@ func shellEscape(s string) string {
 
 // getMachinePassword returns the decrypted password for a machine, if available
 func (m model) getMachinePassword(device client.Device) string {
-	machineID := device.Hostname
+	machineID := device.Name
 	if machineID == "" {
-		machineID = device.Name
+		machineID = device.Hostname
 	}
 	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.passwordEncrypted != "" {
 		if decrypted, err := util.DecryptPassword(cred.passwordEncrypted); err == nil {

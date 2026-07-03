@@ -600,6 +600,11 @@ var normalModeHandlers = map[string]keyHandler{
 		m.aboutMode = true
 		return m, nil
 	},
+	"f1": func(m model) (tea.Model, tea.Cmd) {
+		m.helpMode = true
+		m.helpScroll = 0
+		return m, nil
+	},
 	"S": func(m model) (tea.Model, tea.Cmd) {
 		// Cycle sort mode
 		m.list.sort = (m.list.sort + 1) % sortModeCount
@@ -729,6 +734,14 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	// Clear any previous SSH errors
 	m.notify.sshError = nil
 
+	// Determine machine ID for per-machine credential lookup (must be set before account switch)
+	// Use Name (Tailscale display name) as primary key since that's what the user sees
+	machineID := device.Name
+	if machineID == "" {
+		machineID = device.Hostname
+	}
+	m.ssh.pendingMachineID = machineID
+
 	// Check if we need to switch accounts first
 	// Compare device's account tailnet against the real Tailscale active account
 	if device.AccountTailnet != "" && m.acct.tailscaleActiveAccount != "" {
@@ -746,13 +759,6 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 			return m, m.switchAccountForSSH(target, device.AccountTailnet)
 		}
 	}
-
-	// Determine machine ID for per-machine credential lookup
-	machineID := device.Hostname
-	if machineID == "" {
-		machineID = device.Name
-	}
-	m.ssh.pendingMachineID = machineID
 
 	// Check per-machine credentials first
 	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" && cred.passwordEncrypted != "" {
@@ -897,6 +903,22 @@ func (m model) handleAboutMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) handleHelpMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q", "f1", "enter":
+		m.helpMode = false
+	case "ctrl+c":
+		return m, tea.Quit
+	case "up", "k":
+		if m.helpScroll > 0 {
+			m.helpScroll--
+		}
+	case "down", "j":
+		m.helpScroll++
+	}
+	return m, nil
+}
+
 // ─── SSH retry menu ───────────────────────────────────────────────────────────
 
 const (
@@ -978,7 +1000,10 @@ var passwordPromptHandlers = map[string]keyHandler{
 		m.input = textInput{mode: inputNone}
 		m.input.value = ""
 		m.ssh.pendingPassword = password
-		// Store encrypted password in per-machine creds for immediate use by buildSSHCommand
+
+		// Store encrypted password in per-machine creds and persist to disk immediately
+		// (so credentials survive even if terminal is closed during SSH session)
+		var cmds []tea.Cmd
 		if m.ssh.pendingMachineID != "" {
 			encrypted, err := util.EncryptPassword(password)
 			if err == nil {
@@ -986,18 +1011,24 @@ var passwordPromptHandlers = map[string]keyHandler{
 				cred.username = m.ssh.username
 				cred.passwordEncrypted = encrypted
 				m.ssh.machineCreds[m.ssh.pendingMachineID] = cred
+				// Persist to disk now
+				cmds = append(cmds, storeMachineCredentials(m.ssh.pendingMachineID, m.ssh.username, encrypted))
 			}
 		}
-		// Set pendingUsername if not already set (covers case when username was already saved)
+		// Save username globally
 		if m.ssh.pendingUsername == "" && m.ssh.username != "" {
 			m.ssh.pendingUsername = m.ssh.username
+		}
+		if m.ssh.pendingUsername != "" {
+			cmds = append(cmds, m.storeUsername(m.ssh.pendingUsername))
 		}
 		// Proceed with SSH
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.list.filteredDevices) {
-			return m, m.sshToDevice(target)
+			cmds = append(cmds, m.sshToDevice(target))
+			return m, tea.Batch(cmds...)
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.input.value) > 0 {

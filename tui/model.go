@@ -30,6 +30,8 @@ type model struct {
 	version     string
 	reloading   bool
 	aboutMode   bool
+	helpMode    bool
+	helpScroll  int
 }
 
 // MachineCredMap is a map of machine hostname → [username, encryptedPassword]
@@ -144,43 +146,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sshMsg:
 		if msg.err != nil {
 			// SSH failed — show retry menu to let user fix credentials
+			// Delete the pre-saved credentials since they didn't work
+			var cmds []tea.Cmd
+			if m.ssh.pendingMachineID != "" {
+				delete(m.ssh.machineCreds, m.ssh.pendingMachineID)
+				cmds = append(cmds, m.deleteMachineCredentials(m.ssh.pendingMachineID))
+			}
 			m.ssh.pendingPassword = ""
 			m.ssh.retryMode = true
 			m.ssh.retryCursor = 0
 			m.notify.sshError = msg.err
+			if len(cmds) > 0 {
+				return m, tea.Batch(cmds...)
+			}
 			return m, nil
 		}
-		// SSH succeeded — persist credentials per-machine
-		var cmds []tea.Cmd
-		// Save username globally as default for new machines
-		if m.ssh.pendingUsername != "" {
-			m.ssh.username = m.ssh.pendingUsername
-			cmds = append(cmds, m.storeUsername(m.ssh.pendingUsername))
-			m.ssh.pendingUsername = ""
-		}
-		// Encrypt pending password for per-machine storage
-		var encryptedPass string
-		if m.ssh.pendingPassword != "" {
-			if enc, err := util.EncryptPassword(m.ssh.pendingPassword); err == nil {
-				encryptedPass = enc
-			}
-			m.ssh.pendingPassword = ""
-		}
-		// Save per-machine credentials (only if we have a password to save)
-		if m.ssh.pendingMachineID != "" && m.ssh.username != "" && encryptedPass != "" {
-			machineID := m.ssh.pendingMachineID
-			m.ssh.machineCreds[machineID] = machineCredential{
-				username:          m.ssh.username,
-				passwordEncrypted: encryptedPass,
-			}
-			cmds = append(cmds, storeMachineCredentials(machineID, m.ssh.username, encryptedPass))
-			m.ssh.pendingMachineID = ""
-		} else {
-			m.ssh.pendingMachineID = ""
-		}
-		if len(cmds) > 0 {
-			return m, tea.Batch(cmds...)
-		}
+		// SSH succeeded — credentials already saved before session started
+		m.ssh.pendingPassword = ""
+		m.ssh.pendingUsername = ""
+		m.ssh.pendingMachineID = ""
 		return m, nil
 
 	case copiedMsg:
@@ -250,17 +234,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.acct.activeAccount = msg.accountName
 		// Update the real Tailscale active account
 		m.acct.tailscaleActiveAccount = getRealTailscaleAccount()
-		// If we should proceed with SSH, do it now
+		// If we should proceed with SSH, go through credential flow
 		if msg.proceedWithSSH {
-			// Check if username is stored
+			// Check per-machine credentials first
+			if m.ssh.pendingMachineID != "" {
+				if cred, ok := m.ssh.machineCreds[m.ssh.pendingMachineID]; ok && cred.username != "" && cred.passwordEncrypted != "" {
+					m.ssh.username = cred.username
+					return m, m.sshToDevice(msg.deviceIndex)
+				}
+			}
+			// No per-machine creds — prompt for username or password
 			if m.ssh.username == "" {
-				// Prompt for username
 				m.input = textInput{mode: inputUsername}
 				m.input.value = ""
 				return m, nil
 			}
-			// Username exists — try connecting (per-machine password looked up automatically)
-			return m, m.sshToDevice(msg.deviceIndex)
+			// Username exists but no per-machine password — prompt for password
+			m.ssh.pendingUsername = m.ssh.username
+			m.input = textInput{mode: inputPassword}
+			m.input.value = ""
+			return m, nil
 		}
 		return m, nil
 
@@ -362,6 +355,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.aboutMode {
 			return m.handleAboutMode(msg)
 		}
+		if m.helpMode {
+			return m.handleHelpMode(msg)
+		}
 		return m.handleNormalMode(msg)
 	}
 
@@ -391,6 +387,11 @@ func (m model) View() string {
 	// Show about screen
 	if m.aboutMode {
 		return m.renderAbout()
+	}
+
+	// Show help screen
+	if m.helpMode {
+		return m.renderHelp()
 	}
 
 	// Show SSH retry menu after failed connection

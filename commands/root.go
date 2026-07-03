@@ -36,6 +36,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(NewUpCommand())
 	rootCmd.AddCommand(NewAccountCommand())
 	rootCmd.AddCommand(NewInstallCommand())
+	rootCmd.AddCommand(NewUninstallCommand())
 
 	return rootCmd
 }
