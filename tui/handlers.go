@@ -779,18 +779,13 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 	// Check if username is stored (global fallback)
 	if m.ssh.username == "" {
-		// Prompt for username
+		// No saved username at all — prompt
 		m.input = textInput{mode: inputUsername}
 		m.input.value = ""
 		return m, nil
 	}
-	// Username exists — check if we need to prompt for password
-	if m.ssh.passwordEncrypted == "" {
-		m.input = textInput{mode: inputPassword}
-		m.input.value = ""
-		return m, nil
-	}
-	// Username and password ready, start SSH session
+	// Username exists (global default) — attempt connection without password
+	// If it fails, retry menu will appear for user to adjust credentials
 	return m, m.sshToDevice(target)
 }
 
