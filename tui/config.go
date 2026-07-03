@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/ihor/ts-cli/util"
 )
 
 // Config functions for persisting TUI user preferences
@@ -47,69 +46,6 @@ func (m model) clearUsername() tea.Cmd {
 		}
 
 		return usernameStoredMsg{err: nil}
-	}
-}
-
-// storePassword encrypts and saves the SSH password to config.json
-func (m model) storePassword(password string) tea.Cmd {
-	return func() tea.Msg {
-		encrypted, err := util.EncryptPassword(password)
-		if err != nil {
-			return passwordStoredMsg{err: fmt.Errorf("failed to encrypt password: %w", err)}
-		}
-
-		config, err := loadConfigJSON()
-		if err != nil {
-			return passwordStoredMsg{err: err}
-		}
-
-		config.SSHPassword = encrypted
-		config.SavePasswordEnabled = true
-
-		if err := saveConfigJSON(config); err != nil {
-			return passwordStoredMsg{err: err}
-		}
-
-		return passwordStoredMsg{err: nil, encrypted: encrypted}
-	}
-}
-
-// clearSavedPassword removes the saved password from config.json
-func (m model) clearSavedPassword() tea.Cmd {
-	return func() tea.Msg {
-		config, err := loadConfigJSON()
-		if err != nil {
-			return passwordStoredMsg{err: err}
-		}
-
-		config.SSHPassword = ""
-
-		if err := saveConfigJSON(config); err != nil {
-			return passwordStoredMsg{err: err}
-		}
-
-		return passwordStoredMsg{err: nil}
-	}
-}
-
-// toggleSavePassword enables/disables the password saving feature
-func (m model) toggleSavePassword(enabled bool) tea.Cmd {
-	return func() tea.Msg {
-		config, err := loadConfigJSON()
-		if err != nil {
-			return optionToggledMsg{err: err}
-		}
-
-		config.SavePasswordEnabled = enabled
-		if !enabled {
-			config.SSHPassword = ""
-		}
-
-		if err := saveConfigJSON(config); err != nil {
-			return optionToggledMsg{err: err}
-		}
-
-		return optionToggledMsg{err: nil}
 	}
 }
 
@@ -159,12 +95,10 @@ func saveConfigJSON(config *configJSON) error {
 
 // configJSON mirrors the relevant fields from commands.Config to avoid import cycles
 type configJSON struct {
-	Accounts            json.RawMessage        `json:"accounts,omitempty"`
-	SSHUsername         string                 `json:"ssh_username,omitempty"`
-	SSHPassword         string                 `json:"ssh_password,omitempty"`
-	SavePasswordEnabled bool                   `json:"save_password_enabled"`
-	MachineCredentials  map[string]machineAuth `json:"machine_credentials,omitempty"`
-	ConfigVersion       string                 `json:"config_version,omitempty"`
+	Accounts           json.RawMessage        `json:"accounts,omitempty"`
+	SSHUsername        string                 `json:"ssh_username,omitempty"`
+	MachineCredentials map[string]machineAuth `json:"machine_credentials,omitempty"`
+	ConfigVersion      string                 `json:"config_version,omitempty"`
 }
 
 // machineAuth stores per-machine SSH credentials

@@ -75,7 +75,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 				for id, cred := range config.MachineCredentials {
 					mc[id] = [2]string{cred.Username, cred.PasswordEncrypted}
 				}
-				m := tui.NewModel(devices, Version, config.SSHUsername, accounts, config.SavePasswordEnabled, config.SSHPassword, mc)
+				m := tui.NewModel(devices, Version, config.SSHUsername, accounts, mc)
 				p := tea.NewProgram(m, tea.WithAltScreen())
 				if _, err := p.Run(); err != nil {
 					return fmt.Errorf("TUI error: %w", err)
@@ -111,7 +111,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 			for id, cred := range config.MachineCredentials {
 				mc2[id] = [2]string{cred.Username, cred.PasswordEncrypted}
 			}
-			m := tui.NewModel(devices, Version, config.SSHUsername, accounts, config.SavePasswordEnabled, config.SSHPassword, mc2)
+			m := tui.NewModel(devices, Version, config.SSHUsername, accounts, mc2)
 			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				return fmt.Errorf("TUI error: %w", err)

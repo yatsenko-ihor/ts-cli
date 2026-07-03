@@ -17,12 +17,10 @@ type Account struct {
 
 // Config represents the application configuration
 type Config struct {
-	Accounts            []Account                `json:"accounts"`
-	SSHUsername         string                   `json:"ssh_username,omitempty"`
-	SSHPassword         string                   `json:"ssh_password,omitempty"`       // Encrypted SSH password (global fallback)
-	SavePasswordEnabled bool                     `json:"save_password_enabled"`        // Whether password saving is enabled
-	MachineCredentials  map[string]MachineAuth   `json:"machine_credentials,omitempty"`
-	ConfigVersion       string                   `json:"config_version"`               // For future migrations
+	Accounts           []Account              `json:"accounts"`
+	SSHUsername        string                 `json:"ssh_username,omitempty"`
+	MachineCredentials map[string]MachineAuth `json:"machine_credentials,omitempty"`
+	ConfigVersion      string                 `json:"config_version"` // For future migrations
 }
 
 // MachineAuth stores per-machine SSH credentials

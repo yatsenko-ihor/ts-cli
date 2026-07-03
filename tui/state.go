@@ -62,15 +62,13 @@ type accounts struct {
 
 // ssh groups SSH connection related state.
 type ssh struct {
-	username            string
-	passwordEncrypted   string
-	savePasswordEnabled bool
-	pendingPassword     string // Plaintext password awaiting successful SSH before saving
-	pendingUsername     string // Username awaiting successful SSH before saving
-	pendingMachineID    string // Machine ID for per-machine credential save
-	retryMode           bool   // Show retry menu after SSH failure
-	retryCursor         int    // Cursor position in retry menu
-	machineCreds        map[string]machineCredential // Per-machine saved credentials
+	username         string
+	pendingPassword  string // Plaintext password awaiting successful SSH before saving
+	pendingUsername  string // Username awaiting successful SSH before saving
+	pendingMachineID string // Machine ID for per-machine credential save
+	retryMode        bool   // Show retry menu after SSH failure
+	retryCursor      int    // Cursor position in retry menu
+	machineCreds     map[string]machineCredential // Per-machine saved credentials
 }
 
 // machineCredential holds per-machine SSH credentials in memory

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ihor/ts-cli/client"
 	"github.com/ihor/ts-cli/util"
 )
 
@@ -48,14 +49,17 @@ func (m model) buildSSHCommand(sshTarget string) *exec.Cmd {
 	name := m.getTargetDeviceName()
 	ip := m.getTargetDeviceIP()
 
+	target := m.getTargetDevice()
+	var password string
+	if target >= 0 && target < len(m.list.filteredDevices) {
+		password = m.getMachinePassword(m.list.filteredDevices[target])
+	}
+
 	var sshCmdStr string
-	if m.ssh.passwordEncrypted != "" {
-		decrypted, err := util.DecryptPassword(m.ssh.passwordEncrypted)
-		if err == nil {
-			if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
-				sshCmdStr = fmt.Sprintf("sshpass -p %s ssh -o StrictHostKeyChecking=accept-new %s",
-					shellEscape(decrypted), sshTarget)
-			}
+	if password != "" {
+		if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
+			sshCmdStr = fmt.Sprintf("sshpass -p %s ssh -o StrictHostKeyChecking=accept-new %s",
+				shellEscape(password), sshTarget)
 		}
 	}
 	if sshCmdStr == "" {
@@ -72,6 +76,20 @@ func (m model) buildSSHCommand(sshTarget string) *exec.Cmd {
 // shellEscape escapes a string for safe use in shell commands
 func shellEscape(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+// getMachinePassword returns the decrypted password for a machine, if available
+func (m model) getMachinePassword(device client.Device) string {
+	machineID := device.Hostname
+	if machineID == "" {
+		machineID = device.Name
+	}
+	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.passwordEncrypted != "" {
+		if decrypted, err := util.DecryptPassword(cred.passwordEncrypted); err == nil {
+			return decrypted
+		}
+	}
+	return ""
 }
 
 // getTargetDeviceName returns the name of the currently targeted device
@@ -139,14 +157,12 @@ func (m model) executeRemoteCommand(command string) tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		// Execute command via SSH, using sshpass if password is saved
+		// Execute command via SSH, using sshpass if password is saved per-machine
 		var cmd *exec.Cmd
-		if m.ssh.passwordEncrypted != "" {
-			if decrypted, err := util.DecryptPassword(m.ssh.passwordEncrypted); err == nil {
-				if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
-					cmd = exec.Command("sshpass", "-p", decrypted, "ssh",
-						"-o", "StrictHostKeyChecking=accept-new", sshTarget, command)
-				}
+		if password := m.getMachinePassword(device); password != "" {
+			if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
+				cmd = exec.Command("sshpass", "-p", password, "ssh",
+					"-o", "StrictHostKeyChecking=accept-new", sshTarget, command)
 			}
 		}
 		if cmd == nil {
@@ -194,14 +210,12 @@ func (m model) resolveRemoteOutputPath(entry string) (string, error) {
 		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
 	}
 
-	// Use sshpass if password is saved
+	// Use sshpass if password is saved per-machine
 	var pwdCmd *exec.Cmd
-	if m.ssh.passwordEncrypted != "" {
-		if decrypted, err := util.DecryptPassword(m.ssh.passwordEncrypted); err == nil {
-			if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
-				pwdCmd = exec.Command("sshpass", "-p", decrypted, "ssh",
-					"-o", "StrictHostKeyChecking=accept-new", sshTarget, "pwd")
-			}
+	if password := m.getMachinePassword(device); password != "" {
+		if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
+			pwdCmd = exec.Command("sshpass", "-p", password, "ssh",
+				"-o", "StrictHostKeyChecking=accept-new", sshTarget, "pwd")
 		}
 	}
 	if pwdCmd == nil {
