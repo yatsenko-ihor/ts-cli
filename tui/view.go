@@ -619,33 +619,9 @@ func (m model) renderOptionsMenu() string {
 
 	var listContent strings.Builder
 
-	// Option 1: Save password toggle
-	saveLabel := "Enable saving SSH password"
-	if m.ssh.savePasswordEnabled {
-		saveLabel += " ✓"
-	}
-	if m.opts.cursor == 0 {
-		listContent.WriteString(selectedStyle.Render("▸ " + saveLabel))
-	} else {
-		listContent.WriteString(normalStyle.Render("  " + saveLabel))
-	}
-	listContent.WriteString("\n")
-
-	// Option 2: Clear saved password
-	clearLabel := "Clear saved password"
-	if m.ssh.passwordEncrypted == "" {
-		clearLabel += " (none saved)"
-	}
-	if m.opts.cursor == 1 {
-		listContent.WriteString(selectedStyle.Render("▸ " + clearLabel))
-	} else {
-		listContent.WriteString(normalStyle.Render("  " + clearLabel))
-	}
-	listContent.WriteString("\n")
-
-	// Option 3: View machines with saved passwords
+	// Option: View machines with saved passwords
 	machineCredsLabel := fmt.Sprintf("Machines with saved passwords (%d)", len(m.ssh.machineCreds))
-	if m.opts.cursor == 2 {
+	if m.opts.cursor == 0 {
 		listContent.WriteString(selectedStyle.Render("▸ " + machineCredsLabel))
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + machineCredsLabel))
@@ -655,17 +631,15 @@ func (m model) renderOptionsMenu() string {
 	b.WriteString("\n\n")
 
 	// Info text
-	if m.ssh.savePasswordEnabled {
-		b.WriteString(grayItalicStyle.Render("Passwords are encrypted locally using AES-256-GCM"))
-		b.WriteString("\n")
-		savedCount := len(m.ssh.machineCreds)
-		if savedCount > 0 {
-			b.WriteString(successStyle.Render(fmt.Sprintf("✓ %d machine(s) with saved credentials", savedCount)))
-		} else {
-			b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine on next SSH connection"))
-		}
-		b.WriteString("\n")
+	b.WriteString(grayItalicStyle.Render("Passwords are encrypted locally using AES-256-GCM"))
+	b.WriteString("\n")
+	savedCount := len(m.ssh.machineCreds)
+	if savedCount > 0 {
+		b.WriteString(successStyle.Render(fmt.Sprintf("✓ %d machine(s) with saved credentials", savedCount)))
+	} else {
+		b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine on next SSH connection"))
 	}
+	b.WriteString("\n")
 
 	b.WriteString("\n")
 	help := "↑/k up • ↓/j down • enter toggle/select • esc/q back"

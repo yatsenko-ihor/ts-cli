@@ -35,7 +35,7 @@ type model struct {
 // MachineCredMap is a map of machine hostname → [username, encryptedPassword]
 type MachineCredMap map[string][2]string
 
-func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, savePasswordEnabled bool, sshPasswordEncrypted string, machineCreds MachineCredMap) model {
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds MachineCredMap) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -91,10 +91,8 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 			manageCursor:           0,
 		},
 		ssh: ssh{
-			username:            sshUsername,
-			passwordEncrypted:   sshPasswordEncrypted,
-			savePasswordEnabled: savePasswordEnabled,
-			machineCreds:        mCreds,
+			username:     sshUsername,
+			machineCreds: mCreds,
 		},
 		opts: options{
 			active: false,
@@ -147,39 +145,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			// SSH failed — show retry menu to let user fix credentials
 			m.ssh.pendingPassword = ""
-			m.ssh.passwordEncrypted = ""
 			m.ssh.retryMode = true
 			m.ssh.retryCursor = 0
 			m.notify.sshError = msg.err
 			return m, nil
 		}
-		// SSH succeeded — persist credentials
+		// SSH succeeded — persist credentials per-machine
 		var cmds []tea.Cmd
-		// Save username
+		// Save username globally as default for new machines
 		if m.ssh.pendingUsername != "" {
 			m.ssh.username = m.ssh.pendingUsername
 			cmds = append(cmds, m.storeUsername(m.ssh.pendingUsername))
 			m.ssh.pendingUsername = ""
 		}
-		// Save password if enabled
-		if m.ssh.pendingPassword != "" && m.ssh.savePasswordEnabled {
-			cmds = append(cmds, m.storePassword(m.ssh.pendingPassword))
-			m.ssh.pendingPassword = ""
-		} else if !m.ssh.savePasswordEnabled {
-			// One-time use — clear from memory
-			m.ssh.passwordEncrypted = ""
-			m.ssh.pendingPassword = ""
-		} else {
+		// Encrypt pending password for per-machine storage
+		var encryptedPass string
+		if m.ssh.pendingPassword != "" {
+			if enc, err := util.EncryptPassword(m.ssh.pendingPassword); err == nil {
+				encryptedPass = enc
+			}
 			m.ssh.pendingPassword = ""
 		}
-		// Save per-machine credentials (even without password for key-based auth)
+		// Save per-machine credentials
 		if m.ssh.pendingMachineID != "" && m.ssh.username != "" {
 			machineID := m.ssh.pendingMachineID
 			m.ssh.machineCreds[machineID] = machineCredential{
 				username:          m.ssh.username,
-				passwordEncrypted: m.ssh.passwordEncrypted,
+				passwordEncrypted: encryptedPass,
 			}
-			cmds = append(cmds, storeMachineCredentials(machineID, m.ssh.username, m.ssh.passwordEncrypted))
+			cmds = append(cmds, storeMachineCredentials(machineID, m.ssh.username, encryptedPass))
 			m.ssh.pendingMachineID = ""
 		}
 		if len(cmds) > 0 {
@@ -263,13 +257,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.value = ""
 				return m, nil
 			}
-			// Check if we need to prompt for password
-			if m.ssh.passwordEncrypted == "" {
-				m.input = textInput{mode: inputPassword}
-				m.input.value = ""
-				return m, nil
-			}
-			// Username and password ready, start SSH session
+			// Username exists — try connecting (per-machine password looked up automatically)
 			return m, m.sshToDevice(msg.deviceIndex)
 		}
 		return m, nil
@@ -324,20 +312,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hist.outputScroll = 0 // Reset scroll when new output arrives
 			m.hist.outputCursor = 0
 			m.notify.sshError = nil
-		}
-		return m, nil
-
-	case passwordStoredMsg:
-		if msg.err != nil {
-			m.notify.sshError = msg.err
-		} else if msg.encrypted != "" {
-			m.ssh.passwordEncrypted = msg.encrypted
-		}
-		return m, nil
-
-	case optionToggledMsg:
-		if msg.err != nil {
-			m.notify.sshError = msg.err
 		}
 		return m, nil
 

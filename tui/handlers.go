@@ -137,12 +137,7 @@ var usernamePromptHandlers = map[string]keyHandler{
 		m.input.value = ""
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.list.filteredDevices) {
-			// If no password available, prompt for it
-			if m.ssh.passwordEncrypted == "" {
-				m.input = textInput{mode: inputPassword}
-				m.input.value = ""
-				return m, nil
-			}
+			// Try connecting — if it fails, retry menu will appear
 			return m, m.sshToDevice(target)
 		}
 		return m, nil
@@ -766,15 +761,8 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	// Check per-machine credentials first
 	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" {
 		m.ssh.username = cred.username
-		if cred.passwordEncrypted != "" {
-			m.ssh.passwordEncrypted = cred.passwordEncrypted
-			// Both username and password from per-machine creds, start SSH
-			return m, m.sshToDevice(target)
-		}
-		// Username from per-machine, but no password — prompt
-		m.input = textInput{mode: inputPassword}
-		m.input.value = ""
-		return m, nil
+		// Per-machine creds found — try connecting (password looked up in buildSSHCommand)
+		return m, m.sshToDevice(target)
 	}
 
 	// Check if username is stored (global fallback)
@@ -792,10 +780,8 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 // ─── Options menu constants ───────────────────────────────────────────────────
 
 const (
-	optionSavePassword       = 0 // Toggle save-password feature
-	optionClearPassword      = 1 // Clear saved password
-	optionMachineCredentials = 2 // View machines with saved passwords
-	optionCount              = 3 // Total number of options
+	optionMachineCredentials = 0 // View machines with saved passwords
+	optionCount              = 1 // Total number of options
 )
 
 // ─── Options menu mode ────────────────────────────────────────────────────────
@@ -839,19 +825,6 @@ var optionsMenuHandlers = map[string]keyHandler{
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
 		switch m.opts.cursor {
-		case optionSavePassword:
-			m.ssh.savePasswordEnabled = !m.ssh.savePasswordEnabled
-			if !m.ssh.savePasswordEnabled {
-				// When disabling, also clear saved password
-				m.ssh.passwordEncrypted = ""
-			}
-			return m, m.toggleSavePassword(m.ssh.savePasswordEnabled)
-		case optionClearPassword:
-			if m.ssh.passwordEncrypted != "" {
-				m.ssh.passwordEncrypted = ""
-				return m, m.clearSavedPassword()
-			}
-			return m, nil
 		case optionMachineCredentials:
 			m.opts.showMachineCreds = true
 			m.opts.machineCredsCursor = 0
@@ -957,12 +930,19 @@ func (m model) handleSSHRetryMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input = textInput{mode: inputUsername}
 			m.input.value = ""
 		case sshRetryPassword:
-			m.ssh.passwordEncrypted = ""
+			// Clear per-machine password so user is prompted again
+			if m.ssh.pendingMachineID != "" {
+				cred := m.ssh.machineCreds[m.ssh.pendingMachineID]
+				cred.passwordEncrypted = ""
+				m.ssh.machineCreds[m.ssh.pendingMachineID] = cred
+			}
 			m.input = textInput{mode: inputPassword}
 			m.input.value = ""
 		case sshRetryBoth:
 			m.ssh.username = ""
-			m.ssh.passwordEncrypted = ""
+			if m.ssh.pendingMachineID != "" {
+				delete(m.ssh.machineCreds, m.ssh.pendingMachineID)
+			}
 			m.input = textInput{mode: inputUsername}
 			m.input.value = ""
 		case sshRetryCancel:
@@ -993,11 +973,16 @@ var passwordPromptHandlers = map[string]keyHandler{
 		password := m.input.value
 		m.input = textInput{mode: inputNone}
 		m.input.value = ""
-		// Encrypt for immediate use via sshpass
-		encrypted, err := util.EncryptPassword(password)
-		if err == nil {
-			m.ssh.passwordEncrypted = encrypted
-			m.ssh.pendingPassword = password
+		m.ssh.pendingPassword = password
+		// Store encrypted password in per-machine creds for immediate use by buildSSHCommand
+		if m.ssh.pendingMachineID != "" {
+			encrypted, err := util.EncryptPassword(password)
+			if err == nil {
+				cred := m.ssh.machineCreds[m.ssh.pendingMachineID]
+				cred.username = m.ssh.username
+				cred.passwordEncrypted = encrypted
+				m.ssh.machineCreds[m.ssh.pendingMachineID] = cred
+			}
 		}
 		// Set pendingUsername if not already set (covers case when username was already saved)
 		if m.ssh.pendingUsername == "" && m.ssh.username != "" {

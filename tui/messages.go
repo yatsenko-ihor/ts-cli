@@ -83,23 +83,12 @@ type pasteMsg struct {
 	err    error
 }
 
-// passwordStoredMsg is returned when SSH password storage completes
-type passwordStoredMsg struct {
-	err       error
-	encrypted string // The encrypted password to update in model
-}
-
 // machineCredsSavedMsg is returned when per-machine credentials are saved
 type machineCredsSavedMsg struct {
 	err       error
 	machineID string
 	username  string
 	encrypted string
-}
-
-// optionToggledMsg is returned when an option toggle is saved
-type optionToggledMsg struct {
-	err error
 }
 
 // panelFocus represents which panel currently has focus
