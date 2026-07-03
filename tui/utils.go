@@ -70,6 +70,39 @@ func applyFrameTitle(frame, title string, borderColor lipgloss.Color, bold bool)
 	return strings.Join(lines, "\n")
 }
 
+// applyFrameTitleRaw injects a pre-styled (ANSI-coded) title into the top border of a rendered frame.
+// Unlike applyFrameTitle, it does not wrap the title in any additional style, preserving inner colours.
+func applyFrameTitleRaw(frame, styledTitle string, borderColor lipgloss.Color) string {
+	lines := strings.Split(frame, "\n")
+	if len(lines) == 0 {
+		return frame
+	}
+
+	frameWidth := lipgloss.Width(lines[0])
+	if frameWidth < 4 {
+		return frame
+	}
+
+	available := frameWidth - 2 // corners
+	padded := " " + styledTitle + " "
+	visualWidth := lipgloss.Width(padded)
+
+	if visualWidth > available {
+		padded = " " + styledTitle
+		visualWidth = lipgloss.Width(padded)
+	}
+
+	fill := available - visualWidth
+	if fill < 0 {
+		fill = 0
+	}
+
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	lines[0] = borderStyle.Render("╭") + padded + borderStyle.Render(strings.Repeat("─", fill)+"╮")
+
+	return strings.Join(lines, "\n")
+}
+
 // renderTitledPanel renders a panel with a title in the border.
 // When bold is true the title text is rendered bold.
 func renderTitledPanel(content, title string, contentWidth, contentHeight int, borderColor lipgloss.Color, bold bool) string {

@@ -32,7 +32,10 @@ type model struct {
 	aboutMode   bool
 }
 
-func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, savePasswordEnabled bool, sshPasswordEncrypted string) model {
+// MachineCredMap is a map of machine hostname → [username, encryptedPassword]
+type MachineCredMap map[string][2]string
+
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, savePasswordEnabled bool, sshPasswordEncrypted string, machineCreds MachineCredMap) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -53,6 +56,12 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 
 	// Initialize history store
 	history, _ := util.NewHistoryStore()
+
+	// Convert machine credentials
+	mCreds := make(map[string]machineCredential)
+	for id, cred := range machineCreds {
+		mCreds[id] = machineCredential{username: cred[0], passwordEncrypted: cred[1]}
+	}
 
 	return model{
 		list: deviceList{
@@ -85,6 +94,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 			username:            sshUsername,
 			passwordEncrypted:   sshPasswordEncrypted,
 			savePasswordEnabled: savePasswordEnabled,
+			machineCreds:        mCreds,
 		},
 		opts: options{
 			active: false,
@@ -162,6 +172,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.ssh.pendingPassword = ""
 		}
+		// Save per-machine credentials
+		if m.ssh.pendingMachineID != "" && m.ssh.username != "" && m.ssh.passwordEncrypted != "" {
+			machineID := m.ssh.pendingMachineID
+			m.ssh.machineCreds[machineID] = machineCredential{
+				username:          m.ssh.username,
+				passwordEncrypted: m.ssh.passwordEncrypted,
+			}
+			cmds = append(cmds, storeMachineCredentials(machineID, m.ssh.username, m.ssh.passwordEncrypted))
+			m.ssh.pendingMachineID = ""
+		}
 		if len(cmds) > 0 {
 			return m, tea.Batch(cmds...)
 		}
@@ -188,6 +208,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case usernameStoredMsg:
 		if msg.err != nil {
 			m.notify.sshError = msg.err
+		}
+		return m, nil
+
+	case machineCredsSavedMsg:
+		if msg.err != nil {
+			m.notify.sshError = fmt.Errorf("failed to save machine credentials: %w", msg.err)
 		}
 		return m, nil
 

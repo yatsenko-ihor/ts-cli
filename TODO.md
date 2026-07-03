@@ -112,9 +112,14 @@
     - [x] reuse encrypted pass for new ssh session
 - [x] label how much online/offline
 - [x] sort by added/last connected/etc.
+- [ ] once run command with e - also ask login/pass with popup (if not saved before in encrypted storage)
+- [ ] change log of connection Connection to -> Connection to username@...
+- [ ] if no saved pass, try connect with username and pass in separate thread and once connect save username and pass and connect to machine
+- [ ] add support keys of terminal. Now on Iterm2 in macos I have settings "press Option + left/right arrows" navigate back or forward words, want to have same in app (if terminal have such settings)
 ## To be implemented later:
 - [ ] check how input fiels done in lazygit or lazy docker
 - [ ] add option to fall into termux on remote machine
+
 ## Ideas for future (probably yes, but to keep minimalistic seems like not)
 
 - [ ] add ability to remove/enable key expirtation status

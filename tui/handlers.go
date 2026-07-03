@@ -756,7 +756,28 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Check if username is stored
+	// Determine machine ID for per-machine credential lookup
+	machineID := device.Hostname
+	if machineID == "" {
+		machineID = device.Name
+	}
+	m.ssh.pendingMachineID = machineID
+
+	// Check per-machine credentials first
+	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" {
+		m.ssh.username = cred.username
+		if cred.passwordEncrypted != "" {
+			m.ssh.passwordEncrypted = cred.passwordEncrypted
+			// Both username and password from per-machine creds, start SSH
+			return m, m.sshToDevice(target)
+		}
+		// Username from per-machine, but no password — prompt
+		m.input = textInput{mode: inputPassword}
+		m.input.value = ""
+		return m, nil
+	}
+
+	// Check if username is stored (global fallback)
 	if m.ssh.username == "" {
 		// Prompt for username
 		m.input = textInput{mode: inputUsername}

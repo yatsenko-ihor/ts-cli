@@ -89,6 +89,14 @@ type passwordStoredMsg struct {
 	encrypted string // The encrypted password to update in model
 }
 
+// machineCredsSavedMsg is returned when per-machine credentials are saved
+type machineCredsSavedMsg struct {
+	err       error
+	machineID string
+	username  string
+	encrypted string
+}
+
 // optionToggledMsg is returned when an option toggle is saved
 type optionToggledMsg struct {
 	err error

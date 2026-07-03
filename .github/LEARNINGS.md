@@ -613,3 +613,68 @@ line = strings.TrimRight(line, " ") // avoid trailing spaces when no icon
 **Key Lesson**: Keep display helpers in `device_utils.go` alongside the other status helpers (online check, status icon). Keeps `view.go` clean.
 
 - Tailscale API: v2
+
+## Per-Machine SSH Credentials
+
+### Design Decision: Machine Hostname as Key
+
+**Problem**: Need to store different SSH credentials for different machines (e.g., `pi` uses `pi`/`raspberry`, server uses `admin`/different password).
+
+**Approach**: Use device hostname as the map key in `config.json`:
+
+```json
+{
+  "machine_credentials": {
+    "pi": {"username": "pi", "password": "<encrypted>"},
+    "server1": {"username": "admin", "password": "<encrypted>"}
+  }
+}
+```
+
+**Why hostname, not device ID**: Hostname is stable and human-readable. Tailscale device IDs can change when re-registering a node.
+
+### Credential Resolution Order
+
+1. Check per-machine credentials for the target hostname
+2. Fall back to global SSH username/password
+3. Prompt user if nothing found
+
+### Import Cycle Avoidance
+
+**Problem**: `tui/` can't import `commands/` (which defines `Config`).
+
+**Solution**: Define a parallel `configJSON` struct in `tui/config.go` that mirrors the fields. Pass data as `MachineCredMap` (type alias for `map[string][2]string`) at the boundary in `commands/interactive.go`.
+
+### Save-on-Success Pattern
+
+Per-machine credentials are only saved after SSH connection succeeds:
+1. Set `pendingMachineID` before attempting connection
+2. On `sshMsg` success → save both username and encrypted password for that machine
+3. On failure → clear pending state, show retry menu
+
+## Sort Modes
+
+### Implementation: Online-First + Secondary Sort
+
+Three sort modes toggle with `Shift+S`: Name, Last Seen, Added (Created).
+
+**Key insight**: Always sort online devices first regardless of secondary sort mode. This uses Go's `slices.SortStableFunc` with a composite comparator:
+
+```go
+slices.SortStableFunc(devices, func(a, b client.Device) int {
+    aOnline := isDeviceOnline(a)
+    bOnline := isDeviceOnline(b)
+    if aOnline != bOnline {
+        if aOnline { return -1 }
+        return 1
+    }
+    // Secondary sort varies by mode
+})
+```
+
+### Frame Title Shows Sort + Counts
+
+Format: `[1] Machines 🟢12 🔴135 ⇅Name`
+
+Shows online/offline count and current sort mode. Updates dynamically on sort toggle.
+
