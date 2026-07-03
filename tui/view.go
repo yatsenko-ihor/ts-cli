@@ -704,6 +704,9 @@ func (m model) renderMachineCredsView() string {
 		for i, id := range machineIDs {
 			cred := m.ssh.machineCreds[id]
 			label := fmt.Sprintf("%s (user: %s)", id, cred.username)
+			if cred.passwordEncrypted == "" {
+				label += " 🔑" // key-based auth
+			}
 			if i == m.opts.machineCredsCursor {
 				listContent.WriteString(selectedStyle.Render("▸ " + label))
 			} else {
