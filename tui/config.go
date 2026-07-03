@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -13,9 +14,15 @@ import (
 // Config functions for persisting TUI user preferences
 // These operate directly on the config file to avoid import cycles with the commands package
 
+// configMu protects concurrent read/write of config.json
+var configMu sync.Mutex
+
 // storeUsername saves the SSH username to config.json
 func (m model) storeUsername(username string) tea.Cmd {
 	return func() tea.Msg {
+		configMu.Lock()
+		defer configMu.Unlock()
+
 		config, err := loadConfigJSON()
 		if err != nil {
 			return usernameStoredMsg{err: err}
@@ -34,6 +41,9 @@ func (m model) storeUsername(username string) tea.Cmd {
 // clearUsername removes the stored SSH username from config.json
 func (m model) clearUsername() tea.Cmd {
 	return func() tea.Msg {
+		configMu.Lock()
+		defer configMu.Unlock()
+
 		config, err := loadConfigJSON()
 		if err != nil {
 			return usernameStoredMsg{err: err}
@@ -110,6 +120,9 @@ type machineAuth struct {
 // storeMachineCredentials saves per-machine SSH credentials to config
 func storeMachineCredentials(machineID, username, passwordEncrypted string) tea.Cmd {
 	return func() tea.Msg {
+		configMu.Lock()
+		defer configMu.Unlock()
+
 		cfg, err := loadConfigJSON()
 		if err != nil {
 			return machineCredsSavedMsg{err: err}
@@ -129,6 +142,9 @@ func storeMachineCredentials(machineID, username, passwordEncrypted string) tea.
 // deleteMachineCredentials removes per-machine SSH credentials from config
 func (m model) deleteMachineCredentials(machineID string) tea.Cmd {
 	return func() tea.Msg {
+		configMu.Lock()
+		defer configMu.Unlock()
+
 		cfg, err := loadConfigJSON()
 		if err != nil {
 			return machineCredsSavedMsg{err: err}

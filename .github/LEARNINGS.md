@@ -616,28 +616,28 @@ line = strings.TrimRight(line, " ") // avoid trailing spaces when no icon
 
 ## Per-Machine SSH Credentials
 
-### Design Decision: Machine Hostname as Key
+### Design Decision: Device Name as Key
 
 **Problem**: Need to store different SSH credentials for different machines (e.g., `pi` uses `pi`/`raspberry`, server uses `admin`/different password).
 
-**Approach**: Use device hostname as the map key in `config.json`:
+**Approach**: Use `device.Name` (Tailscale display name) as the map key in `config.json`:
 
 ```json
 {
   "machine_credentials": {
-    "pi": {"username": "pi", "password": "<encrypted>"},
+    "box-057": {"username": "pi", "password": "<encrypted>"},
     "server1": {"username": "admin", "password": "<encrypted>"}
   }
 }
 ```
 
-**Why hostname, not device ID**: Hostname is stable and human-readable. Tailscale device IDs can change when re-registering a node.
+**Why Name, not Hostname**: The Tailscale display name (`device.Name`) is what users see in the TUI. The OS hostname (`device.Hostname`) can differ (e.g., `box-57` vs `box-057`). Using the display name ensures the key matches what the user sees.
 
 ### Credential Resolution Order
 
-1. Check per-machine credentials for the target hostname
-2. Fall back to global SSH username/password
-3. Prompt user if nothing found
+1. Check per-machine credentials for the target device name
+2. Fall back to saved global SSH username (prompt for password)
+3. Prompt user for username + password if nothing found
 
 ### Import Cycle Avoidance
 
@@ -645,12 +645,27 @@ line = strings.TrimRight(line, " ") // avoid trailing spaces when no icon
 
 **Solution**: Define a parallel `configJSON` struct in `tui/config.go` that mirrors the fields. Pass data as `MachineCredMap` (type alias for `map[string][2]string`) at the boundary in `commands/interactive.go`.
 
-### Save-on-Success Pattern
+### Save-Before-Connect Pattern
 
-Per-machine credentials are only saved after SSH connection succeeds:
-1. Set `pendingMachineID` before attempting connection
-2. On `sshMsg` success → save both username and encrypted password for that machine
-3. On failure → clear pending state, show retry menu
+Per-machine credentials are saved **before** the SSH session starts (so they survive terminal close):
+1. User enters password → immediately persist to disk
+2. Launch SSH with `sshpass` using the saved password
+3. On SSH failure → delete the saved credentials, show retry menu
+4. On success → nothing extra needed (already saved)
+
+**Key Lesson**: Don't defer saves until after long-running external processes. The user may close the terminal during an SSH session, losing the `sshMsg` callback. Save optimistically, delete on failure.
+
+### Account Switch + SSH Flow
+
+**Problem**: When a device requires switching Tailscale accounts before SSH, the credential flow was bypassed.
+
+**Solution**: Set `pendingMachineID` **before** the account switch check. After account switch completes (`accountSwitchedMsg`), go through the full credential flow (check per-machine creds → prompt if needed).
+
+### Config File Race Condition
+
+**Problem**: `tea.Batch` runs commands concurrently. When `storeMachineCredentials` and `storeUsername` both do load→modify→save simultaneously, the file gets corrupted (two JSON objects concatenated).
+
+**Solution**: Protect all config read/write operations with `sync.Mutex` (`configMu` in `tui/config.go`). All config commands acquire the lock before load and release after save.
 
 ## Sort Modes
 

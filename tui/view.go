@@ -718,8 +718,9 @@ func (m model) getHelpText() string {
 		if m.ssh.username != "" {
 			help += " • d clear-user"
 		}
-		help += " • q quit"
+		help += " • F1 help • q quit"
 	}
+	
 	if m.input.mode == inputUsername {
 		help = "Enter SSH username • esc cancel • enter confirm"
 	} else if m.input.mode == inputPassword {

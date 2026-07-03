@@ -1,0 +1,60 @@
+ts-cli — Help (F1)
+═══════════════════════════════════════════════════════
+
+KEYBOARD SHORTCUTS
+──────────────────
+  ↑/k, ↓/j      Navigate device list
+  s              SSH to selected machine
+  c              Run command on selected machine
+  r              Reload device list
+  /              Search devices
+  Shift+S        Cycle sort mode (Name/Last seen/Added)
+  o              Options menu
+  a              About screen
+  p              Switch profile/account
+  u              Run 'tailscale up'
+  1, 2, 3        Focus panels (List, History, Output)
+  n              Copy output item
+  q / Ctrl+C     Quit
+  F1             This help screen
+
+SSH CREDENTIALS
+───────────────
+  Default username:
+    After your first successful SSH connection, the username is saved
+    globally as the default. This is NOT the OS username — it's the
+    value saved after first successful connect. All new machines use
+    this default until overridden per-machine.
+
+  Per-machine passwords:
+    Each machine stores its own unique encrypted password.
+    Credentials are saved BEFORE the SSH session starts (survives
+    terminal close). If connection fails, saved creds are deleted.
+
+  Connection flow:
+    1. Saved per-machine creds → connect directly (sshpass)
+    2. No per-machine creds, global username → prompt for password
+    3. Nothing saved → prompt for username, then password
+    4. Connection fails → retry menu (change user/pass/both)
+
+ICONS
+─────
+  🟢  Device is online
+  🔴  Device is offline
+  🔑  Device key expires in the future (device list)
+  🔑  Key-based auth, no password stored (credentials list)
+  🔒  Device key has expired
+  ⚠️   Key expiry warning
+
+OPTIONS MENU (o)
+────────────────
+  Machines with saved passwords:
+    View/delete per-machine SSH credentials.
+    Press 'd' to delete a machine's saved credentials.
+
+ENCRYPTION
+──────────
+  Passwords are encrypted with AES-256-GCM.
+  The encryption key is derived from your OS username, UID, and
+  machine hostname — passwords can only be decrypted on the same
+  machine by the same OS user.
