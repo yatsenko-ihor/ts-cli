@@ -656,12 +656,13 @@ func (m model) renderOptionsMenu() string {
 
 	// Info text
 	if m.ssh.savePasswordEnabled {
-		b.WriteString(grayItalicStyle.Render("Password is encrypted locally using AES-256-GCM"))
+		b.WriteString(grayItalicStyle.Render("Passwords are encrypted locally using AES-256-GCM"))
 		b.WriteString("\n")
-		if m.ssh.passwordEncrypted != "" {
-			b.WriteString(successStyle.Render("✓ Password saved"))
+		savedCount := len(m.ssh.machineCreds)
+		if savedCount > 0 {
+			b.WriteString(successStyle.Render(fmt.Sprintf("✓ %d machine(s) with saved credentials", savedCount)))
 		} else {
-			b.WriteString(grayItalicStyle.Render("Password will be saved on next SSH connection"))
+			b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine on next SSH connection"))
 		}
 		b.WriteString("\n")
 	}
