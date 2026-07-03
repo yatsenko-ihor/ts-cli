@@ -116,7 +116,7 @@ ts-cli tui          # alternative alias
 | `p`         | Switch profile (account filter)                   |
 | `m`         | Manage accounts                                   |
 | `u`         | Tailscale up                                      |
-| `o`         | Options menu (password saving)                    |
+| `o`         | Options menu (manage credentials)                 |
 | `a`         | About (version, author info)                      |
 | `d`         | Clear default SSH username                        |
 | `x`         | Dismiss install tip                               |
@@ -163,14 +163,16 @@ Configuration is stored in `~/.config/ts-cli/config.json` and contains all saved
 
 You can always override stored values using CLI flags (`--api-key`, `--tailnet`).
 
-### SSH Password Storage
+### SSH Credential Management
 
-ts-cli can save your SSH password locally (encrypted) to skip password prompts on every connection.
+ts-cli stores SSH credentials **per-machine** — each device has its own username/password pair.
 
-**How to use:**
-1. Press `o` → select "Save SSH password" → Enter
-2. Next time you SSH (`s`), enter password once — it's encrypted and saved
-3. All subsequent SSH connections and remote commands (`e`) use the saved password automatically
+**Connection flow:**
+1. **Saved per-machine creds** → connect directly using that machine's username + password
+2. **No per-machine creds, global username exists** → try connecting (key-based auth)
+3. **Nothing saved** → prompt for username, then try
+4. **Connection fails** → retry menu (change user/pass/both)
+5. **Connection succeeds** → save credentials for that specific machine
 
 **Security:**
 - Encryption: AES-256-GCM (authenticated encryption)
@@ -179,7 +181,7 @@ ts-cli can save your SSH password locally (encrypted) to skip password prompts o
 - The password cannot be decrypted on another machine or by another user
 - Requires `sshpass` in PATH (`brew install hudochenkov/sshpass/sshpass`)
 
-**Manage:** Press `o` → "Clear saved password" to remove it.
+**Manage:** Press `o` → "Machines with saved passwords" to view or delete stored credentials.
 
 ## Commands
 
