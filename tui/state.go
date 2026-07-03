@@ -67,8 +67,16 @@ type ssh struct {
 	savePasswordEnabled bool
 	pendingPassword     string // Plaintext password awaiting successful SSH before saving
 	pendingUsername     string // Username awaiting successful SSH before saving
+	pendingMachineID    string // Machine ID for per-machine credential save
 	retryMode           bool   // Show retry menu after SSH failure
 	retryCursor         int    // Cursor position in retry menu
+	machineCreds        map[string]machineCredential // Per-machine saved credentials
+}
+
+// machineCredential holds per-machine SSH credentials in memory
+type machineCredential struct {
+	username          string
+	passwordEncrypted string
 }
 
 // options groups the options menu state.

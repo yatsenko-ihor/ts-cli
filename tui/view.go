@@ -141,8 +141,19 @@ func (m model) renderDeviceList() string {
 		}
 	}
 	offline := len(m.list.filteredDevices) - online
-	title := fmt.Sprintf("[1] Machines 🟢 %d 🔴 %d ⇅ %s", online, offline, m.list.sort.String())
-	return applyFrameTitle(listPanel, title, borderColor, m.activeFocus == focusList)
+
+	focused := m.activeFocus == focusList
+	labelColor := lipgloss.Color("#435871")
+	if focused {
+		labelColor = lipgloss.Color("#232e3b")
+	}
+	titleLabel := lipgloss.NewStyle().Bold(focused).Foreground(labelColor).Render("[1] Machines")
+	onlineSeg := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#4CAF50")).Render(fmt.Sprintf(" 🟢 %d", online))
+	offlineSeg := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EF5350")).Render(fmt.Sprintf(" 🔴 %d", offline))
+	sortSeg := lipgloss.NewStyle().Foreground(lipgloss.Color("#232e3b")).Render(fmt.Sprintf(" ⇅ %s", m.list.sort.String()))
+
+	styledTitle := titleLabel + onlineSeg + offlineSeg + sortSeg
+	return applyFrameTitleRaw(listPanel, styledTitle, borderColor)
 }
 
 // renderHistoryPanel renders the command history panel

@@ -158,9 +158,35 @@ func saveConfigJSON(config *configJSON) error {
 
 // configJSON mirrors the relevant fields from commands.Config to avoid import cycles
 type configJSON struct {
-	Accounts            json.RawMessage `json:"accounts,omitempty"`
-	SSHUsername         string          `json:"ssh_username,omitempty"`
-	SSHPassword         string          `json:"ssh_password,omitempty"`
-	SavePasswordEnabled bool            `json:"save_password_enabled"`
-	ConfigVersion       string          `json:"config_version,omitempty"`
+	Accounts            json.RawMessage        `json:"accounts,omitempty"`
+	SSHUsername         string                 `json:"ssh_username,omitempty"`
+	SSHPassword         string                 `json:"ssh_password,omitempty"`
+	SavePasswordEnabled bool                   `json:"save_password_enabled"`
+	MachineCredentials  map[string]machineAuth `json:"machine_credentials,omitempty"`
+	ConfigVersion       string                 `json:"config_version,omitempty"`
+}
+
+// machineAuth stores per-machine SSH credentials
+type machineAuth struct {
+	Username          string `json:"username,omitempty"`
+	PasswordEncrypted string `json:"password,omitempty"`
+}
+
+// storeMachineCredentials saves per-machine SSH credentials to config
+func storeMachineCredentials(machineID, username, passwordEncrypted string) tea.Cmd {
+	return func() tea.Msg {
+		cfg, err := loadConfigJSON()
+		if err != nil {
+			return machineCredsSavedMsg{err: err}
+		}
+		if cfg.MachineCredentials == nil {
+			cfg.MachineCredentials = make(map[string]machineAuth)
+		}
+		cfg.MachineCredentials[machineID] = machineAuth{
+			Username:          username,
+			PasswordEncrypted: passwordEncrypted,
+		}
+		err = saveConfigJSON(cfg)
+		return machineCredsSavedMsg{err: err}
+	}
 }
