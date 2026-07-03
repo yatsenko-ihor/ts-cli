@@ -63,8 +63,9 @@ func (m model) buildSSHCommand(sshTarget string) *exec.Cmd {
 	}
 
 	// Print connection info then exec SSH
-	script := fmt.Sprintf("printf '\\nConnection to %s (%s)\\n' && %s",
-		shellEscape(name), shellEscape(ip), sshCmdStr)
+	username := m.ssh.username
+	script := fmt.Sprintf("printf '\\nConnection to %s@%s (%s)\\n' && %s",
+		shellEscape(username), shellEscape(name), shellEscape(ip), sshCmdStr)
 	return exec.Command("sh", "-c", script)
 }
 
