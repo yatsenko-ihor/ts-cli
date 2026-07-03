@@ -172,8 +172,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.ssh.pendingPassword = ""
 		}
-		// Save per-machine credentials
-		if m.ssh.pendingMachineID != "" && m.ssh.username != "" && m.ssh.passwordEncrypted != "" {
+		// Save per-machine credentials (even without password for key-based auth)
+		if m.ssh.pendingMachineID != "" && m.ssh.username != "" {
 			machineID := m.ssh.pendingMachineID
 			m.ssh.machineCreds[machineID] = machineCredential{
 				username:          m.ssh.username,
