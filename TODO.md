@@ -116,6 +116,11 @@
 - [ ] change log of connection Connection to -> Connection to username@...
 - [ ] if no saved pass, try connect with username and pass in separate thread and once connect save username and pass and connect to machine
 - [ ] add support keys of terminal. Now on Iterm2 in macos I have settings "press Option + left/right arrows" navigate back or forward words, want to have same in app (if terminal have such settings)
+- [ ] after "exit" in ssh session I see pop up with "change username/pass/both" fix it
+- [ ] on password prompt popup window -> SSH Password -> SSH Password for box-0.. (add machine name) 
+- [ ] add icon to machine if the password saved
+- [ ] add ping to machine via button and if ping fail - replace green or red circle emoji with this ⭕️  
+
 ## To be implemented later:
 - [ ] check how input fiels done in lazygit or lazy docker
 - [ ] add option to fall into termux on remote machine

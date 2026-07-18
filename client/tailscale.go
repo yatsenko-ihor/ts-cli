@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,47 @@ type Device struct {
 	// Additional fields for multi-account support
 	AccountName    string `json:"-"` // Not from API, added locally
 	AccountTailnet string `json:"-"` // Not from API, added locally
+}
+
+// apiTime wraps time.Time to tolerate empty or null timestamps returned by the
+// Tailscale API (for example, "expires" is empty when key expiry is disabled).
+type apiTime struct {
+	time.Time
+}
+
+// UnmarshalJSON parses an RFC3339 timestamp, treating "" and null as a zero time.
+func (t *apiTime) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	if s == "" || s == "null" {
+		t.Time = time.Time{}
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return err
+	}
+	t.Time = parsed
+	return nil
+}
+
+// UnmarshalJSON parses a Device while tolerating empty timestamp fields.
+func (d *Device) UnmarshalJSON(data []byte) error {
+	type deviceAlias Device
+	aux := struct {
+		Created  apiTime `json:"created"`
+		LastSeen apiTime `json:"lastSeen"`
+		Expires  apiTime `json:"expires"`
+		*deviceAlias
+	}{
+		deviceAlias: (*deviceAlias)(d),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	d.Created = aux.Created.Time
+	d.LastSeen = aux.LastSeen.Time
+	d.Expires = aux.Expires.Time
+	return nil
 }
 
 // DevicesResponse represents the response from the devices API
