@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // CheckTailscaleStatus checks if the Tailscale daemon is running
@@ -103,8 +104,7 @@ func attemptToStartTailscale() bool {
 	// Wait a moment for Tailscale to start
 	fmt.Println("   Waiting for Tailscale to initialize...")
 	// Give it a couple seconds to start
-	cmd = exec.Command("sleep", "2")
-	cmd.Run()
+	time.Sleep(2 * time.Second)
 
 	// Verify it's running
 	isRunning, _ := CheckTailscaleStatus()

@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/ihor/ts-cli/client"
-	"github.com/ihor/ts-cli/tui"
 	"github.com/spf13/cobra"
+	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/tui"
 )
 
 // NewInteractiveCommand creates the interactive TUI command

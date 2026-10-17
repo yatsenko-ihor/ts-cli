@@ -1,4 +1,4 @@
-module github.com/ihor/ts-cli
+module github.com/yatsenko-ihor/ts-cli
 
 go 1.24.0
 

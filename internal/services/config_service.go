@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ihor/ts-cli/internal/constants"
+	"github.com/yatsenko-ihor/ts-cli/internal/constants"
 )
 
 // Account represents a Tailscale account configuration
@@ -166,8 +166,3 @@ func splitOnce(s, sep string) (string, string, bool) {
 	}
 	return s[:idx], s[idx+len(sep):], true
 }
-
-
-
-
-

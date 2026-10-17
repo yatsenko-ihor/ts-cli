@@ -17,9 +17,10 @@ A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports m
 
 ## Prerequisites
 
-- Go 1.23 or later
+- Go 1.24 or later
 - A Tailscale account with API access
 - A valid Tailscale API key (get one from https://login.tailscale.com/admin/settings/keys)
+- Optional: `sshpass` for saved-password SSH logins (`brew install hudochenkov/sshpass/sshpass` on macOS, `apt install sshpass` on Debian/Ubuntu). Without it ts-cli falls back to plain `ssh`.
 
 ## Installation
 
@@ -35,7 +36,7 @@ go build -o ts-cli .
 ### Install globally
 
 ```bash
-go install github.com/ihor/ts-cli@latest
+go install github.com/yatsenko-ihor/ts-cli@latest
 ```
 
 This installs `ts-cli` to your `$GOPATH/bin` directory.
@@ -57,7 +58,9 @@ export TAILSCALE_API_KEY=tskey-api-xxxxx
 
 Replace `example.com` with your actual tailnet name (e.g. `mycompany.com` or `user@example.com`).
 
-The login command validates your API key and stores it in `~/.config/ts-cli/config.json`.
+The login command validates your API key and stores it in `~/.ts-cli/config.json`.
+
+Prefer the environment variable over `--api-key`: command-line flags end up in your shell history and are visible to other local users in the process list while the command runs.
 
 ### Multi-Account Setup
 
@@ -159,7 +162,9 @@ tmux split-window -v -c "#{pane_current_path}" "ts-cli"
 
 ## Configuration
 
-Configuration is stored in `~/.config/ts-cli/config.json` and contains all saved accounts (API key + tailnet per account) plus the active account selection. The file is created with permissions `0600`; the directory with `0700`.
+Configuration is stored in `~/.ts-cli/config.json` and contains all saved accounts (API key + tailnet per account), the active account selection, the default SSH username and per-machine SSH credentials. The file is created with permissions `0600`; the directory with `0700`.
+
+The API keys in this file are stored in cleartext and grant whatever access they were created with in the Tailscale admin console. Treat `~/.ts-cli/` like `~/.ssh/`: do not sync it to shared folders or commit it anywhere.
 
 You can always override stored values using CLI flags (`--api-key`, `--tailnet`).
 
@@ -168,18 +173,21 @@ You can always override stored values using CLI flags (`--api-key`, `--tailnet`)
 ts-cli stores SSH credentials **per-machine** — each device has its own username/password pair.
 
 **Connection flow:**
-1. **Saved per-machine creds** → connect directly using that machine's username + password
-2. **No per-machine creds, global username exists** → try connecting (key-based auth)
-3. **Nothing saved** → prompt for username, then try
-4. **Connection fails** → retry menu (change user/pass/both)
-5. **Connection succeeds** → save credentials for that specific machine
+1. **Saved per-machine creds** → connect directly using that machine's username + password (via `sshpass`)
+2. **Default username exists, no per-machine password** → prompt for the password
+3. **Nothing saved** → prompt for username, then password
+4. **Credentials are saved before the session starts** so they survive a closed terminal
+5. **Saved password rejected** (sshpass exit 5) → it is deleted and the retry menu opens
+6. **Connection/auth error** (ssh exit 255) → retry menu (change user/pass/both); saved credentials are kept
+7. **Remote shell exits non-zero** → shown as information only; nothing is deleted
 
 **Security:**
-- Encryption: AES-256-GCM (authenticated encryption)
-- Key derivation: SHA-256 of `"ts-cli:{username}:{uid}:{hostname}"` — machine-bound
+- Encryption: AES-256-GCM (authenticated encryption) with a random nonce per password
+- Key: a random 32-byte key generated on first use and stored in `~/.ts-cli/key` (permissions 0600), separate from `config.json`. Passwords saved by older versions (host-derived key) are still readable and are re-encrypted with the new key the next time you save them.
 - Storage: base64-encoded ciphertext in `~/.ts-cli/config.json` (permissions 0600)
-- The password cannot be decrypted on another machine or by another user
-- Requires `sshpass` in PATH (`brew install hudochenkov/sshpass/sshpass`)
+- What this protects against: a leaked `config.json` on its own. What it does **not** protect against: anyone who can read your home directory as your user (they have both files). For stronger protection use full-disk encryption and keep `~/.ts-cli/` private.
+- The password is handed to `sshpass` over a private file descriptor, never on the command line, so it is not visible in `ps`.
+- Requires `sshpass` in PATH; without it ts-cli falls back to plain `ssh` (key-based or interactive password).
 
 **Manage:** Press `o` → "Machines with saved passwords" to view or delete stored credentials.
 
@@ -228,8 +236,10 @@ ts-cli/
 │   ├── list.go          # list subcommand
 │   ├── ssh.go           # ssh subcommand
 │   ├── interactive.go   # interactive subcommand
+│   ├── account.go       # account list/set-active/remove
 │   ├── config.go        # Account config persistence
-│   ├── install.go       # Install helpers
+│   ├── install.go       # install subcommand
+│   ├── uninstall.go     # uninstall subcommand
 │   ├── up.go            # tailscale up helpers
 │   └── tailscale_check.go
 ├── tui/
@@ -243,13 +253,16 @@ ts-cli/
 │   ├── messages.go      # tea.Msg types
 │   ├── clipboard.go     # Clipboard read/write (cross-platform)
 │   ├── ssh.go           # SSH / remote command execution
+│   ├── tailscale.go     # Local tailscale daemon interaction
+│   ├── help.go/.txt     # F1 help screen
 │   ├── config.go        # TUI config persistence helpers
 │   ├── device_utils.go  # Device filtering, sorting, status
 │   └── utils.go         # Misc helpers
-└── util/
-    ├── crypto.go        # AES-256-GCM password encryption
-    ├── history.go       # Per-device command history
-    └── validation.go    # Input sanitization and validation
+├── util/
+│   ├── crypto.go        # AES-256-GCM password encryption
+│   ├── history.go       # Per-device command history
+│   └── validation.go    # Input sanitization and validation
+└── internal/            # Unused scaffolding (services/errors/constants/formatters); candidate for removal
 ```
 
 ## Architecture
@@ -277,7 +290,14 @@ go test -cover ./...
 Test files:
 
 - `commands/config_test.go` — account config operations
+- `commands/list_test.go` — JSON output validity
+- `commands/install_test.go` — `tsc` alias safety
+- `client/tailscale_test.go` — API client (httptest), path escaping, multi-account errors
 - `tui/model_test.go` — device filtering, sorting, status detection
+- `tui/ssh_test.go` — SSH command construction, exit-code classification, status JSON parsing
+- `util/*_test.go` — encryption round-trip/tamper detection, validation, history
+
+CI (`.github/workflows/ci.yml`) runs `go vet`, `go test -race`, `staticcheck`, `gosec` and `govulncheck` on every push and pull request.
 
 ### Shell Completion
 

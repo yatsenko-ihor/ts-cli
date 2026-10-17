@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -519,7 +520,7 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 	// Show the input value (masked for password)
 	displayValue := value
 	if masked {
-		displayValue = strings.Repeat("•", len(value))
+		displayValue = strings.Repeat("•", utf8.RuneCountInString(value))
 	}
 	inputStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFFFFF")).
@@ -720,7 +721,7 @@ func (m model) getHelpText() string {
 		}
 		help += " • F1 help • q quit"
 	}
-	
+
 	if m.input.mode == inputUsername {
 		help = "Enter SSH username • esc cancel • enter confirm"
 	} else if m.input.mode == inputPassword {

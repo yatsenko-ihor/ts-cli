@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/ihor/ts-cli/client"
-	"github.com/ihor/ts-cli/util"
+	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 // ─── Sub-state structs ────────────────────────────────────────────────────────
@@ -63,11 +63,11 @@ type accounts struct {
 // ssh groups SSH connection related state.
 type ssh struct {
 	username         string
-	pendingPassword  string // Plaintext password awaiting successful SSH before saving
-	pendingUsername  string // Username awaiting successful SSH before saving
-	pendingMachineID string // Machine ID for per-machine credential save
-	retryMode        bool   // Show retry menu after SSH failure
-	retryCursor      int    // Cursor position in retry menu
+	pendingPassword  string                       // Plaintext password awaiting successful SSH before saving
+	pendingUsername  string                       // Username awaiting successful SSH before saving
+	pendingMachineID string                       // Machine ID for per-machine credential save
+	retryMode        bool                         // Show retry menu after SSH failure
+	retryCursor      int                          // Cursor position in retry menu
 	machineCreds     map[string]machineCredential // Per-machine saved credentials
 }
 
@@ -79,9 +79,9 @@ type machineCredential struct {
 
 // options groups the options menu state.
 type options struct {
-	active           bool
-	cursor           int
-	showMachineCreds bool // Sub-view: list of machines with saved credentials
+	active             bool
+	cursor             int
+	showMachineCreds   bool // Sub-view: list of machines with saved credentials
 	machineCredsCursor int
 }
 

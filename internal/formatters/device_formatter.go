@@ -9,13 +9,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/client"
 )
 
 // DeviceFormatter handles device output formatting
-type DeviceFormatter struct {
-	writer *tabwriter.Writer
-}
+type DeviceFormatter struct{}
 
 // NewDeviceFormatter creates a new device formatter
 func NewDeviceFormatter() *DeviceFormatter {

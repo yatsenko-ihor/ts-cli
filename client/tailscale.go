@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
 
-const (
-	baseURL = "https://api.tailscale.com/api/v2"
-)
+// baseURL is the Tailscale API root. It is a variable so tests can point the
+// client at an httptest server.
+var baseURL = "https://api.tailscale.com/api/v2"
+
+// maxResponseBytes caps how much of an API response we are willing to
+// buffer; device lists are small, so this is purely a safety limit.
+const maxResponseBytes = 16 << 20
 
 // Client represents a Tailscale API client
 type Client struct {
@@ -82,9 +87,31 @@ func (c *Client) doRequest(method, path string) (*http.Response, error) {
 	return resp, nil
 }
 
+// devicesPath builds the devices endpoint path for a tailnet. The tailnet is
+// user input (an email or domain) and is path-escaped so characters such as
+// '/' or '?' cannot alter the endpoint.
+func devicesPath(tailnet string) string {
+	return "/tailnet/" + url.PathEscape(tailnet) + "/devices"
+}
+
+// readBody reads at most maxResponseBytes of the response body.
+func readBody(resp *http.Response) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+}
+
+// apiError turns a non-2xx response into an error.
+func apiError(resp *http.Response) error {
+	body, _ := readBody(resp)
+	var errResp ErrorResponse
+	if json.Unmarshal(body, &errResp) == nil && errResp.Message != "" {
+		return fmt.Errorf("API error: %s", errResp.Message)
+	}
+	return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+}
+
 // ValidateAPIKey checks if the API key is valid by making a test request
 func (c *Client) ValidateAPIKey(tailnet string) error {
-	resp, err := c.doRequest("GET", fmt.Sprintf("/tailnet/%s/devices", tailnet))
+	resp, err := c.doRequest("GET", devicesPath(tailnet))
 	if err != nil {
 		return err
 	}
@@ -95,12 +122,7 @@ func (c *Client) ValidateAPIKey(tailnet string) error {
 	}
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		var errResp ErrorResponse
-		if json.Unmarshal(body, &errResp) == nil && errResp.Message != "" {
-			return fmt.Errorf("API error: %s", errResp.Message)
-		}
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return apiError(resp)
 	}
 
 	return nil
@@ -108,22 +130,17 @@ func (c *Client) ValidateAPIKey(tailnet string) error {
 
 // ListDevices retrieves all devices in the tailnet
 func (c *Client) ListDevices(tailnet string) ([]Device, error) {
-	resp, err := c.doRequest("GET", fmt.Sprintf("/tailnet/%s/devices", tailnet))
+	resp, err := c.doRequest("GET", devicesPath(tailnet))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		var errResp ErrorResponse
-		if json.Unmarshal(body, &errResp) == nil && errResp.Message != "" {
-			return nil, fmt.Errorf("API error: %s", errResp.Message)
-		}
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, apiError(resp)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBody(resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -144,14 +161,26 @@ type AccountDevices struct {
 	Error       error
 }
 
-// ListDevicesFromAccounts retrieves devices from multiple accounts
+// ListDevicesFromAccounts retrieves devices from multiple accounts.
+// Per-account failures are reported on stderr; use
+// ListDevicesFromAccountsWithErrors when stderr is not available (TUI).
 func ListDevicesFromAccounts(accounts []AccountInfo) []Device {
-	var allDevices []Device
+	devices, errs := ListDevicesFromAccountsWithErrors(accounts)
+	for _, err := range errs {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
+	return devices
+}
 
-	// Use a channel to collect results
+// ListDevicesFromAccountsWithErrors retrieves devices from multiple accounts
+// in parallel and returns the merged list together with one error per
+// account that could not be queried.
+func ListDevicesFromAccountsWithErrors(accounts []AccountInfo) ([]Device, []error) {
+	var allDevices []Device
+	var errs []error
+
 	results := make(chan AccountDevices, len(accounts))
 
-	// Query each account in parallel
 	for _, account := range accounts {
 		go func(acc AccountInfo) {
 			client := NewClient(acc.APIKey)
@@ -165,16 +194,13 @@ func ListDevicesFromAccounts(accounts []AccountInfo) []Device {
 		}(account)
 	}
 
-	// Collect results
 	for i := 0; i < len(accounts); i++ {
 		result := <-results
 		if result.Error != nil {
-			// Log error but continue with other accounts
-			fmt.Fprintf(os.Stderr, "Warning: Failed to fetch devices from account %s: %v\n", result.AccountName, result.Error)
+			errs = append(errs, fmt.Errorf("failed to fetch devices from account %s: %w", result.AccountName, result.Error))
 			continue
 		}
 
-		// Tag each device with its account info
 		for j := range result.Devices {
 			result.Devices[j].AccountName = result.AccountName
 			result.Devices[j].AccountTailnet = result.Tailnet
@@ -183,7 +209,7 @@ func ListDevicesFromAccounts(accounts []AccountInfo) []Device {
 		allDevices = append(allDevices, result.Devices...)
 	}
 
-	return allDevices
+	return allDevices, errs
 }
 
 // AccountInfo represents basic account information for device querying

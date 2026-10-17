@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
-	"github.com/ihor/ts-cli/client"
 	"github.com/spf13/cobra"
+	"github.com/yatsenko-ihor/ts-cli/client"
 )
 
 // NewSSHCommand creates the SSH command
@@ -106,7 +107,7 @@ The command will look up the device in your tailnet and establish an SSH connect
 				fmt.Println("SSH connection may fail if Tailscale is not running.")
 				fmt.Println("Press Ctrl+C to cancel or wait 3 seconds to continue anyway...")
 				// Give user time to read and cancel if needed
-				exec.Command("sleep", "3").Run()
+				time.Sleep(3 * time.Second)
 			}
 
 			// Use SSH username from config if not provided

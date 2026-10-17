@@ -32,44 +32,6 @@ func clampToLines(content string, maxLines int) string {
 	return strings.Join(lines[:maxLines], "\n")
 }
 
-// applyFrameTitle injects a title into the top border line of a rendered rounded frame.
-// When bold is true the title text is rendered bold.
-func applyFrameTitle(frame, title string, borderColor lipgloss.Color, bold bool) string {
-	lines := strings.Split(frame, "\n")
-	if len(lines) == 0 {
-		return frame
-	}
-
-	frameWidth := lipgloss.Width(lines[0])
-	if frameWidth < 4 {
-		return frame
-	}
-
-	available := frameWidth - 2 // corners
-	titleSegment := " " + title + " "
-	if lipgloss.Width(titleSegment) > available {
-		truncated := truncateForWidth(title, available)
-		titleSegment = " " + truncated
-		if lipgloss.Width(titleSegment) < available {
-			titleSegment += " "
-		}
-	}
-
-	fill := available - lipgloss.Width(titleSegment)
-	if fill < 0 {
-		fill = 0
-	}
-
-	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
-	titleStyle := borderStyle
-	if bold {
-		titleStyle = titleStyle.Bold(true)
-	}
-	lines[0] = borderStyle.Render("╭") + titleStyle.Render(titleSegment) + borderStyle.Render(strings.Repeat("─", fill)+"╮")
-
-	return strings.Join(lines, "\n")
-}
-
 // applyFrameTitleRaw injects a pre-styled (ANSI-coded) title into the top border of a rendered frame.
 // Unlike applyFrameTitle, it does not wrap the title in any additional style, preserving inner colours.
 func applyFrameTitleRaw(frame, styledTitle string, borderColor lipgloss.Color) string {

@@ -156,8 +156,10 @@ func migrateOldConfig() (*Config, bool) {
 		return nil, false
 	}
 
-	// Rename old config to backup
-	os.Rename(oldConfigPath, oldConfigPath+".backup")
+	// Rename old config to backup (best effort: the new config is already saved)
+	if err := os.Rename(oldConfigPath, oldConfigPath+".backup"); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not rename old config %s: %v\n", oldConfigPath, err)
+	}
 
 	return config, true
 }

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/client"
 )
 
 // Device utility functions for filtering, sorting, and managing devices

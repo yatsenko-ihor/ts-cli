@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/ihor/ts-cli/client"
-	"github.com/ihor/ts-cli/util"
+	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 type model struct {
@@ -59,10 +59,18 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	// Initialize history store
 	history, _ := util.NewHistoryStore()
 
-	// Convert machine credentials
+	// Convert machine credentials. Usernames come from disk, so re-validate
+	// them here rather than trusting the file.
 	mCreds := make(map[string]machineCredential)
 	for id, cred := range machineCreds {
-		mCreds[id] = machineCredential{username: cred[0], passwordEncrypted: cred[1]}
+		username := cred[0]
+		if username != "" && util.ValidateSSHUsername(username) != nil {
+			username = ""
+		}
+		mCreds[id] = machineCredential{username: username, passwordEncrypted: cred[1]}
+	}
+	if sshUsername != "" && util.ValidateSSHUsername(sshUsername) != nil {
+		sshUsername = ""
 	}
 
 	return model{
@@ -126,12 +134,14 @@ func (m model) reloadDevices() tea.Cmd {
 			}
 		}
 
-		// Fetch devices from all accounts
-		devices := client.ListDevicesFromAccounts(m.acct.list)
+		// Fetch devices from all accounts; per-account failures are returned
+		// to the UI instead of being printed over the alt-screen.
+		devices, warnings := client.ListDevicesFromAccountsWithErrors(m.acct.list)
 
 		return reloadMsg{
-			devices: devices,
-			err:     nil,
+			devices:  devices,
+			warnings: warnings,
+			err:      nil,
 		}
 	}
 }
@@ -144,25 +154,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case sshMsg:
-		if msg.err != nil {
-			// SSH failed — show retry menu to let user fix credentials
-			// Delete the pre-saved credentials since they didn't work
+		m.ssh.pendingPassword = ""
+		switch msg.failure {
+		case sshFailureBadPassword:
+			// sshpass rejected the saved password: forget it and offer to fix.
 			var cmds []tea.Cmd
 			if m.ssh.pendingMachineID != "" {
 				delete(m.ssh.machineCreds, m.ssh.pendingMachineID)
 				cmds = append(cmds, m.deleteMachineCredentials(m.ssh.pendingMachineID))
 			}
-			m.ssh.pendingPassword = ""
+			m.ssh.retryMode = true
+			m.ssh.retryCursor = sshRetryPassword
+			m.notify.sshError = fmt.Errorf("saved password was rejected: %w", msg.err)
+			return m, tea.Batch(cmds...)
+		case sshFailureConnection:
+			// Could be auth (key-based) or network. Keep saved credentials;
+			// the retry menu lets the user change them explicitly.
 			m.ssh.retryMode = true
 			m.ssh.retryCursor = 0
 			m.notify.sshError = msg.err
-			if len(cmds) > 0 {
-				return m, tea.Batch(cmds...)
-			}
 			return m, nil
+		case sshFailureExec:
+			m.notify.sshError = fmt.Errorf("could not start ssh: %w", msg.err)
+			return m, nil
+		case sshFailureRemoteExit:
+			// The session itself worked; the remote shell just exited non-zero.
+			// That is not a credential problem, so nothing is deleted.
+			m.notify.sshError = fmt.Errorf("SSH session ended: %w", msg.err)
 		}
-		// SSH succeeded — credentials already saved before session started
-		m.ssh.pendingPassword = ""
+		// Success (or ordinary non-zero exit): credentials were saved before
+		// the session started and stay as they are.
 		m.ssh.pendingUsername = ""
 		m.ssh.pendingMachineID = ""
 		return m, nil
@@ -201,15 +222,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Tailscale up command completed
 		if msg.err != nil {
 			m.notify.sshError = fmt.Errorf("tailscale up failed: %w", msg.err)
-		}
-		return m, nil
-
-	case tailscaleDownMsg:
-		// Tailscale down command completed
-		if msg.err != nil {
-			m.notify.sshError = fmt.Errorf("tailscale down failed: %w", msg.err)
-		} else {
-			m.acct.tailscaleActiveAccount = "<not connected>"
 		}
 		return m, nil
 
@@ -284,8 +296,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.list.selected = -1
 		}
 
-		// Clear any previous SSH error
+		// Clear any previous SSH error, surface per-account fetch failures
 		m.notify.sshError = nil
+		if len(msg.warnings) > 0 {
+			parts := make([]string, 0, len(msg.warnings))
+			for _, w := range msg.warnings {
+				parts = append(parts, w.Error())
+			}
+			m.notify.sshError = fmt.Errorf("some accounts failed to load: %s", strings.Join(parts, "; "))
+		}
 
 		// Show reload success message
 		m.notify.reloadSuccess = fmt.Sprintf("Reloaded %d device(s) from %d account(s)", len(msg.devices), len(m.acct.list))
@@ -296,6 +315,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case commandExecutedMsg:
+		// Record history here, on the update loop, so the store is never
+		// mutated concurrently with the history-panel key handlers.
+		if m.hist.history != nil && msg.machineID != "" {
+			m.hist.history.AddCommand(msg.machineID, msg.machineName, msg.command, msg.exitCode, msg.output)
+			_ = m.hist.history.Save() // Ignore save errors
+		}
 		// Handle command execution result
 		if msg.err != nil {
 			m.notify.sshError = fmt.Errorf("command failed: %w", msg.err)
