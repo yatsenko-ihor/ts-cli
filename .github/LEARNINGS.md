@@ -625,13 +625,13 @@ line = strings.TrimRight(line, " ") // avoid trailing spaces when no icon
 ```json
 {
   "machine_credentials": {
-    "box-057": {"username": "pi", "password": "<encrypted>"},
+    "100001": {"username": "alice", "password": "<encrypted>"},
     "server1": {"username": "admin", "password": "<encrypted>"}
   }
 }
 ```
 
-**Why Name, not Hostname**: The Tailscale display name (`device.Name`) is what users see in the TUI. The OS hostname (`device.Hostname`) can differ (e.g., `box-57` vs `box-057`). Using the display name ensures the key matches what the user sees.
+**Why Name, not Hostname**: The Tailscale display name (`device.Name`) is what users see in the TUI. The OS hostname (`device.Hostname`) can differ (e.g., `laptop` vs `laptop-2`). Using the display name ensures the key matches what the user sees.
 
 ### Credential Resolution Order
 

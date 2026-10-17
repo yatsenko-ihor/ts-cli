@@ -42,10 +42,10 @@ Credentials are persisted **before** the SSH session starts because:
 
 ```json
 {
-  "ssh_username": "pi",
+  "ssh_username": "alice",
   "machine_credentials": {
-    "box-057": {
-      "username": "pi",
+    "100001": {
+      "username": "alice",
       "password": "<AES-256-GCM encrypted, base64 encoded>"
     },
     "server1": {
