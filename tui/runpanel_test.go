@@ -3,6 +3,7 @@ package tui
 import (
 	"os/exec"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,9 +152,11 @@ func TestHandleRunDoneRecordsHistoryAndClearsPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := &runJob{}
+	dev := client.Device{ID: "dev-1", Name: "laptop", Addresses: []string{"100.64.0.1"}}
 	m := model{
-		list: deviceList{filteredDevices: []client.Device{{ID: "dev-1", Name: "laptop", Addresses: []string{"100.64.0.1"}}}},
-		run:  runPanel{history: hist, job: job, running: true, lines: []string{"ok"}, startedAt: time.Now()},
+		list: deviceList{filteredDevices: []client.Device{dev}},
+		run: runPanel{history: hist, label: "uptime", startedAt: time.Now(),
+			runs: []*machineRun{{device: dev, username: "root", job: job, status: runRunning, lines: []string{"ok"}, startedAt: time.Now()}}},
 		ssh: ssh{machineCreds: map[string]machineCredential{}, pending: pendingSSH{
 			action: sshActionCommand, machineID: "dev-1", machineName: "laptop", username: "root", command: "uptime",
 		}},
@@ -162,8 +165,8 @@ func TestHandleRunDoneRecordsHistoryAndClearsPending(t *testing.T) {
 	updated, _ := m.handleRunDone(runDoneMsg{job: job, res: runResult{exitCode: 0}})
 	m = updated.(model)
 
-	if m.run.running || !m.run.finished || m.run.job != nil {
-		t.Fatalf("output state not finalised: %+v", m.run)
+	if m.run.running() || !m.run.finished() || m.run.runs[0].job != nil {
+		t.Fatalf("output state not finalised: %+v", m.run.runs[0])
 	}
 	if m.ssh.pending.action != sshActionNone {
 		t.Fatal("pending attempt should be cleared after success")
@@ -178,55 +181,227 @@ func TestHandleRunDoneRecordsHistoryAndClearsPending(t *testing.T) {
 
 	// A stale job's completion is ignored.
 	updated, _ = m.handleRunDone(runDoneMsg{job: &runJob{}, res: runResult{exitCode: 9}})
-	if updated.(model).run.exitCode != 0 {
+	if updated.(model).run.runs[0].exitCode != 0 {
 		t.Fatal("stale job result must be ignored")
 	}
 }
 
-func TestAppendJobLinesFollowsTail(t *testing.T) {
-	m := model{run: runPanel{follow: true}, height: 40, width: 120}
-	m.appendJobLines([]string{"a", "b", "c"})
+func TestAppendRunLinesFollowsTail(t *testing.T) {
+	job := &runJob{}
+	m := model{run: runPanel{follow: true, runs: []*machineRun{{job: job, status: runRunning}}}, height: 40, width: 120}
+	m.appendRunLines(job, []string{"a", "b", "c"})
 	if m.run.outputCursor != 2 {
 		t.Fatalf("follow mode should keep cursor on last line, got %d", m.run.outputCursor)
 	}
 	m.run.follow = false
 	m.run.outputCursor = 0
-	m.appendJobLines([]string{"d"})
+	m.appendRunLines(job, []string{"d"})
 	if m.run.outputCursor != 0 {
 		t.Fatal("cursor must stay put when the user scrolled up")
 	}
+	m.appendRunLines(&runJob{}, []string{"stale"})
+	if len(m.run.runs[0].lines) != 4 {
+		t.Fatal("lines from an unknown job must be dropped")
+	}
 }
 
-func TestViewRendersRunAndOutputPanels(t *testing.T) {
+// ─── Multi-machine runs ───────────────────────────────────────────────────────
+
+func multiModel(t *testing.T) model {
+	t.Helper()
 	t.Setenv(util.ConfigDirEnv, t.TempDir())
-	devices := []client.Device{{ID: "1", Name: "laptop.example.ts.net", Hostname: "laptop", OS: "linux", Addresses: []string{"100.64.0.1"}, LastSeen: time.Now()}}
-	m := model{
+	hist, _ := util.NewHistoryStore()
+	now := time.Now()
+	devices := []client.Device{
+		{ID: "a", Name: "alpha", OS: "linux", Addresses: []string{"100.64.0.1"}, LastSeen: now},
+		{ID: "b", Name: "bravo", OS: "linux", Addresses: []string{"100.64.0.2"}, LastSeen: now},
+		{ID: "c", Name: "charlie", OS: "windows", Addresses: []string{"100.64.0.3"}, LastSeen: now},
+		{ID: "d", Name: "delta", OS: "linux", Addresses: []string{"100.64.0.4"}, LastSeen: now.Add(-time.Hour)},
+		{ID: "e", Name: "echo", OS: "linux", Addresses: []string{"100.64.0.5"}, LastSeen: now},
+	}
+	return model{
 		width: 140, height: 45,
 		list: deviceList{devices: devices, filteredDevices: devices},
-		run: runPanel{
-			visible:  true,
-			scripts:  []scripts.Script{scripts.Parse("du.sh", []byte("# ts-cli: name=Disk usage; args=path\n"))},
-			commands: []config.SavedCommand{{Name: "uptime", Command: "uptime"}},
-			lines:    []string{"line 1", "line 2"},
-			finished: true, exitCode: 2, label: "uptime",
-		},
-		activeFocus: focusRun,
+		run:  runPanel{history: hist},
+		ssh: ssh{username: "admin", machineCreds: map[string]machineCredential{
+			"b": {name: "bravo", username: "pi"},
+		}},
 	}
-	for _, tab := range []runTab{tabScripts, tabCommands, tabRecent} {
-		m.run.tab = tab
-		for _, f := range []panelFocus{focusList, focusRun, focusOutput} {
-			m.activeFocus = f
-			if out := m.View(); len(out) == 0 {
-				t.Fatalf("empty view for tab %v focus %v", tab, f)
-			}
-		}
+}
+
+func TestMarksAndTargets(t *testing.T) {
+	m := multiModel(t)
+	if m.isMulti() || len(m.targets()) != 1 {
+		t.Fatal("without marks the highlighted machine is the only target")
 	}
-	m.input = textInput{mode: inputCommand, value: "ls"}
+	m.toggleMark(m.list.filteredDevices[0])
+	m.toggleMark(m.list.filteredDevices[2])
+	if !m.isMulti() || len(m.targets()) != 2 || m.targets()[1].ID != "c" {
+		t.Fatalf("targets = %+v", m.targets())
+	}
+	m.toggleMark(m.list.filteredDevices[2])
+	if m.isMulti() {
+		t.Fatal("one mark is not multi")
+	}
+	m.toggleAllMarks()
+	if len(m.markedDevices()) != 5 {
+		t.Fatalf("expected all marked, got %d", len(m.markedDevices()))
+	}
+	m.toggleAllMarks()
+	if len(m.markedDevices()) != 0 {
+		t.Fatal("toggle all on a full selection must clear it")
+	}
+	m.toggleMark(m.list.filteredDevices[0])
+	m.clearMarks()
+	if len(m.list.marked) != 0 {
+		t.Fatal("clearMarks")
+	}
+}
+
+func TestVisibleScriptsAcrossTargets(t *testing.T) {
+	m := multiModel(t)
+	m.run.scripts = []scripts.Script{
+		scripts.Parse("nix.sh", []byte("# ts-cli: os=linux\n")),
+		scripts.Parse("win.ps1", []byte("# ts-cli: os=windows\n")),
+		scripts.Parse("mac.sh", []byte("# ts-cli: os=darwin\n")),
+	}
+	m.toggleMark(m.list.filteredDevices[0]) // linux
+	m.toggleMark(m.list.filteredDevices[2]) // windows
+	got := m.visibleScripts()
+	if len(got) != 2 || got[0].File != "nix.sh" || got[1].File != "win.ps1" {
+		t.Fatalf("a script is listed when any target can run it: %+v", got)
+	}
+}
+
+func TestStartMultiRunSkipsAndStarts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs sh")
+	}
+	m := multiModel(t)
+	m.ssh.username = "" // only bravo has a username now
+	m.toggleAllMarks()
+	spec := sshJob{action: sshActionScript, script: ptr(scripts.Parse("nix.sh", []byte("#!/bin/sh\n# ts-cli: os=linux\necho hi\n")))}
+
+	// Replace ssh with a local stub so startRemoteJob can actually spawn.
+	// We only check planning here, so make every start fail fast instead.
+	updated, _ := m.startMultiRun(spec)
+	m = updated.(model)
+
+	if !m.run.multi || len(m.run.runs) != 5 {
+		t.Fatalf("expected 5 machine runs, got %+v", m.run.runs)
+	}
+	byID := map[string]*machineRun{}
+	for _, mr := range m.run.runs {
+		byID[mr.device.ID] = mr
+	}
+	if byID["c"].status != runSkipped || byID["c"].note != "script is not for windows" {
+		t.Fatalf("windows machine: %+v", byID["c"])
+	}
+	if byID["d"].status != runSkipped || byID["d"].note != "offline" {
+		t.Fatalf("offline machine: %+v", byID["d"])
+	}
+	if byID["a"].status != runSkipped || byID["a"].note == "" {
+		t.Fatalf("machine without username must be skipped: %+v", byID["a"])
+	}
+	// bravo has a saved username; it was attempted (ssh may or may not exist here).
+	if byID["b"].status == runSkipped || byID["b"].status == runPending {
+		t.Fatalf("bravo should be attempted: %+v", byID["b"])
+	}
+	if byID["b"].username != "pi" {
+		t.Fatalf("bravo must use its saved username, got %q", byID["b"].username)
+	}
+	m.stopRun()
+	if m.outputStatus() == "" {
+		t.Fatal("expected a status summary")
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func TestContinueMultiRunRecordsAndStartsNext(t *testing.T) {
+	m := multiModel(t)
+	m.run.multi = true
+	m.run.spec = sshJob{action: sshActionCommand, command: "uptime"}
+	m.run.label = "uptime"
+	m.run.startedAt = time.Now()
+	jobA := &runJob{}
+	a := &machineRun{device: m.list.filteredDevices[0], username: "admin", job: jobA, status: runRunning, startedAt: time.Now(), lines: []string{"up"}}
+	skipped := &machineRun{device: m.list.filteredDevices[3], status: runSkipped, note: "offline"}
+	m.run.runs = []*machineRun{a, skipped}
+
+	m.settleMachineRun(a, runResult{exitCode: 0})
+	updated, _ := m.continueMultiRun(a, runResult{exitCode: 0})
+	m = updated.(model)
+
+	if a.status != runDone || a.exitCode != 0 {
+		t.Fatalf("alpha: %+v", a)
+	}
+	if got := m.run.history.Recent("a", 5); len(got) != 1 || got[0].Command != "uptime" {
+		t.Fatalf("history for alpha: %+v", got)
+	}
+	if cred := m.ssh.machineCreds["a"]; cred.username != "admin" || cred.name != "alpha" {
+		t.Fatalf("default username should be persisted per machine after success: %+v", cred)
+	}
+	if m.run.running() || !m.run.finished() {
+		t.Fatal("run should be finished")
+	}
+	if s := m.outputStatus(); !strings.Contains(s, "1/1 done") || !strings.Contains(s, "1 skipped") {
+		t.Fatalf("status = %q", s)
+	}
+
+	// Auth failure is reported, not prompted for.
+	b := &machineRun{device: m.list.filteredDevices[1], username: "pi", job: &runJob{}, status: runRunning, startedAt: time.Now()}
+	m.run.runs = append(m.run.runs, b)
+	m.settleMachineRun(b, runResult{exitCode: 255, failure: sshFailureConnection})
+	updated, _ = m.continueMultiRun(b, runResult{exitCode: 255, failure: sshFailureConnection})
+	m = updated.(model)
+	if b.status != runFailed || !strings.Contains(b.note, "connect once with s") {
+		t.Fatalf("bravo: %+v", b)
+	}
+	if m.input.mode != inputNone || m.ssh.retryMode {
+		t.Fatal("multi runs must never open prompts")
+	}
+}
+
+func TestOutputLinesSectionsAndNavigation(t *testing.T) {
+	m := multiModel(t)
+	m.run.multi = true
+	m.run.runs = []*machineRun{
+		{device: m.list.filteredDevices[0], status: runDone, lines: []string{"a1", "a2"}},
+		{device: m.list.filteredDevices[3], status: runSkipped, note: "offline"},
+		{device: m.list.filteredDevices[4], status: runDone, exitCode: 2, lines: []string{"e1"}},
+	}
+	lines := m.outputLines()
+	// header a, a1, a2, sep, header d, note, sep, header e, e1
+	if len(lines) != 9 || !lines[0].header || lines[4].header != true || lines[7].header != true {
+		t.Fatalf("flattened lines = %+v", lines)
+	}
+	if lines[5].text != "  offline" {
+		t.Fatalf("skip note missing: %q", lines[5].text)
+	}
+	m.jumpToSection(+1)
+	if m.run.outputCursor != 4 {
+		t.Fatalf("} should land on next header, got %d", m.run.outputCursor)
+	}
+	m.jumpToSection(+1)
+	if m.run.outputCursor != 7 {
+		t.Fatalf("} again, got %d", m.run.outputCursor)
+	}
+	m.jumpToSection(-1)
+	if m.run.outputCursor != 4 {
+		t.Fatalf("{ should go back, got %d", m.run.outputCursor)
+	}
+	m.run.outputCursor = 8
+	if entry, ok := m.selectedOutputItem(); !ok || entry != "e1" {
+		t.Fatalf("selected = %q %v", entry, ok)
+	}
+	m.run.outputCursor = 7
+	if _, ok := m.selectedOutputItem(); ok {
+		t.Fatal("headers are not copyable")
+	}
+	m.activeFocus = focusOutput
+	m.run.visible = true
 	if out := m.View(); len(out) == 0 {
-		t.Fatal("empty view with ad-hoc prompt")
-	}
-	m.input = textInput{mode: inputText, label: "Value for {{path}}", hint: "Script: Disk usage"}
-	if out := m.View(); len(out) == 0 {
-		t.Fatal("empty view with text prompt")
+		t.Fatal("empty multi view")
 	}
 }

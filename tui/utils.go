@@ -249,7 +249,7 @@ func (m *model) handleFrameShortcut(key string) bool {
 
 // ensureOutputCursorVisible adjusts outputScroll so the cursor line is visible.
 func (m *model) ensureOutputCursorVisible() {
-	if len(m.run.lines) == 0 {
+	if len(m.outputLines()) == 0 {
 		return
 	}
 	_, outputHeight := m.getHistoryPanelSize()

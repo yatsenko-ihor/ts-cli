@@ -161,11 +161,9 @@ func (m model) sshToDevice(device client.Device, username, password string) tea.
 	})
 }
 
-// startRemoteJob starts the pending command or script on device and begins
-// streaming its output into the Output panel. It returns the Cmd that waits
-// for the first output event, or an error when the process could not start.
-func (m *model) startRemoteJob(device client.Device, username, password string) (tea.Cmd, error) {
-	p := m.ssh.pending
+// startRemoteJob starts spec (a command or a script) on device as a streaming
+// job. It does not touch model state; callers attach the job to a machineRun.
+func startRemoteJob(device client.Device, username, password string, spec sshJob) (*runJob, error) {
 	if len(device.Addresses) == 0 {
 		return nil, fmt.Errorf("device has no IP addresses")
 	}
@@ -176,15 +174,15 @@ func (m *model) startRemoteJob(device client.Device, username, password string) 
 
 	var remote string
 	var stdin []byte
-	switch p.action {
+	switch spec.action {
 	case sshActionCommand:
-		remote = p.command
+		remote = spec.command
 	case sshActionScript:
-		if p.script == nil {
+		if spec.script == nil {
 			return nil, fmt.Errorf("no script selected")
 		}
-		remote = p.script.RemoteCommand(p.args)
-		stdin = p.script.Content
+		remote = spec.script.RemoteCommand(spec.args)
+		stdin = spec.script.Content
 	default:
 		return nil, fmt.Errorf("nothing to run")
 	}
@@ -197,19 +195,12 @@ func (m *model) startRemoteJob(device client.Device, username, password string) 
 	if err != nil {
 		return nil, fmt.Errorf("could not start ssh: %w", err)
 	}
-
-	m.beginJobOutput(job, p.label())
-	return tea.Batch(waitRunEvent(job), tickRun(job)), nil
+	return job, nil
 }
 
-// resolveRemoteOutputPath resolves a relative path in command output to an absolute remote path
-func (m model) resolveRemoteOutputPath(entry string) (string, error) {
-	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.list.filteredDevices) {
-		return "", fmt.Errorf("no device selected")
-	}
-
-	device := m.list.filteredDevices[target]
+// resolveRemoteOutputPath resolves a relative path in command output to an
+// absolute remote path on device.
+func (m model) resolveRemoteOutputPath(device client.Device, entry string) (string, error) {
 	if len(device.Addresses) == 0 {
 		return "", fmt.Errorf("device has no IP addresses")
 	}
