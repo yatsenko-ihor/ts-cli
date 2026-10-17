@@ -736,7 +736,8 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 const (
 	optionMachineCredentials = 0 // View machines with saved passwords
-	optionCount              = 1 // Total number of options
+	optionSecretStore        = 1 // Toggle master key location: file / OS keychain
+	optionCount              = 2 // Total number of options
 )
 
 // ─── Options menu mode ────────────────────────────────────────────────────────
@@ -784,9 +785,31 @@ var optionsMenuHandlers = map[string]keyHandler{
 			m.opts.showMachineCreds = true
 			m.opts.machineCredsCursor = 0
 			return m, nil
+		case optionSecretStore:
+			if m.opts.secretStoreBusy {
+				return m, nil
+			}
+			m.opts.secretStoreBusy = true
+			m.opts.secretStoreMsg = "Switching secret store…"
+			return m, toggleSecretStore()
 		}
 		return m, nil
 	},
+}
+
+// toggleSecretStore moves the master key to the other store.
+func toggleSecretStore() tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		target := util.SecretStoreKeychain
+		if util.CurrentSecretStore() == util.SecretStoreKeychain {
+			target = util.SecretStoreFile
+			err = util.UseFile()
+		} else {
+			err = util.UseKeychain()
+		}
+		return secretStoreChangedMsg{store: util.CurrentSecretStore(), target: target, err: err}
+	}
 }
 
 func (m model) handleOptionsMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

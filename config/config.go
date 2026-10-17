@@ -22,12 +22,19 @@ const (
 	CurrentVersion = "1.0"
 )
 
-// Account represents a Tailscale account configuration
+// Account represents a Tailscale account configuration.
+//
+// APIKey is the usable, cleartext key in memory. On disk it is stored only
+// as APIKeyEncrypted (AES-256-GCM with the master key, see util.Encrypt);
+// the cleartext api_key field is still accepted when reading so files
+// written by older versions keep working and are re-encrypted on the next
+// save.
 type Account struct {
-	Name    string `json:"name"`    // User-friendly name for the account
-	APIKey  string `json:"api_key"` // Tailscale API key
-	Tailnet string `json:"tailnet"` // Tailnet name
-	Active  bool   `json:"active"`  // Whether this is the active account
+	Name            string `json:"name"`                  // User-friendly name for the account
+	APIKey          string `json:"api_key,omitempty"`     // Tailscale API key (cleartext; legacy on disk)
+	APIKeyEncrypted string `json:"api_key_enc,omitempty"` // Tailscale API key, encrypted (on disk)
+	Tailnet         string `json:"tailnet"`               // Tailnet name
+	Active          bool   `json:"active"`                // Whether this is the active account
 }
 
 // MachineAuth stores per-machine SSH credentials. The map key is the stable
@@ -95,7 +102,47 @@ func load() (*Config, error) {
 	if cfg.ConfigVersion == "" {
 		cfg.ConfigVersion = CurrentVersion
 	}
+
+	// Decrypt API keys; migrate cleartext ones written by older versions.
+	needsRewrite := false
+	for i := range cfg.Accounts {
+		acc := &cfg.Accounts[i]
+		switch {
+		case acc.APIKeyEncrypted != "":
+			plain, err := util.Decrypt(acc.APIKeyEncrypted)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decrypt API key for account %q (secret store: %s): %w",
+					acc.Name, util.CurrentSecretStore(), err)
+			}
+			acc.APIKey = plain
+		case acc.APIKey != "":
+			needsRewrite = true
+		}
+	}
+	if needsRewrite {
+		// Best effort: a failure here must not block reading the config.
+		_ = save(&cfg)
+	}
 	return &cfg, nil
+}
+
+// forDisk returns a copy of cfg with every API key encrypted and the
+// cleartext field cleared.
+func forDisk(cfg *Config) (*Config, error) {
+	out := *cfg
+	out.Accounts = make([]Account, len(cfg.Accounts))
+	for i, acc := range cfg.Accounts {
+		if acc.APIKey != "" {
+			enc, err := util.Encrypt(acc.APIKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encrypt API key for account %q: %w", acc.Name, err)
+			}
+			acc.APIKeyEncrypted = enc
+		}
+		acc.APIKey = ""
+		out.Accounts[i] = acc
+	}
+	return &out, nil
 }
 
 // Save writes the configuration atomically (temp file + rename) with mode 0600.
@@ -114,7 +161,11 @@ func save(cfg *Config) error {
 		cfg.ConfigVersion = CurrentVersion
 	}
 
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	disk, err := forDisk(cfg)
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(disk, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}

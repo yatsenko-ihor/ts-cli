@@ -2,12 +2,14 @@ package commands
 
 import (
 	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/yatsenko-ihor/ts-cli/client"
 	"github.com/yatsenko-ihor/ts-cli/config"
 	"github.com/yatsenko-ihor/ts-cli/tui"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 // NewInteractiveCommand creates the interactive TUI command
@@ -37,6 +39,9 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 
 			if len(cfg.Accounts) == 0 {
 				return fmt.Errorf("no accounts configured.\nRun 'ts-cli login --tailnet=<name>' first to add an account")
+			}
+			if notice := util.KeyStoreNotice(); notice != "" {
+				fmt.Fprintf(os.Stderr, "Warning: %s\n", notice)
 			}
 
 			var devices []client.Device

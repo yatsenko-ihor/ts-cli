@@ -164,7 +164,7 @@ tmux split-window -v -c "#{pane_current_path}" "ts-cli"
 
 Configuration is stored in `~/.ts-cli/config.json` (override the directory with `TS_CLI_CONFIG_DIR`) and contains all saved accounts (API key + tailnet per account), the active account selection, the default SSH username and per-machine SSH credentials. The file is created with permissions `0600`; the directory with `0700`.
 
-The API keys in this file are stored in cleartext and grant whatever access they were created with in the Tailscale admin console. Treat `~/.ts-cli/` like `~/.ssh/`: do not sync it to shared folders or commit it anywhere.
+The API keys grant whatever access they were created with in the Tailscale admin console. They are stored encrypted (see **SSH Credential Management → Security**), but treat `~/.ts-cli/` like `~/.ssh/` anyway: do not sync it to shared folders or commit it anywhere.
 
 You can always override stored values using CLI flags (`--api-key`, `--tailnet`).
 
@@ -184,12 +184,29 @@ ts-cli stores SSH credentials **per-machine** — each device has its own userna
 Credentials are keyed by the device's stable Tailscale ID, so renaming a machine keeps its saved login. Entries saved by older versions (keyed by name) are migrated automatically on first start.
 
 **Security:**
-- Encryption: AES-256-GCM (authenticated encryption) with a random nonce per password
-- Key: a random 32-byte key generated on first use and stored in `~/.ts-cli/key` (permissions 0600), separate from `config.json`. Passwords saved by older versions (host-derived key) are still readable and are re-encrypted with the new key the next time you save them.
-- Storage: base64-encoded ciphertext in `~/.ts-cli/config.json` (permissions 0600)
-- What this protects against: a leaked `config.json` on its own. What it does **not** protect against: anyone who can read your home directory as your user (they have both files). For stronger protection use full-disk encryption and keep `~/.ts-cli/` private.
+- Encryption: AES-256-GCM (authenticated encryption) with a random nonce per secret. Both SSH passwords and Tailscale API keys are stored encrypted in `~/.ts-cli/config.json` (permissions 0600); passwords and keys saved by older versions are migrated automatically.
+- Master key: a random 32-byte key generated on first use. Where it lives is up to you, see **Where the encryption key lives** below.
 - The password is handed to `sshpass` over a private file descriptor, never on the command line, so it is not visible in `ps`.
 - Requires `sshpass` in PATH; without it ts-cli falls back to plain `ssh` (key-based or interactive password).
+
+### Where the encryption key lives
+
+```bash
+ts-cli secrets status          # current store, keychain availability
+ts-cli secrets use keychain    # move the key into the OS credential store
+ts-cli secrets use file        # move it back to ~/.ts-cli/key
+```
+
+The same switch is available in the TUI under `o` → "Encryption key".
+
+| Store | Where | Protects against | Caveats |
+|---|---|---|---|
+| `file` (default) | `~/.ts-cli/key`, mode 0600 | a leaked `config.json` on its own | anyone who can read your home directory has both files |
+| `keychain` | macOS Keychain, Linux Secret Service (D-Bus), Windows Credential Manager | a copied or backed-up `~/.ts-cli/` directory; the key is unlocked with your login session and never written under `~/.ts-cli` | macOS may ask for permission once; Linux needs a running Secret Service (GNOME Keyring, KWallet) |
+
+Switching copies the key, verifies it can be read back, and only then removes it from the old location, so existing credentials stay readable. The active store is recorded in `~/.ts-cli/secret_store`.
+
+**Fallback.** If the store is `keychain` but the keychain cannot be reached (headless or SSH session, locked login keychain, no D-Bus), ts-cli uses the key file if one still exists and prints a warning. It never silently creates a new key in that situation, because that would make the existing credentials unreadable. Run `ts-cli secrets use file` from a session where the keychain works to go back permanently.
 
 **Manage:** Press `o` → "Machines with saved passwords" to view or delete stored credentials.
 
@@ -223,6 +240,15 @@ ts-cli [interactive|i|tui]
 
 Launches the interactive TUI (default when no subcommand is given).
 
+### `secrets`
+
+```bash
+ts-cli secrets status
+ts-cli secrets use <keychain|file>
+```
+
+Shows or changes where the master encryption key is stored.
+
 ## Project Structure
 
 ```
@@ -242,6 +268,7 @@ ts-cli/
 │   ├── config.go        # Account config persistence
 │   ├── install.go       # install subcommand
 │   ├── uninstall.go     # uninstall subcommand
+│   ├── secrets.go       # secrets status / use keychain|file
 │   ├── up.go            # tailscale up helpers
 │   └── tailscale_check.go
 ├── tui/
@@ -264,7 +291,8 @@ ts-cli/
 ├── config/
 │   └── config.go        # Single owner of ~/.ts-cli/config.json (used by commands and tui)
 └── util/
-    ├── crypto.go        # AES-256-GCM password encryption
+    ├── crypto.go        # AES-256-GCM encryption of passwords and API keys
+    ├── keystore.go      # Master key: file or OS keychain, switching, fallback
     ├── history.go       # Per-device command history
     ├── paths.go         # Config directory resolution (TS_CLI_CONFIG_DIR override)
     └── validation.go    # Input sanitization and validation
@@ -279,6 +307,7 @@ Key-handling uses a **Command pattern**: each input mode (normal, search, userna
 ## Security
 
 - Config file stored with `0600` permissions; directory with `0700`
+- SSH passwords and API keys are encrypted at rest; the master key can live in the OS keychain (`ts-cli secrets use keychain`)
 - API keys can be supplied via `TAILSCALE_API_KEY` environment variable to avoid writing them to disk
 - All user input in the TUI is sanitized and validated before use in SSH usernames or remote commands
 
@@ -301,7 +330,7 @@ Test files:
 - `tui/model_test.go` — device filtering, sorting, status detection
 - `tui/ssh_test.go` — SSH command construction, exit-code classification, status JSON parsing
 - `tui/sshflow_test.go` — credential flow: key-first attempt, password prompt on failure, save on success, key migration
-- `util/*_test.go` — encryption round-trip/tamper detection, validation, history
+- `util/*_test.go` — encryption round-trip/tamper detection, key store switching (mock keychain), fallback, validation, history
 
 CI (`.github/workflows/ci.yml`) runs `go vet`, `go test -race`, `staticcheck`, `gosec` and `govulncheck` on every push and pull request.
 
