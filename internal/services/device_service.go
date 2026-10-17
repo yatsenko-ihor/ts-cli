@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/client"
 )
 
 // DeviceService handles device-related business logic
@@ -109,4 +109,3 @@ func (s *DeviceService) GetDevicePrimaryAddress(device *client.Device) (string, 
 	}
 	return device.Addresses[0], nil
 }
-

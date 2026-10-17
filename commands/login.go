@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ihor/ts-cli/client"
-	"github.com/ihor/ts-cli/util"
 	"github.com/spf13/cobra"
+	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 // NewLoginCommand creates the login command
@@ -64,14 +64,12 @@ or using the --api-key flag.`,
 
 			fmt.Println("✓ API key is valid")
 
-			// Load or create config
+			// Load config. A missing file already yields an empty config, so an
+			// error here means the file exists but is unreadable or corrupt.
+			// Overwriting it would silently destroy every other saved account.
 			config, err := LoadConfig()
 			if err != nil {
-				// If config doesn't exist, create a new one
-				config = &Config{
-					Accounts:    []Account{},
-					SSHUsername: "",
-				}
+				return fmt.Errorf("failed to load existing configuration (not overwriting it): %w", err)
 			}
 
 			// Check if account already exists
@@ -122,7 +120,7 @@ or using the --api-key flag.`,
 	// Define flags
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "Tailscale API key (overrides TAILSCALE_API_KEY env var)")
 	cmd.Flags().StringVar(&tailnet, "tailnet", "", "Tailnet name (e.g., example.com or user@example.com)")
-	cmd.MarkFlagRequired("tailnet")
+	_ = cmd.MarkFlagRequired("tailnet")
 
 	return cmd
 }

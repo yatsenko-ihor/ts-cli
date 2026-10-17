@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/ihor/ts-cli/commands"
+	"github.com/yatsenko-ihor/ts-cli/commands"
 )
 
 func main() {

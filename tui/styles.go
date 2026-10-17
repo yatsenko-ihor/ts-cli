@@ -26,12 +26,6 @@ var (
 			BorderForeground(lipgloss.Color("#7A7A7A")).
 			Padding(1, 2)
 
-	detailStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7A7A7A")).
-			Padding(1).
-			MarginTop(1)
-
 	errorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#B22222")).
 			Bold(true).
@@ -54,14 +48,6 @@ var (
 
 	infoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#8A6D3B"))
-
-	promptLabelStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#3F3F3F"))
-
-	promptInputStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#2D6A8C"))
 )
 
 // Layout constants for panel sizing and spacing

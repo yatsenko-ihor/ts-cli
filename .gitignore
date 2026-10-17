@@ -54,10 +54,9 @@ Desktop.ini
 .ts-cli/
 
 # Agent/AI config (local only)
-.github/
+# NOTE: .github/ is tracked (CI workflows live there); .copilot/ is tracked too
 .vscode/
 .sixth/
-.copilot/
 
 # Tailscale API spec (large, not needed)
 tailscale-api.json

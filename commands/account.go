@@ -61,7 +61,7 @@ func newAccountListCommand() *cobra.Command {
 				fmt.Fprintf(w, "%s\t%s\t%s\n", acc.Name, acc.Tailnet, active)
 			}
 
-			w.Flush()
+			_ = w.Flush()
 			fmt.Printf("\nTotal accounts: %d\n", len(config.Accounts))
 
 			if config.SSHUsername != "" {

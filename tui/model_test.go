@@ -6,7 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/client"
 )
 
 // TestIsDeviceOnline tests the device online detection logic

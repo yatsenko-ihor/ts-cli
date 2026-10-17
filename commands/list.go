@@ -1,13 +1,15 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"text/tabwriter"
 	"time"
 
-	"github.com/ihor/ts-cli/client"
 	"github.com/spf13/cobra"
+	"github.com/yatsenko-ihor/ts-cli/client"
 )
 
 // NewListCommand creates the list command
@@ -84,7 +86,7 @@ Displays device information including name, addresses, OS, and status.`,
 			case "table":
 				displayTable(devices)
 			case "json":
-				displayJSON(devices)
+				return displayJSON(devices)
 			default:
 				return fmt.Errorf("unknown format '%s'. Use 'table' or 'json'", format)
 			}
@@ -140,30 +142,50 @@ func displayTable(devices []client.Device) {
 		)
 	}
 
-	w.Flush()
+	_ = w.Flush()
 	fmt.Printf("\nTotal devices: %d\n", len(devices))
 }
 
+// deviceJSON is the stable output shape of `list --format=json`.
+type deviceJSON struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Hostname   string   `json:"hostname"`
+	OS         string   `json:"os"`
+	Addresses  []string `json:"addresses"`
+	Authorized bool     `json:"authorized"`
+	LastSeen   string   `json:"lastSeen"`
+	Account    string   `json:"account,omitempty"`
+}
+
 // displayJSON displays devices in JSON format
-func displayJSON(devices []client.Device) {
-	// Simple JSON output (for production, use encoding/json)
-	fmt.Println("[")
-	for i, device := range devices {
-		fmt.Printf("  {\n")
-		fmt.Printf("    \"id\": \"%s\",\n", device.ID)
-		fmt.Printf("    \"name\": \"%s\",\n", device.Name)
-		fmt.Printf("    \"hostname\": \"%s\",\n", device.Hostname)
-		fmt.Printf("    \"os\": \"%s\",\n", device.OS)
-		fmt.Printf("    \"addresses\": %v,\n", device.Addresses)
-		fmt.Printf("    \"authorized\": %t,\n", device.Authorized)
-		fmt.Printf("    \"lastSeen\": \"%s\"\n", device.LastSeen.Format(time.RFC3339))
-		if i < len(devices)-1 {
-			fmt.Printf("  },\n")
-		} else {
-			fmt.Printf("  }\n")
+func displayJSON(devices []client.Device) error {
+	return writeDevicesJSON(os.Stdout, devices)
+}
+
+// writeDevicesJSON encodes devices as a JSON array. Using encoding/json
+// guarantees valid output regardless of characters in device names.
+func writeDevicesJSON(w io.Writer, devices []client.Device) error {
+	out := make([]deviceJSON, 0, len(devices))
+	for _, d := range devices {
+		addrs := d.Addresses
+		if addrs == nil {
+			addrs = []string{}
 		}
+		out = append(out, deviceJSON{
+			ID:         d.ID,
+			Name:       d.Name,
+			Hostname:   d.Hostname,
+			OS:         d.OS,
+			Addresses:  addrs,
+			Authorized: d.Authorized,
+			LastSeen:   d.LastSeen.Format(time.RFC3339),
+			Account:    d.AccountName,
+		})
 	}
-	fmt.Println("]")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
 }
 
 // formatDuration formats a duration into a human-readable string

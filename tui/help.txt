@@ -29,13 +29,16 @@ SSH CREDENTIALS
   Per-machine passwords:
     Each machine stores its own unique encrypted password.
     Credentials are saved BEFORE the SSH session starts (survives
-    terminal close). If connection fails, saved creds are deleted.
+    terminal close). They are deleted only when sshpass reports the
+    password was rejected; an ordinary non-zero exit of the remote
+    shell keeps them.
 
   Connection flow:
     1. Saved per-machine creds → connect directly (sshpass)
     2. No per-machine creds, global username → prompt for password
     3. Nothing saved → prompt for username, then password
-    4. Connection fails → retry menu (change user/pass/both)
+    4. Password rejected → creds deleted, retry menu opens
+    5. Connection/auth error → retry menu (change user/pass/both)
 
 ICONS
 ─────
@@ -54,7 +57,8 @@ OPTIONS MENU (o)
 
 ENCRYPTION
 ──────────
-  Passwords are encrypted with AES-256-GCM.
-  The encryption key is derived from your OS username, UID, and
-  machine hostname — passwords can only be decrypted on the same
-  machine by the same OS user.
+  Passwords are encrypted with AES-256-GCM using a random key stored
+  in ~/.ts-cli/key (mode 0600), separate from config.json. Anyone who
+  can read your home directory can read both files, so protect
+  ~/.ts-cli/ like ~/.ssh/. The password is passed to sshpass over a
+  private file descriptor and never appears in the process list.

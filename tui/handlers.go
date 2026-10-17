@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/ihor/ts-cli/util"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ var (
 			if deviceName == "" {
 				deviceName = device.Hostname
 			}
-			m.notify.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+			m.notify.sshError = fmt.Errorf("machine %q is offline", deviceName)
 			return m, nil
 		}
 		m.input = textInput{mode: inputCommand}
@@ -721,13 +721,13 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 		if deviceName == "" {
 			deviceName = device.Hostname
 		}
-		m.notify.sshError = fmt.Errorf("Machine \"%s\" is offline", deviceName)
+		m.notify.sshError = fmt.Errorf("machine %q is offline", deviceName)
 		return m, nil
 	}
 
 	// Check if Tailscale is running locally before attempting SSH
 	if isRunning, message := checkLocalTailscaleStatus(); !isRunning {
-		m.notify.sshError = fmt.Errorf("Tailscale is not running locally: %s\nPress 'u' to run 'tailscale up' or start Tailscale manually", message)
+		m.notify.sshError = fmt.Errorf("tailscale is not running locally: %s\nPress 'u' to run 'tailscale up' or start Tailscale manually", message)
 		return m, nil
 	}
 
@@ -876,8 +876,9 @@ func (m model) handleMachineCredsView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.opts.machineCredsCursor++
 		}
 		return m, nil
-	case "d", "delete", "backspace":
-		// Delete selected machine credentials
+	case "d", "delete":
+		// Delete selected machine credentials (backspace deliberately not
+		// bound: it is too easy to hit by reflex after leaving a text prompt)
 		if len(machineIDs) > 0 && m.opts.machineCredsCursor < len(machineIDs) {
 			id := machineIDs[m.opts.machineCredsCursor]
 			delete(m.ssh.machineCreds, id)
