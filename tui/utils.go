@@ -144,20 +144,6 @@ func renderTitledPanel(content, title string, contentWidth, contentHeight int, b
 	return b.String()
 }
 
-// splitOutputLines splits output into lines and trims trailing empty lines
-func splitOutputLines(output string) []string {
-	if output == "" {
-		return nil
-	}
-
-	lines := strings.Split(output, "\n")
-	for len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-
-	return lines
-}
-
 // outputViewport calculates which lines to show in the output panel viewport
 // Returns start and end indices, and whether to show scroll indicators
 func outputViewport(totalLines, outputHeight, outputScroll int) (startIdx, endIdx int, showTop, showBottom bool) {
@@ -247,15 +233,14 @@ func (m *model) handleFrameShortcut(key string) bool {
 	case keyFocusList:
 		m.activeFocus = focusList
 		return true
-	case keyFocusHistory:
-		if m.hist.visible {
-			m.activeFocus = focusHistory
+	case keyFocusRun:
+		if m.run.visible {
+			m.activeFocus = focusRun
 			return true
 		}
 	case keyFocusOutput:
-		if m.hist.visible {
+		if m.run.visible {
 			m.activeFocus = focusOutput
-			m.hist.outputScroll = 0
 			return true
 		}
 	}
@@ -264,17 +249,20 @@ func (m *model) handleFrameShortcut(key string) bool {
 
 // ensureOutputCursorVisible adjusts outputScroll so the cursor line is visible.
 func (m *model) ensureOutputCursorVisible() {
-	lines := splitOutputLines(m.hist.commandOutput)
-	if len(lines) == 0 {
+	if len(m.run.lines) == 0 {
 		return
 	}
 	_, outputHeight := m.getHistoryPanelSize()
-	if outputHeight <= 0 {
+	visible := outputHeight - panelVerticalPadding - 2 // indicators
+	if visible <= 0 {
 		return
 	}
-	if m.hist.outputCursor < m.hist.outputScroll {
-		m.hist.outputScroll = m.hist.outputCursor
-	} else if m.hist.outputCursor >= m.hist.outputScroll+outputHeight {
-		m.hist.outputScroll = m.hist.outputCursor - outputHeight + 1
+	if m.run.outputCursor < m.run.outputScroll {
+		m.run.outputScroll = m.run.outputCursor
+	} else if m.run.outputCursor >= m.run.outputScroll+visible {
+		m.run.outputScroll = m.run.outputCursor - visible + 1
+	}
+	if m.run.outputScroll < 0 {
+		m.run.outputScroll = 0
 	}
 }

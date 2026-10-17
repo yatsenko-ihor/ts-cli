@@ -229,17 +229,25 @@ func TestGetHelpText(t *testing.T) {
 		{
 			name: "normal mode includes search and ssh controls",
 			m: model{
-				hist: historyPanel{visible: false},
+				run: runPanel{visible: false},
 			},
 			mustContain: "s ssh",
 		},
 		{
-			name: "history focus includes delete and reverse tab",
+			name: "run focus shows tabs and run keys",
 			m: model{
-				hist:        historyPanel{visible: true},
-				activeFocus: focusHistory,
+				run:         runPanel{visible: true},
+				activeFocus: focusRun,
 			},
-			mustContain: "tab/shift+tab switch",
+			mustContain: "enter run",
+		},
+		{
+			name: "output focus shows stop and copy keys",
+			m: model{
+				run:         runPanel{visible: true},
+				activeFocus: focusOutput,
+			},
+			mustContain: "x stop",
 		},
 		{
 			name: "search mode shows dedicated prompt",
@@ -266,15 +274,15 @@ func TestGetHelpText(t *testing.T) {
 
 func TestHandleNormalModeShiftTabReverseNavigation(t *testing.T) {
 	m := model{
-		hist:        historyPanel{visible: false},
+		run:         runPanel{visible: false},
 		activeFocus: focusList,
 	}
 
 	updated, _ := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyShiftTab})
 	m2 := updated.(model)
 
-	if !m2.hist.visible {
-		t.Fatalf("expected history panel to open on shift+tab")
+	if !m2.run.visible {
+		t.Fatalf("expected run panel to open on shift+tab")
 	}
 	if m2.activeFocus != focusOutput {
 		t.Fatalf("expected focusOutput on initial shift+tab, got %v", m2.activeFocus)
@@ -282,8 +290,8 @@ func TestHandleNormalModeShiftTabReverseNavigation(t *testing.T) {
 
 	updated, _ = m2.handleNormalMode(tea.KeyMsg{Type: tea.KeyShiftTab})
 	m3 := updated.(model)
-	if m3.activeFocus != focusHistory {
-		t.Fatalf("expected reverse cycle to focusHistory, got %v", m3.activeFocus)
+	if m3.activeFocus != focusRun {
+		t.Fatalf("expected reverse cycle to focusRun, got %v", m3.activeFocus)
 	}
 
 	updated, _ = m3.handleNormalMode(tea.KeyMsg{Type: tea.KeyShiftTab})
@@ -293,10 +301,10 @@ func TestHandleNormalModeShiftTabReverseNavigation(t *testing.T) {
 	}
 }
 
-func TestHandleHistoryNavigationShiftTabToList(t *testing.T) {
+func TestRunPanelShiftTabToList(t *testing.T) {
 	m := model{
-		hist:        historyPanel{visible: true},
-		activeFocus: focusHistory,
+		run:         runPanel{visible: true},
+		activeFocus: focusRun,
 		list: deviceList{
 			devices:         []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
 			filteredDevices: []client.Device{{ID: "1", Hostname: "host1", LastSeen: time.Now()}},
@@ -304,10 +312,10 @@ func TestHandleHistoryNavigationShiftTabToList(t *testing.T) {
 		},
 	}
 
-	updated, _ := m.handleHistoryNavigation(tea.KeyMsg{Type: tea.KeyShiftTab})
+	updated, _ := m.handleRunPanel(tea.KeyMsg{Type: tea.KeyShiftTab})
 	m2 := updated.(model)
 
 	if m2.activeFocus != focusList {
-		t.Fatalf("expected shift+tab in history panel to move focus to list, got %v", m2.activeFocus)
+		t.Fatalf("expected shift+tab in run panel to move focus to list, got %v", m2.activeFocus)
 	}
 }

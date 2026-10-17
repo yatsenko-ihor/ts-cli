@@ -46,11 +46,19 @@ type MachineAuth struct {
 	PasswordEncrypted string `json:"password,omitempty"`
 }
 
+// SavedCommand is a named remote command shown in the TUI's Run panel.
+// Command may contain {{placeholders}} that are asked for before running.
+type SavedCommand struct {
+	Name    string `json:"name"`
+	Command string `json:"command"`
+}
+
 // Config represents the application configuration
 type Config struct {
 	Accounts           []Account              `json:"accounts"`
 	SSHUsername        string                 `json:"ssh_username,omitempty"`
 	MachineCredentials map[string]MachineAuth `json:"machine_credentials,omitempty"`
+	Commands           []SavedCommand         `json:"commands,omitempty"`
 	ConfigVersion      string                 `json:"config_version"`
 }
 
@@ -322,6 +330,36 @@ func (c *Config) SetMachineCredential(key string, auth MachineAuth) {
 // DeleteMachineCredential removes the credential stored under key.
 func (c *Config) DeleteMachineCredential(key string) {
 	delete(c.MachineCredentials, key)
+}
+
+// ─── Saved commands ──────────────────────────────────────────────────────────
+
+// UpsertCommand adds a saved command or replaces the one with the same name.
+// When oldName is non-empty, the command previously stored under that name is
+// renamed/replaced instead (edit flow).
+func (c *Config) UpsertCommand(oldName string, cmd SavedCommand) {
+	target := oldName
+	if target == "" {
+		target = cmd.Name
+	}
+	for i := range c.Commands {
+		if c.Commands[i].Name == target {
+			c.Commands[i] = cmd
+			return
+		}
+	}
+	c.Commands = append(c.Commands, cmd)
+}
+
+// DeleteCommand removes the saved command with the given name.
+func (c *Config) DeleteCommand(name string) bool {
+	for i := range c.Commands {
+		if c.Commands[i].Name == name {
+			c.Commands = append(c.Commands[:i], c.Commands[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // ─── Legacy migration ────────────────────────────────────────────────────────

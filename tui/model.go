@@ -9,13 +9,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yatsenko-ihor/ts-cli/client"
 	"github.com/yatsenko-ihor/ts-cli/config"
+	"github.com/yatsenko-ihor/ts-cli/scripts"
 	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 type model struct {
 	// ─── Composed sub-states ──────────────────────────────────────────────────
 	list   deviceList    // Device list panel state
-	hist   historyPanel  // Command history + output panels
+	run    runPanel      // Run (scripts/commands/recent) + Output panels
 	acct   accounts      // Account/profile management
 	ssh    ssh           // SSH connection state
 	opts   options       // Options menu
@@ -37,8 +38,8 @@ type model struct {
 
 // NewModel builds the initial TUI state. machineCreds is the per-machine
 // credential map from config.json (keyed by device ID; older files keyed by
-// device name are migrated on first run).
-func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth) model {
+// device name are migrated on first run). savedCommands feeds the Run panel.
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth, savedCommands []config.SavedCommand) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -57,8 +58,9 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	// Get real active Tailscale account
 	tailscaleActiveAccount := getRealTailscaleAccount()
 
-	// Initialize history store
+	// Initialize history store and local scripts
 	history, _ := util.NewHistoryStore()
+	localScripts, scriptsErr := scripts.Load()
 
 	// Convert machine credentials. Usernames come from disk, so re-validate
 	// them here rather than trusting the file.
@@ -85,13 +87,12 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 			searchQuery:     "",
 			selectedProfile: "",
 		},
-		hist: historyPanel{
-			visible:       false,
-			cursor:        0,
-			history:       history,
-			commandOutput: "",
-			outputScroll:  0,
-			outputCursor:  0,
+		run: runPanel{
+			history:    history,
+			scripts:    localScripts,
+			scriptsErr: scriptsErr,
+			commands:   savedCommands,
+			follow:     true,
 		},
 		acct: accounts{
 			list:                   accountList,
@@ -282,33 +283,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return clearReloadMsg{}
 		})
 
-	case commandExecutedMsg:
-		connected := msg.failure == sshFailureNone || msg.failure == sshFailureRemoteExit
-		// Record history here, on the update loop, so the store is never
-		// mutated concurrently with the history-panel key handlers. Only
-		// commands that actually reached the remote shell are recorded.
-		if connected && m.hist.history != nil && msg.machineID != "" {
-			m.hist.history.AddCommand(msg.machineID, msg.machineName, msg.command, msg.exitCode, msg.output)
-			_ = m.hist.history.Save() // Ignore save errors
+	case runLinesMsg:
+		if msg.job != m.run.job {
+			return m, nil // output of a job that was replaced
 		}
-		if connected {
-			m.hist.commandOutput = msg.output
-			m.hist.outputScroll = 0 // Reset scroll when new output arrives
-			m.hist.outputCursor = 0
-			m.notify.sshError = nil
-			// finishSSHAttempt persists credentials and reports a non-zero exit.
-			updated, cmd := m.finishSSHAttempt(msg.failure, msg.err)
-			um := updated.(model)
-			if msg.failure == sshFailureRemoteExit {
-				um.notify.sshError = fmt.Errorf("command exited with status %d", msg.exitCode)
-			}
-			return um, cmd
+		m.appendJobLines(msg.lines)
+		return m, waitRunEvent(msg.job)
+
+	case runDoneMsg:
+		return m.handleRunDone(msg)
+
+	case runTickMsg:
+		if msg.job != m.run.job || !m.run.running {
+			return m, nil
 		}
-		// Connection/auth problem: let the flow ask for a password or show the retry menu.
-		m.hist.commandOutput = ""
-		m.hist.outputCursor = 0
-		m.hist.outputScroll = 0
-		return m.finishSSHAttempt(msg.failure, msg.err)
+		m.run.elapsed = time.Since(m.run.startedAt)
+		return m, tickRun(msg.job)
+
+	case commandsChangedMsg:
+		if msg.err != nil {
+			m.notify.sshError = fmt.Errorf("failed to save command: %w", msg.err)
+			return m, nil
+		}
+		m.run.commands = msg.commands
+		m.clampTabCursor()
+		return m, nil
 
 	case pasteMsg:
 		// Silently ignore paste errors (clipboard tool missing, etc.)
@@ -323,7 +322,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.filterDevices()
 		case pasteTargetCommand:
 			m.input.value += msg.text
-		case pasteTargetPassword:
+		case pasteTargetPassword, pasteTargetText:
 			m.input.value += msg.text
 		}
 		return m, nil
@@ -337,6 +336,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleUsernamePrompt(msg)
 		case inputCommand:
 			return m.handleCommandMode(msg)
+		case inputText:
+			return m.handleTextPrompt(msg)
 		case inputSearch:
 			return m.handleSearchMode(msg)
 		}
@@ -406,6 +407,9 @@ func (m model) View() string {
 	if m.input.mode == inputPassword {
 		return m.renderInputPopup("SSH Password", m.input.value, true)
 	}
+	if m.input.mode == inputText {
+		return m.renderInputPopup(m.input.label, m.input.value, false)
+	}
 
 	var b strings.Builder
 
@@ -439,18 +443,18 @@ func (m model) View() string {
 	}
 	b.WriteString("\n")
 
-	// Render split view if history panel is shown
-	if m.hist.visible {
-		// Split view: device list on left, history + output on right
+	// Render split view if the Run panel is shown
+	if m.run.visible {
+		// Split view: device list on left, Run + Output on right
 		deviceList := m.renderDeviceList()
-		historyPanel := m.renderHistoryPanel()
+		runPanel := m.renderRunPanel()
 		outputPanel := m.renderOutputPanel()
 		rightSpacer := lipgloss.NewStyle().Width(splitRightSpacerWidth).Render("")
 
-		// Stack history and output vertically
+		// Stack Run and Output vertically
 		rightPanel := lipgloss.JoinVertical(
 			lipgloss.Left,
-			historyPanel,
+			runPanel,
 			outputPanel,
 		)
 
@@ -469,15 +473,10 @@ func (m model) View() string {
 
 	}
 
-	// Show command output if any (when history panel is not shown)
-	if m.hist.commandOutput != "" && !m.hist.visible {
-		b.WriteString("\n\n")
-		outputStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7A7A7A")).
-			Padding(1).
-			MarginTop(1)
-		b.WriteString(outputStyle.Render("Command Output:\n" + m.hist.commandOutput))
+	// A job finishing while the Run panel is closed is still reported briefly.
+	if !m.run.visible && (m.run.running || m.run.finished) && m.run.label != "" {
+		b.WriteString("\n")
+		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Last run: %s  %s  (Tab to open Output)", m.run.label, m.outputStatus())))
 	}
 
 	// Show copy success message if any
@@ -513,7 +512,7 @@ func (m model) View() string {
 	// Show terminal size warning if too small
 	minWidth := 80
 	minHeight := 24
-	if m.hist.visible {
+	if m.run.visible {
 		minWidth = 110 // Need extra width for split view
 		minHeight = 30 // Need extra height for stacked panels
 	}
