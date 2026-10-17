@@ -19,6 +19,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: install sshpass (exercises the password-prompt path in tests)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"

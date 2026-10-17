@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/config"
 	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
@@ -34,10 +35,10 @@ type model struct {
 	helpScroll  int
 }
 
-// MachineCredMap is a map of machine hostname → [username, encryptedPassword]
-type MachineCredMap map[string][2]string
-
-func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds MachineCredMap) model {
+// NewModel builds the initial TUI state. machineCreds is the per-machine
+// credential map from config.json (keyed by device ID; older files keyed by
+// device name are migrated on first run).
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -61,17 +62,18 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 
 	// Convert machine credentials. Usernames come from disk, so re-validate
 	// them here rather than trusting the file.
-	mCreds := make(map[string]machineCredential)
+	mCreds := make(map[string]machineCredential, len(machineCreds))
 	for id, cred := range machineCreds {
-		username := cred[0]
+		username := cred.Username
 		if username != "" && util.ValidateSSHUsername(username) != nil {
 			username = ""
 		}
-		mCreds[id] = machineCredential{username: username, passwordEncrypted: cred[1]}
+		mCreds[id] = machineCredential{name: cred.Name, username: username, passwordEncrypted: cred.PasswordEncrypted}
 	}
 	if sshUsername != "" && util.ValidateSSHUsername(sshUsername) != nil {
 		sshUsername = ""
 	}
+	credsDirty := migrateCredentialKeys(mCreds, devices)
 
 	return model{
 		list: deviceList{
@@ -103,6 +105,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		ssh: ssh{
 			username:     sshUsername,
 			machineCreds: mCreds,
+			credsDirty:   credsDirty,
 		},
 		opts: options{
 			active: false,
@@ -121,6 +124,10 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 }
 
 func (m model) Init() tea.Cmd {
+	if m.ssh.credsDirty {
+		// Persist credentials re-keyed from device name to device ID.
+		return replaceMachineCredentials(m.ssh.machineCreds)
+	}
 	return nil
 }
 
@@ -154,39 +161,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case sshMsg:
-		m.ssh.pendingPassword = ""
-		switch msg.failure {
-		case sshFailureBadPassword:
-			// sshpass rejected the saved password: forget it and offer to fix.
-			var cmds []tea.Cmd
-			if m.ssh.pendingMachineID != "" {
-				delete(m.ssh.machineCreds, m.ssh.pendingMachineID)
-				cmds = append(cmds, m.deleteMachineCredentials(m.ssh.pendingMachineID))
-			}
-			m.ssh.retryMode = true
-			m.ssh.retryCursor = sshRetryPassword
-			m.notify.sshError = fmt.Errorf("saved password was rejected: %w", msg.err)
-			return m, tea.Batch(cmds...)
-		case sshFailureConnection:
-			// Could be auth (key-based) or network. Keep saved credentials;
-			// the retry menu lets the user change them explicitly.
-			m.ssh.retryMode = true
-			m.ssh.retryCursor = 0
-			m.notify.sshError = msg.err
-			return m, nil
-		case sshFailureExec:
-			m.notify.sshError = fmt.Errorf("could not start ssh: %w", msg.err)
-			return m, nil
-		case sshFailureRemoteExit:
-			// The session itself worked; the remote shell just exited non-zero.
-			// That is not a credential problem, so nothing is deleted.
-			m.notify.sshError = fmt.Errorf("SSH session ended: %w", msg.err)
-		}
-		// Success (or ordinary non-zero exit): credentials were saved before
-		// the session started and stay as they are.
-		m.ssh.pendingUsername = ""
-		m.ssh.pendingMachineID = ""
-		return m, nil
+		// Outcome of an interactive session; see sshflow.go.
+		return m.finishSSHAttempt(msg.failure, msg.err)
 
 	case copiedMsg:
 		if msg.success {
@@ -246,26 +222,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.acct.activeAccount = msg.accountName
 		// Update the real Tailscale active account
 		m.acct.tailscaleActiveAccount = getRealTailscaleAccount()
-		// If we should proceed with SSH, go through credential flow
+		// Resume the SSH attempt that triggered the switch
 		if msg.proceedWithSSH {
-			// Check per-machine credentials first
-			if m.ssh.pendingMachineID != "" {
-				if cred, ok := m.ssh.machineCreds[m.ssh.pendingMachineID]; ok && cred.username != "" && cred.passwordEncrypted != "" {
-					m.ssh.username = cred.username
-					return m, m.sshToDevice(msg.deviceIndex)
-				}
-			}
-			// No per-machine creds — prompt for username or password
-			if m.ssh.username == "" {
-				m.input = textInput{mode: inputUsername}
-				m.input.value = ""
-				return m, nil
-			}
-			// Username exists but no per-machine password — prompt for password
-			m.ssh.pendingUsername = m.ssh.username
-			m.input = textInput{mode: inputPassword}
-			m.input.value = ""
-			return m, nil
+			return m.continueSSH()
 		}
 		return m, nil
 
@@ -315,25 +274,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case commandExecutedMsg:
+		connected := msg.failure == sshFailureNone || msg.failure == sshFailureRemoteExit
 		// Record history here, on the update loop, so the store is never
-		// mutated concurrently with the history-panel key handlers.
-		if m.hist.history != nil && msg.machineID != "" {
+		// mutated concurrently with the history-panel key handlers. Only
+		// commands that actually reached the remote shell are recorded.
+		if connected && m.hist.history != nil && msg.machineID != "" {
 			m.hist.history.AddCommand(msg.machineID, msg.machineName, msg.command, msg.exitCode, msg.output)
 			_ = m.hist.history.Save() // Ignore save errors
 		}
-		// Handle command execution result
-		if msg.err != nil {
-			m.notify.sshError = fmt.Errorf("command failed: %w", msg.err)
-			m.hist.commandOutput = ""
-			m.hist.outputCursor = 0
-			m.hist.outputScroll = 0
-		} else {
+		if connected {
 			m.hist.commandOutput = msg.output
 			m.hist.outputScroll = 0 // Reset scroll when new output arrives
 			m.hist.outputCursor = 0
 			m.notify.sshError = nil
+			// finishSSHAttempt persists credentials and reports a non-zero exit.
+			updated, cmd := m.finishSSHAttempt(msg.failure, msg.err)
+			um := updated.(model)
+			if msg.failure == sshFailureRemoteExit {
+				um.notify.sshError = fmt.Errorf("command exited with status %d", msg.exitCode)
+			}
+			return um, cmd
 		}
-		return m, nil
+		// Connection/auth problem: let the flow ask for a password or show the retry menu.
+		m.hist.commandOutput = ""
+		m.hist.outputCursor = 0
+		m.hist.outputScroll = 0
+		return m.finishSSHAttempt(msg.failure, msg.err)
 
 	case pasteMsg:
 		// Silently ignore paste errors (clipboard tool missing, etc.)

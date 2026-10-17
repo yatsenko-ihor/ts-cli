@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/yatsenko-ihor/ts-cli/util"
@@ -113,14 +112,10 @@ var (
 
 var usernamePromptHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.input = textInput{mode: inputNone}
-		m.input.value = ""
-		return m, nil
+		return m.cancelSSHAttempt(), nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.input = textInput{mode: inputNone}
-		m.input.value = ""
-		return m, nil
+		return m.cancelSSHAttempt(), nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
 		if m.input.value == "" {
@@ -129,14 +124,15 @@ var usernamePromptHandlers = map[string]keyHandler{
 		sanitized := util.SanitizeInput(m.input.value)
 		if err := util.ValidateSSHUsername(sanitized); err != nil {
 			m.input.value = ""
+			m.notify.sshError = err
 			return m, nil
 		}
-		m.ssh.username = sanitized
-		m.ssh.pendingUsername = sanitized
-		// After username, prompt for password
-		m.input = textInput{mode: inputPassword}
-		m.input.value = ""
-		return m, nil
+		m.notify.sshError = nil
+		m.input = textInput{mode: inputNone}
+		// Try with this username (key-based first); the flow asks for a
+		// password only if that fails.
+		m.ssh.pending.username = sanitized
+		return m.continueSSH()
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.input.value) > 0 {
@@ -242,7 +238,7 @@ var commandModeHandlers = map[string]keyHandler{
 		command := util.SanitizeInput(m.input.value)
 		m.input = textInput{mode: inputNone}
 		m.input.value = ""
-		return m, m.executeRemoteCommand(command)
+		return m.beginSSH(m.getTargetDevice(), sshActionCommand, command)
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.input.value) > 0 {
@@ -361,7 +357,7 @@ var (
 		if !ok || len(cmds) == 0 || m.hist.cursor >= len(cmds) {
 			return m, nil
 		}
-		return m, m.executeRemoteCommand(cmds[m.hist.cursor])
+		return m.beginSSH(m.getTargetDevice(), sshActionCommand, cmds[m.hist.cursor])
 	})
 )
 
@@ -587,7 +583,7 @@ var normalModeHandlers = map[string]keyHandler{
 	"d": func(m model) (tea.Model, tea.Cmd) {
 		if m.ssh.username != "" {
 			m.ssh.username = ""
-			return m, m.clearUsername()
+			return m, clearUsername()
 		}
 		return m, nil
 	},
@@ -731,60 +727,9 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Clear any previous SSH errors
-	m.notify.sshError = nil
-
-	// Determine machine ID for per-machine credential lookup (must be set before account switch)
-	// Use Name (Tailscale display name) as primary key since that's what the user sees
-	machineID := device.Name
-	if machineID == "" {
-		machineID = device.Hostname
-	}
-	m.ssh.pendingMachineID = machineID
-
-	// Check if we need to switch accounts first
-	// Compare device's account tailnet against the real Tailscale active account
-	if device.AccountTailnet != "" && m.acct.tailscaleActiveAccount != "" {
-		// Normalize both for comparison (handle truncated accounts like "user@" vs "user@domain.com")
-		deviceAccount := strings.ToLower(device.AccountTailnet)
-		activeAccount := strings.ToLower(m.acct.tailscaleActiveAccount)
-
-		// Check if they're different accounts
-		// Account in status might be truncated, so check if one starts with the other
-		needsSwitch := !strings.HasPrefix(deviceAccount, strings.TrimSuffix(activeAccount, "@")) &&
-			!strings.HasPrefix(activeAccount, strings.TrimSuffix(deviceAccount, "@"))
-
-		if needsSwitch {
-			// Need to switch Tailscale account before SSH
-			return m, m.switchAccountForSSH(target, device.AccountTailnet)
-		}
-	}
-
-	// Check per-machine credentials first
-	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" && cred.passwordEncrypted != "" {
-		m.ssh.username = cred.username
-		// Full per-machine creds (username + password) — connect directly
-		return m, m.sshToDevice(target)
-	}
-
-	// No complete per-machine credentials — need to collect them
-	if m.ssh.username == "" {
-		// Check if per-machine has just a username
-		if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.username != "" {
-			m.ssh.username = cred.username
-		}
-	}
-	if m.ssh.username == "" {
-		// No saved username at all — prompt for username first
-		m.input = textInput{mode: inputUsername}
-		m.input.value = ""
-		return m, nil
-	}
-	// Username exists but no per-machine password — prompt for password
-	m.ssh.pendingUsername = m.ssh.username
-	m.input = textInput{mode: inputPassword}
-	m.input.value = ""
-	return m, nil
+	// Everything else (account switch, username/password prompts, persistence)
+	// is handled by the credential flow in sshflow.go.
+	return m.beginSSH(target, sshActionSession, "")
 }
 
 // ─── Options menu constants ───────────────────────────────────────────────────
@@ -885,7 +830,7 @@ func (m model) handleMachineCredsView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.opts.machineCredsCursor > 0 && m.opts.machineCredsCursor >= len(machineIDs)-1 {
 				m.opts.machineCredsCursor--
 			}
-			return m, m.deleteMachineCredentials(id)
+			return m, deleteMachineCredential(id)
 		}
 		return m, nil
 	}
@@ -933,9 +878,7 @@ const (
 func (m model) handleSSHRetryMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
-		m.ssh.retryMode = false
-		m.notify.sshError = nil
-		return m, nil
+		return m.cancelSSHAttempt(), nil
 	case "ctrl+c":
 		return m, tea.Quit
 	case "up", "k":
@@ -951,29 +894,34 @@ func (m model) handleSSHRetryMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.ssh.retryMode = false
 		m.notify.sshError = nil
+		p := &m.ssh.pending
 		switch m.ssh.retryCursor {
 		case sshRetryUsername:
-			m.ssh.username = ""
+			// New username, keep whatever password we have for the retry.
+			p.username = ""
 			m.input = textInput{mode: inputUsername}
-			m.input.value = ""
 		case sshRetryPassword:
-			// Clear per-machine password so user is prompted again
-			if m.ssh.pendingMachineID != "" {
-				cred := m.ssh.machineCreds[m.ssh.pendingMachineID]
+			// Ignore the saved password for this attempt and ask for a new one.
+			p.password = ""
+			p.passwordTried = true
+			if cred, ok := m.ssh.machineCreds[p.machineID]; ok {
 				cred.passwordEncrypted = ""
-				m.ssh.machineCreds[m.ssh.pendingMachineID] = cred
+				m.ssh.machineCreds[p.machineID] = cred
 			}
 			m.input = textInput{mode: inputPassword}
-			m.input.value = ""
 		case sshRetryBoth:
-			m.ssh.username = ""
-			if m.ssh.pendingMachineID != "" {
-				delete(m.ssh.machineCreds, m.ssh.pendingMachineID)
+			p.username = ""
+			p.password = ""
+			p.passwordTried = true
+			p.askPasswordNext = true
+			if cred, ok := m.ssh.machineCreds[p.machineID]; ok {
+				cred.username = ""
+				cred.passwordEncrypted = ""
+				m.ssh.machineCreds[p.machineID] = cred
 			}
 			m.input = textInput{mode: inputUsername}
-			m.input.value = ""
 		case sshRetryCancel:
-			// Just close
+			return m.cancelSSHAttempt(), nil
 		}
 		return m, nil
 	}
@@ -984,14 +932,10 @@ func (m model) handleSSHRetryMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 var passwordPromptHandlers = map[string]keyHandler{
 	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.input = textInput{mode: inputNone}
-		m.input.value = ""
-		return m, nil
+		return m.cancelSSHAttempt(), nil
 	},
 	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.input = textInput{mode: inputNone}
-		m.input.value = ""
-		return m, nil
+		return m.cancelSSHAttempt(), nil
 	},
 	"enter": func(m model) (tea.Model, tea.Cmd) {
 		if m.input.value == "" {
@@ -999,37 +943,12 @@ var passwordPromptHandlers = map[string]keyHandler{
 		}
 		password := m.input.value
 		m.input = textInput{mode: inputNone}
-		m.input.value = ""
-		m.ssh.pendingPassword = password
-
-		// Store encrypted password in per-machine creds and persist to disk immediately
-		// (so credentials survive even if terminal is closed during SSH session)
-		var cmds []tea.Cmd
-		if m.ssh.pendingMachineID != "" {
-			encrypted, err := util.EncryptPassword(password)
-			if err == nil {
-				cred := m.ssh.machineCreds[m.ssh.pendingMachineID]
-				cred.username = m.ssh.username
-				cred.passwordEncrypted = encrypted
-				m.ssh.machineCreds[m.ssh.pendingMachineID] = cred
-				// Persist to disk now
-				cmds = append(cmds, storeMachineCredentials(m.ssh.pendingMachineID, m.ssh.username, encrypted))
-			}
-		}
-		// Save username globally
-		if m.ssh.pendingUsername == "" && m.ssh.username != "" {
-			m.ssh.pendingUsername = m.ssh.username
-		}
-		if m.ssh.pendingUsername != "" {
-			cmds = append(cmds, m.storeUsername(m.ssh.pendingUsername))
-		}
-		// Proceed with SSH
-		target := m.getTargetDevice()
-		if target >= 0 && target < len(m.list.filteredDevices) {
-			cmds = append(cmds, m.sshToDevice(target))
-			return m, tea.Batch(cmds...)
-		}
-		return m, tea.Batch(cmds...)
+		m.notify.sshError = nil
+		// Keep the password in memory only; it is encrypted and written to
+		// config.json by finishSSHAttempt once the connection succeeds.
+		m.ssh.pending.password = password
+		m.ssh.pending.passwordTried = true
+		return m.runPendingAttempt()
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.input.value) > 0 {

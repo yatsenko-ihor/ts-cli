@@ -61,6 +61,7 @@ type commandExecutedMsg struct {
 	output      string
 	exitCode    int
 	err         error
+	failure     sshFailure // classification of err (see classifySSHError)
 }
 
 // pasteTarget identifies which input field a clipboard paste is destined for.

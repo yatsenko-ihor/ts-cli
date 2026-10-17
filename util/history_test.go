@@ -9,14 +9,13 @@ import (
 
 func newTestHistory(t *testing.T) (*HistoryStore, string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home) // windows
+	dir := t.TempDir()
+	t.Setenv(ConfigDirEnv, dir)
 	h, err := NewHistoryStore()
 	if err != nil {
 		t.Fatalf("NewHistoryStore: %v", err)
 	}
-	return h, home
+	return h, dir
 }
 
 func TestHistoryAddSaveLoad(t *testing.T) {
@@ -29,7 +28,7 @@ func TestHistoryAddSaveLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	info, err := os.Stat(filepath.Join(home, ".ts-cli", "history.json"))
+	info, err := os.Stat(filepath.Join(home, "history.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

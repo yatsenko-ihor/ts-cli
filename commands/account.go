@@ -6,6 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/yatsenko-ihor/ts-cli/config"
 )
 
 // NewAccountCommand creates the account management command
@@ -36,24 +37,23 @@ func newAccountListCommand() *cobra.Command {
   # Short alias
   ts-cli account ls`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			config, err := LoadConfig()
+			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load configuration: %w", err)
 			}
 
-			if len(config.Accounts) == 0 {
+			if len(cfg.Accounts) == 0 {
 				fmt.Println("No accounts configured.")
 				fmt.Println("\nTo add an account, run:")
 				fmt.Println("  ts-cli login --tailnet=<your-tailnet>")
 				return nil
 			}
 
-			// Display accounts in a table
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "NAME\tTAILNET\tACTIVE")
 			fmt.Fprintln(w, "----\t-------\t------")
 
-			for _, acc := range config.Accounts {
+			for _, acc := range cfg.Accounts {
 				active := ""
 				if acc.Active {
 					active = "✓"
@@ -62,10 +62,10 @@ func newAccountListCommand() *cobra.Command {
 			}
 
 			_ = w.Flush()
-			fmt.Printf("\nTotal accounts: %d\n", len(config.Accounts))
+			fmt.Printf("\nTotal accounts: %d\n", len(cfg.Accounts))
 
-			if config.SSHUsername != "" {
-				fmt.Printf("Default SSH username: %s\n", config.SSHUsername)
+			if cfg.SSHUsername != "" {
+				fmt.Printf("Default SSH username: %s\n", cfg.SSHUsername)
 			}
 
 			return nil
@@ -88,36 +88,19 @@ func newAccountSetActiveCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			accountName := args[0]
 
-			config, err := LoadConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load configuration: %w", err)
-			}
-
-			if len(config.Accounts) == 0 {
-				return fmt.Errorf("no accounts configured")
-			}
-
-			// Find and set the account as active
-			found := false
-			for i := range config.Accounts {
-				if config.Accounts[i].Name == accountName || config.Accounts[i].Tailnet == accountName {
-					config.Accounts[i].Active = true
-					found = true
-					fmt.Printf("✓ Set '%s' as active account\n", config.Accounts[i].Name)
-				} else {
-					config.Accounts[i].Active = false
+			err := config.Update(func(cfg *config.Config) error {
+				if len(cfg.Accounts) == 0 {
+					return fmt.Errorf("no accounts configured")
 				}
+				if !cfg.SetActiveAccount(accountName) {
+					return fmt.Errorf("account '%s' not found", accountName)
+				}
+				fmt.Printf("✓ Set '%s' as active account\n", cfg.GetActiveAccount().Name)
+				return nil
+			})
+			if err != nil {
+				return err
 			}
-
-			if !found {
-				return fmt.Errorf("account '%s' not found", accountName)
-			}
-
-			// Save configuration
-			if err := SaveConfig(config); err != nil {
-				return fmt.Errorf("failed to save configuration: %w", err)
-			}
-
 			return nil
 		},
 	}
@@ -139,54 +122,25 @@ func newAccountRemoveCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			accountName := args[0]
 
-			config, err := LoadConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load configuration: %w", err)
-			}
-
-			if len(config.Accounts) == 0 {
-				return fmt.Errorf("no accounts configured")
-			}
-
-			// Find and remove the account
-			found := false
-			newAccounts := []Account{}
-			for _, acc := range config.Accounts {
-				if acc.Name == accountName || acc.Tailnet == accountName {
-					found = true
-					fmt.Printf("✓ Removed account: %s\n", acc.Name)
-				} else {
-					newAccounts = append(newAccounts, acc)
+			return config.Update(func(cfg *config.Config) error {
+				if len(cfg.Accounts) == 0 {
+					return fmt.Errorf("no accounts configured")
 				}
-			}
-
-			if !found {
-				return fmt.Errorf("account '%s' not found", accountName)
-			}
-
-			config.Accounts = newAccounts
-
-			// If we removed the active account, set the first one as active
-			if len(config.Accounts) > 0 {
-				hasActive := false
-				for _, acc := range config.Accounts {
-					if acc.Active {
-						hasActive = true
-						break
+				acc := cfg.FindAccount(accountName)
+				if acc == nil {
+					return fmt.Errorf("account '%s' not found", accountName)
+				}
+				removedName := acc.Name
+				wasActive := acc.Active
+				cfg.RemoveAccount(accountName)
+				fmt.Printf("✓ Removed account: %s\n", removedName)
+				if wasActive {
+					if active := cfg.GetActiveAccount(); active != nil {
+						fmt.Printf("Set '%s' as the new active account\n", active.Name)
 					}
 				}
-				if !hasActive {
-					config.Accounts[0].Active = true
-					fmt.Printf("Set '%s' as the new active account\n", config.Accounts[0].Name)
-				}
-			}
-
-			// Save configuration
-			if err := SaveConfig(config); err != nil {
-				return fmt.Errorf("failed to save configuration: %w", err)
-			}
-
-			return nil
+				return nil
+			})
 		},
 	}
 }

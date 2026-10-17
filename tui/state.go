@@ -62,17 +62,41 @@ type accounts struct {
 
 // ssh groups SSH connection related state.
 type ssh struct {
-	username         string
-	pendingPassword  string                       // Plaintext password awaiting successful SSH before saving
-	pendingUsername  string                       // Username awaiting successful SSH before saving
-	pendingMachineID string                       // Machine ID for per-machine credential save
-	retryMode        bool                         // Show retry menu after SSH failure
-	retryCursor      int                          // Cursor position in retry menu
-	machineCreds     map[string]machineCredential // Per-machine saved credentials
+	username     string                       // Default username (from config)
+	machineCreds map[string]machineCredential // Per-machine saved credentials, keyed by device ID
+	credsDirty   bool                         // machineCreds were migrated and must be persisted
+	pending      pendingSSH                   // The connection attempt in progress
+	retryMode    bool                         // Show retry menu after SSH failure
+	retryCursor  int                          // Cursor position in retry menu
+}
+
+// sshAction says what a pending SSH attempt should do once credentials are known.
+type sshAction int
+
+const (
+	sshActionNone    sshAction = iota
+	sshActionSession           // Interactive ssh session
+	sshActionCommand           // Run pending.command and capture output
+)
+
+// pendingSSH tracks a single connection attempt from key press to outcome.
+// Nothing in it is persisted until the attempt succeeds.
+type pendingSSH struct {
+	action          sshAction
+	deviceIndex     int
+	machineID       string // Credential/history key (device ID)
+	machineName     string // Display name
+	username        string // Username used for this attempt
+	password        string // Password entered in the TUI for this attempt (plaintext, memory only)
+	command         string // Remote command for sshActionCommand
+	usedSavedPass   bool   // The attempt used a password loaded from config
+	passwordTried   bool   // A TUI-entered password has already been tried
+	askPasswordNext bool   // After the username prompt, go straight to the password prompt
 }
 
 // machineCredential holds per-machine SSH credentials in memory
 type machineCredential struct {
+	name              string // Display name of the device
 	username          string
 	passwordEncrypted string
 }

@@ -26,14 +26,9 @@ type HistoryStore struct {
 
 // NewHistoryStore creates or loads a history store
 func NewHistoryStore() (*HistoryStore, error) {
-	homeDir, err := os.UserHomeDir()
+	configDir, err := EnsureConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	configDir := filepath.Join(homeDir, ".ts-cli")
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create config directory: %w", err)
+		return nil, err
 	}
 
 	historyFile := filepath.Join(configDir, "history.json")

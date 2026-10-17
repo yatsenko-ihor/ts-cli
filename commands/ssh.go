@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/config"
 )
 
 // NewSSHCommand creates the SSH command
@@ -34,13 +35,13 @@ The command will look up the device in your tailnet and establish an SSH connect
 			deviceName := args[0]
 
 			// Load configuration
-			config, err := LoadConfig()
+			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load configuration: %w", err)
 			}
 
 			// Check if we have any accounts configured
-			if len(config.Accounts) == 0 {
+			if len(cfg.Accounts) == 0 {
 				return fmt.Errorf("no accounts configured.\nRun 'ts-cli login --tailnet=<name>' first to add an account")
 			}
 
@@ -62,8 +63,8 @@ The command will look up the device in your tailnet and establish an SSH connect
 				}
 			} else {
 				// Fetch devices from all configured accounts
-				accounts := make([]client.AccountInfo, len(config.Accounts))
-				for i, acc := range config.Accounts {
+				accounts := make([]client.AccountInfo, len(cfg.Accounts))
+				for i, acc := range cfg.Accounts {
 					accounts[i] = client.AccountInfo{
 						Name:    acc.Name,
 						APIKey:  acc.APIKey,
@@ -110,9 +111,18 @@ The command will look up the device in your tailnet and establish an SSH connect
 				time.Sleep(3 * time.Second)
 			}
 
-			// Use SSH username from config if not provided
-			if user == "" && config.SSHUsername != "" {
-				user = config.SSHUsername
+			// Use the per-machine username, then the default from config
+			if user == "" {
+				key := targetDevice.ID
+				if key == "" {
+					key = targetDevice.Hostname
+				}
+				if cred, ok := cfg.MachineCredentials[key]; ok && cred.Username != "" {
+					user = cred.Username
+				}
+			}
+			if user == "" && cfg.SSHUsername != "" {
+				user = cfg.SSHUsername
 			}
 
 			// Build SSH command

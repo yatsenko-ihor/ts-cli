@@ -11,7 +11,7 @@ import (
 func useTempKeyDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("TS_CLI_CONFIG_DIR", dir)
+	t.Setenv(ConfigDirEnv, dir)
 	return dir
 }
 

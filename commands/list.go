@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/config"
 )
 
 // NewListCommand creates the list command
@@ -33,13 +34,13 @@ Displays device information including name, addresses, OS, and status.`,
   ts-cli list --tailnet=example.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Load configuration
-			config, err := LoadConfig()
+			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load configuration: %w", err)
 			}
 
 			// Check if we have any accounts configured
-			if len(config.Accounts) == 0 {
+			if len(cfg.Accounts) == 0 {
 				return fmt.Errorf("no accounts configured.\nRun 'ts-cli login --tailnet=<name>' first to add an account")
 			}
 
@@ -64,8 +65,8 @@ Displays device information including name, addresses, OS, and status.`,
 				}
 			} else {
 				// Fetch devices from all configured accounts
-				accounts := make([]client.AccountInfo, len(config.Accounts))
-				for i, acc := range config.Accounts {
+				accounts := make([]client.AccountInfo, len(cfg.Accounts))
+				for i, acc := range cfg.Accounts {
 					accounts[i] = client.AccountInfo{
 						Name:    acc.Name,
 						APIKey:  acc.APIKey,

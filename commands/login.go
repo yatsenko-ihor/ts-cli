@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/config"
 	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
@@ -19,8 +20,9 @@ func NewLoginCommand() *cobra.Command {
 		Short: "Validate and configure Tailscale API authentication",
 		Long: `Validate and store the Tailscale API key for authentication.
 The API key can be provided via the TAILSCALE_API_KEY environment variable
-or using the --api-key flag.`,
-		Example: `  # Using environment variable
+or using the --api-key flag. Prefer the environment variable: flags are
+visible in shell history and in the process list.`,
+		Example: `  # Using environment variable (recommended)
   export TAILSCALE_API_KEY=tskey-api-xxxxx
   ts-cli login --tailnet=example.com
 
@@ -36,7 +38,6 @@ or using the --api-key flag.`,
 				return fmt.Errorf("API key not provided.\nSet TAILSCALE_API_KEY environment variable or use --api-key flag")
 			}
 
-			// If tailnet not provided, return error
 			if tailnet == "" {
 				return fmt.Errorf("tailnet name is required.\nUse --tailnet flag to specify your tailnet name")
 			}
@@ -54,7 +55,7 @@ or using the --api-key flag.`,
 				return fmt.Errorf("invalid tailnet: %w", err)
 			}
 
-			// Validate the API key
+			// Validate the API key against the API before touching the config
 			fmt.Println("Validating API key...")
 			apiClient := client.NewClient(apiKey)
 
@@ -64,50 +65,22 @@ or using the --api-key flag.`,
 
 			fmt.Println("✓ API key is valid")
 
-			// Load config. A missing file already yields an empty config, so an
-			// error here means the file exists but is unreadable or corrupt.
-			// Overwriting it would silently destroy every other saved account.
-			config, err := LoadConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load existing configuration (not overwriting it): %w", err)
-			}
-
-			// Check if account already exists
-			accountName := tailnet
-			existingIdx := -1
-			for i, acc := range config.Accounts {
-				if acc.Name == accountName || acc.Tailnet == tailnet {
-					existingIdx = i
-					break
+			// Read-modify-write under the config lock. A corrupt or unreadable
+			// config is an error, never silently replaced.
+			err := config.Update(func(cfg *config.Config) error {
+				if existing := cfg.FindAccount(tailnet); existing != nil {
+					existing.APIKey = apiKey
+					existing.Tailnet = tailnet
+					fmt.Printf("✓ Updated account: %s\n", existing.Name)
+				} else {
+					cfg.AddAccount(tailnet, apiKey, tailnet, false)
+					fmt.Printf("✓ Added new account: %s\n", tailnet)
 				}
-			}
-
-			if existingIdx >= 0 {
-				// Update existing account
-				config.Accounts[existingIdx].APIKey = apiKey
-				config.Accounts[existingIdx].Tailnet = tailnet
-				config.Accounts[existingIdx].Active = true
-				fmt.Printf("✓ Updated account: %s\n", accountName)
-			} else {
-				// Add new account
-				newAccount := Account{
-					Name:    accountName,
-					APIKey:  apiKey,
-					Tailnet: tailnet,
-					Active:  true,
-				}
-				config.Accounts = append(config.Accounts, newAccount)
-				fmt.Printf("✓ Added new account: %s\n", accountName)
-			}
-
-			// Set this account as active
-			config.SetActiveAccount(accountName)
-
-			// Save the configuration
-			if err := SaveConfig(config); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to store config: %s\n", err)
-				fmt.Println("You can still use the API key via environment variable.")
+				cfg.SetActiveAccount(tailnet)
 				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("failed to store config: %w", err)
 			}
 
 			fmt.Println("✓ Configuration saved successfully")
@@ -117,7 +90,6 @@ or using the --api-key flag.`,
 		},
 	}
 
-	// Define flags
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "Tailscale API key (overrides TAILSCALE_API_KEY env var)")
 	cmd.Flags().StringVar(&tailnet, "tailnet", "", "Tailnet name (e.g., example.com or user@example.com)")
 	_ = cmd.MarkFlagRequired("tailnet")

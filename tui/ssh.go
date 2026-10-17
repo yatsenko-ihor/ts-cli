@@ -132,95 +132,59 @@ func (b *bannerExec) SetStdin(r io.Reader)  { b.cmd.Stdin = r }
 func (b *bannerExec) SetStdout(w io.Writer) { b.stdout = w; b.cmd.Stdout = w }
 func (b *bannerExec) SetStderr(w io.Writer) { b.cmd.Stderr = w }
 
-// sshToDevice initiates an interactive SSH connection to a device
-func (m model) sshToDevice(index int) tea.Cmd {
-	if index < 0 || index >= len(m.list.filteredDevices) {
-		return func() tea.Msg { return sshMsg{err: fmt.Errorf("no device selected")} }
-	}
-	device := m.list.filteredDevices[index]
-
+// sshToDevice starts an interactive SSH session with the given credentials.
+// When no password is available and sshpass is installed, BatchMode makes a
+// failed key login return quickly (exit 255) so the TUI can ask for a
+// password; without sshpass, ssh is left free to prompt on the terminal.
+func (m model) sshToDevice(device client.Device, username, password string) tea.Cmd {
 	if len(device.Addresses) == 0 {
 		return func() tea.Msg {
-			return sshMsg{err: fmt.Errorf("device has no IP addresses")}
+			return sshMsg{err: fmt.Errorf("device has no IP addresses"), failure: sshFailureExec}
 		}
 	}
 
-	target, err := buildSSHTarget(m.ssh.username, device.Addresses[0])
+	target, err := buildSSHTarget(username, device.Addresses[0])
 	if err != nil {
-		return func() tea.Msg { return sshMsg{err: err} }
+		return func() tea.Msg { return sshMsg{err: err, failure: sshFailureExec} }
 	}
 
-	name := device.Name
-	if name == "" {
-		name = device.Hostname
-	}
-
-	cmd, cleanup, err := newSSHCommand(target, m.getMachinePassword(device), false)
+	batch := password == "" && sshpassAvailable()
+	cmd, cleanup, err := newSSHCommand(target, password, batch)
 	if err != nil {
-		return func() tea.Msg { return sshMsg{err: err} }
+		return func() tea.Msg { return sshMsg{err: err, failure: sshFailureExec} }
 	}
 
-	banner := fmt.Sprintf("\nConnection to %s (%s)\n", name, target)
+	banner := fmt.Sprintf("\nConnection to %s (%s)\n", displayName(device), target)
 	return tea.Exec(&bannerExec{banner: banner, cmd: cmd}, func(err error) tea.Msg {
 		cleanup()
 		return sshMsg{err: err, failure: classifySSHError(err)}
 	})
 }
 
-// getMachinePassword returns the decrypted password for a machine, if available
-func (m model) getMachinePassword(device client.Device) string {
-	machineID := device.Name
-	if machineID == "" {
-		machineID = device.Hostname
-	}
-	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.passwordEncrypted != "" {
-		if decrypted, err := util.DecryptPassword(cred.passwordEncrypted); err == nil {
-			return decrypted
-		}
-	}
-	return ""
-}
-
-// executeRemoteCommand executes a command on a remote device via SSH.
-// Everything that touches model state (credentials map, device list) is
-// resolved here, on the update loop; the returned tea.Cmd only runs the
-// process. History is appended by Update when commandExecutedMsg arrives,
-// so the HistoryStore is never mutated from a background goroutine.
-func (m model) executeRemoteCommand(command string) tea.Cmd {
-	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.list.filteredDevices) {
-		return func() tea.Msg {
-			return commandExecutedMsg{err: fmt.Errorf("no device selected")}
-		}
-	}
-
-	device := m.list.filteredDevices[target]
-
+// executeRemoteCommand runs command on device via SSH and captures output.
+// Everything that touches model state is resolved here, on the update loop;
+// the returned tea.Cmd only runs the process. History is appended by Update
+// when commandExecutedMsg arrives, so the HistoryStore is never mutated from
+// a background goroutine.
+func (m model) executeRemoteCommand(device client.Device, username, password, command string) tea.Cmd {
 	if len(device.Addresses) == 0 {
 		return func() tea.Msg {
-			return commandExecutedMsg{err: fmt.Errorf("device has no IP addresses")}
+			return commandExecutedMsg{err: fmt.Errorf("device has no IP addresses"), failure: sshFailureExec}
 		}
 	}
 
-	sshTarget, err := buildSSHTarget(m.ssh.username, device.Addresses[0])
+	sshTarget, err := buildSSHTarget(username, device.Addresses[0])
 	if err != nil {
-		return func() tea.Msg { return commandExecutedMsg{err: err} }
+		return func() tea.Msg { return commandExecutedMsg{err: err, failure: sshFailureExec} }
 	}
 
-	name := device.Name
-	if name == "" {
-		name = device.Hostname
-	}
-
-	machineID := device.ID
-	if machineID == "" {
-		machineID = device.Hostname
-	}
-
-	cmd, cleanup, err := newSSHCommand(sshTarget, m.getMachinePassword(device), true, command)
+	cmd, cleanup, err := newSSHCommand(sshTarget, password, true, command)
 	if err != nil {
-		return func() tea.Msg { return commandExecutedMsg{err: err} }
+		return func() tea.Msg { return commandExecutedMsg{err: err, failure: sshFailureExec} }
 	}
+
+	machineID := machineKey(device)
+	name := displayName(device)
 
 	return func() tea.Msg {
 		defer cleanup()
@@ -241,6 +205,7 @@ func (m model) executeRemoteCommand(command string) tea.Cmd {
 			output:      string(output),
 			exitCode:    exitCode,
 			err:         err,
+			failure:     classifySSHError(err),
 		}
 	}
 }
@@ -257,12 +222,12 @@ func (m model) resolveRemoteOutputPath(entry string) (string, error) {
 		return "", fmt.Errorf("device has no IP addresses")
 	}
 
-	sshTarget, err := buildSSHTarget(m.ssh.username, device.Addresses[0])
+	sshTarget, err := buildSSHTarget(m.usernameForDevice(device), device.Addresses[0])
 	if err != nil {
 		return "", err
 	}
 
-	pwdCmd, cleanup, err := newSSHCommand(sshTarget, m.getMachinePassword(device), true, "pwd")
+	pwdCmd, cleanup, err := newSSHCommand(sshTarget, m.passwordForDevice(device), true, "pwd")
 	if err != nil {
 		return "", err
 	}
@@ -291,7 +256,7 @@ func (m model) copySSHCommand(index int) tea.Cmd {
 		}
 	}
 
-	target, err := buildSSHTarget(m.ssh.username, device.Addresses[0])
+	target, err := buildSSHTarget(m.usernameForDevice(device), device.Addresses[0])
 	if err != nil {
 		return func() tea.Msg {
 			return copiedMsg{success: false, text: ""}
