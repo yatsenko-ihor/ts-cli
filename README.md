@@ -162,7 +162,7 @@ tmux split-window -v -c "#{pane_current_path}" "ts-cli"
 
 ## Configuration
 
-Configuration is stored in `~/.ts-cli/config.json` and contains all saved accounts (API key + tailnet per account), the active account selection, the default SSH username and per-machine SSH credentials. The file is created with permissions `0600`; the directory with `0700`.
+Configuration is stored in `~/.ts-cli/config.json` (override the directory with `TS_CLI_CONFIG_DIR`) and contains all saved accounts (API key + tailnet per account), the active account selection, the default SSH username and per-machine SSH credentials. The file is created with permissions `0600`; the directory with `0700`.
 
 The API keys in this file are stored in cleartext and grant whatever access they were created with in the Tailscale admin console. Treat `~/.ts-cli/` like `~/.ssh/`: do not sync it to shared folders or commit it anywhere.
 
@@ -172,14 +172,16 @@ You can always override stored values using CLI flags (`--api-key`, `--tailnet`)
 
 ts-cli stores SSH credentials **per-machine** — each device has its own username/password pair.
 
-**Connection flow:**
-1. **Saved per-machine creds** → connect directly using that machine's username + password (via `sshpass`)
-2. **Default username exists, no per-machine password** → prompt for the password
-3. **Nothing saved** → prompt for username, then password
-4. **Credentials are saved before the session starts** so they survive a closed terminal
-5. **Saved password rejected** (sshpass exit 5) → it is deleted and the retry menu opens
-6. **Connection/auth error** (ssh exit 255) → retry menu (change user/pass/both); saved credentials are kept
+**Connection flow** (same for interactive sessions and remote commands):
+1. **Saved password for this machine** → connect directly with it, no questions asked
+2. **No saved password** → try once without a password (key-based auth). The username is the one saved for the machine, else the default username, else you are asked for it
+3. **That attempt fails to authenticate** → you are asked for the password and the connection is retried with `sshpass`
+4. **Connection succeeds** → the username and, if you entered one, the encrypted password are saved for this machine. Nothing is written to disk before success
+5. **Saved password rejected** (sshpass exit 5) → it is forgotten and you are asked for the current one
+6. **Still failing** (ssh exit 255 after a password, or `sshpass` not installed) → retry menu: change user / password / both
 7. **Remote shell exits non-zero** → shown as information only; nothing is deleted
+
+Credentials are keyed by the device's stable Tailscale ID, so renaming a machine keeps its saved login. Entries saved by older versions (keyed by name) are migrated automatically on first start.
 
 **Security:**
 - Encryption: AES-256-GCM (authenticated encryption) with a random nonce per password
@@ -258,11 +260,14 @@ ts-cli/
 │   ├── config.go        # TUI config persistence helpers
 │   ├── device_utils.go  # Device filtering, sorting, status
 │   └── utils.go         # Misc helpers
-├── util/
-│   ├── crypto.go        # AES-256-GCM password encryption
-│   ├── history.go       # Per-device command history
-│   └── validation.go    # Input sanitization and validation
-└── internal/            # Unused scaffolding (services/errors/constants/formatters); candidate for removal
+│   ├── sshflow.go       # SSH credential flow (key-first, prompt on failure, save on success)
+├── config/
+│   └── config.go        # Single owner of ~/.ts-cli/config.json (used by commands and tui)
+└── util/
+    ├── crypto.go        # AES-256-GCM password encryption
+    ├── history.go       # Per-device command history
+    ├── paths.go         # Config directory resolution (TS_CLI_CONFIG_DIR override)
+    └── validation.go    # Input sanitization and validation
 ```
 
 ## Architecture
@@ -289,12 +294,13 @@ go test -cover ./...
 
 Test files:
 
-- `commands/config_test.go` — account config operations
+- `config/config_test.go` — account operations, atomic save, corrupt-file refusal, legacy migration
 - `commands/list_test.go` — JSON output validity
 - `commands/install_test.go` — `tsc` alias safety
 - `client/tailscale_test.go` — API client (httptest), path escaping, multi-account errors
 - `tui/model_test.go` — device filtering, sorting, status detection
 - `tui/ssh_test.go` — SSH command construction, exit-code classification, status JSON parsing
+- `tui/sshflow_test.go` — credential flow: key-first attempt, password prompt on failure, save on success, key migration
 - `util/*_test.go` — encryption round-trip/tamper detection, validation, history
 
 CI (`.github/workflows/ci.yml`) runs `go vet`, `go test -race`, `staticcheck`, `gosec` and `govulncheck` on every push and pull request.

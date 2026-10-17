@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/config"
 	"github.com/yatsenko-ihor/ts-cli/tui"
 )
 
@@ -29,99 +30,66 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
   # Short alias
   ts-cli i`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load configuration
-			config, err := LoadConfig()
+			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load configuration: %w", err)
 			}
 
-			// Check if we have any accounts configured
-			if len(config.Accounts) == 0 {
+			if len(cfg.Accounts) == 0 {
 				return fmt.Errorf("no accounts configured.\nRun 'ts-cli login --tailnet=<name>' first to add an account")
 			}
 
-			// If specific flags are provided, use them to override
+			var devices []client.Device
+			var accounts []client.AccountInfo
+
 			if apiKey != "" && tailnet != "" {
-				// Use the provided credentials
+				// Explicit credentials override the stored accounts
 				apiClient := client.NewClient(apiKey)
-				devices, err := apiClient.ListDevices(tailnet)
+				devices, err = apiClient.ListDevices(tailnet)
 				if err != nil {
 					return fmt.Errorf("failed to list devices: %w", err)
 				}
-
-				// Tag devices with account info
 				for i := range devices {
 					devices[i].AccountName = tailnet
 					devices[i].AccountTailnet = tailnet
 				}
-
 				if len(devices) == 0 {
 					fmt.Println("No devices found in the specified tailnet.")
 					return nil
 				}
+				accounts = []client.AccountInfo{{Name: tailnet, APIKey: apiKey, Tailnet: tailnet, Active: true}}
+			} else {
+				// Check if Tailscale is running (warning only, doesn't block)
+				WarnIfTailscaleNotRunning()
 
-				// Create accounts slice for reload functionality
-				accounts := []client.AccountInfo{
-					{
-						Name:    tailnet,
-						APIKey:  apiKey,
-						Tailnet: tailnet,
-						Active:  true,
-					},
+				fmt.Println("Fetching devices from all configured accounts...")
+				accounts = make([]client.AccountInfo, len(cfg.Accounts))
+				for i, acc := range cfg.Accounts {
+					accounts[i] = client.AccountInfo{
+						Name:    acc.Name,
+						APIKey:  acc.APIKey,
+						Tailnet: acc.Tailnet,
+						Active:  acc.Active,
+					}
 				}
 
-				// Launch TUI
-				mc := make(tui.MachineCredMap)
-				for id, cred := range config.MachineCredentials {
-					mc[id] = [2]string{cred.Username, cred.PasswordEncrypted}
+				devices = client.ListDevicesFromAccounts(accounts)
+				if len(devices) == 0 {
+					fmt.Println("No devices found in any of your configured accounts.")
+					return nil
 				}
-				m := tui.NewModel(devices, Version, config.SSHUsername, accounts, mc)
-				p := tea.NewProgram(m, tea.WithAltScreen())
-				if _, err := p.Run(); err != nil {
-					return fmt.Errorf("TUI error: %w", err)
-				}
-				return nil
+				fmt.Printf("Found %d device(s) from %d account(s)\n", len(devices), len(cfg.Accounts))
 			}
 
-			// Check if Tailscale is running (warning only, doesn't block)
-			WarnIfTailscaleNotRunning()
-
-			// Fetch devices from all configured accounts
-			fmt.Println("Fetching devices from all configured accounts...")
-			accounts := make([]client.AccountInfo, len(config.Accounts))
-			for i, acc := range config.Accounts {
-				accounts[i] = client.AccountInfo{
-					Name:    acc.Name,
-					APIKey:  acc.APIKey,
-					Tailnet: acc.Tailnet,
-					Active:  acc.Active,
-				}
-			}
-
-			devices := client.ListDevicesFromAccounts(accounts)
-			if len(devices) == 0 {
-				fmt.Println("No devices found in any of your configured accounts.")
-				return nil
-			}
-
-			fmt.Printf("Found %d device(s) from %d account(s)\n", len(devices), len(config.Accounts))
-
-			// Launch TUI
-			mc2 := make(tui.MachineCredMap)
-			for id, cred := range config.MachineCredentials {
-				mc2[id] = [2]string{cred.Username, cred.PasswordEncrypted}
-			}
-			m := tui.NewModel(devices, Version, config.SSHUsername, accounts, mc2)
+			m := tui.NewModel(devices, Version, cfg.SSHUsername, accounts, cfg.MachineCredentials)
 			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				return fmt.Errorf("TUI error: %w", err)
 			}
-
 			return nil
 		},
 	}
 
-	// Define flags
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "Tailscale API key (overrides TAILSCALE_API_KEY env var)")
 	cmd.Flags().StringVar(&tailnet, "tailnet", "", "Tailnet name (overrides stored configuration)")
 

@@ -515,7 +515,18 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 
 	var content strings.Builder
 	content.WriteString(lipgloss.NewStyle().Bold(true).Render(label))
+	if p := m.ssh.pending; p.machineName != "" {
+		content.WriteString("\n")
+		content.WriteString(grayItalicStyle.Render(truncateForWidth(p.machineName, popupWidth-8)))
+	}
 	content.WriteString("\n\n")
+
+	// Explain why we are asking (key auth failed, password rejected, ...)
+	if m.notify.sshError != nil {
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+		content.WriteString(errStyle.Render(truncateForWidth(m.notify.sshError.Error(), popupWidth-8)))
+		content.WriteString("\n\n")
+	}
 
 	// Show the input value (masked for password)
 	displayValue := value
@@ -679,7 +690,7 @@ func (m model) renderMachineCredsView() string {
 	} else {
 		for i, id := range machineIDs {
 			cred := m.ssh.machineCreds[id]
-			label := fmt.Sprintf("%s (user: %s)", id, cred.username)
+			label := fmt.Sprintf("%s (user: %s)", m.credDisplayName(id), cred.username)
 			if cred.passwordEncrypted == "" {
 				label += " 🔑" // key-based auth
 			}

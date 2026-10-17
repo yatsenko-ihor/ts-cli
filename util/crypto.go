@@ -20,15 +20,10 @@ const (
 )
 
 // keyFilePath returns the location of the random encryption key.
-// It can be overridden in tests via TS_CLI_CONFIG_DIR.
 func keyFilePath() (string, error) {
-	dir := os.Getenv("TS_CLI_CONFIG_DIR")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
-		}
-		dir = filepath.Join(home, ".ts-cli")
+	dir, err := ConfigDir()
+	if err != nil {
+		return "", err
 	}
 	return filepath.Join(dir, keyFileName), nil
 }
