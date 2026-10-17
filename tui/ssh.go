@@ -161,53 +161,45 @@ func (m model) sshToDevice(device client.Device, username, password string) tea.
 	})
 }
 
-// executeRemoteCommand runs command on device via SSH and captures output.
-// Everything that touches model state is resolved here, on the update loop;
-// the returned tea.Cmd only runs the process. History is appended by Update
-// when commandExecutedMsg arrives, so the HistoryStore is never mutated from
-// a background goroutine.
-func (m model) executeRemoteCommand(device client.Device, username, password, command string) tea.Cmd {
+// startRemoteJob starts the pending command or script on device and begins
+// streaming its output into the Output panel. It returns the Cmd that waits
+// for the first output event, or an error when the process could not start.
+func (m *model) startRemoteJob(device client.Device, username, password string) (tea.Cmd, error) {
+	p := m.ssh.pending
 	if len(device.Addresses) == 0 {
-		return func() tea.Msg {
-			return commandExecutedMsg{err: fmt.Errorf("device has no IP addresses"), failure: sshFailureExec}
-		}
+		return nil, fmt.Errorf("device has no IP addresses")
 	}
-
 	sshTarget, err := buildSSHTarget(username, device.Addresses[0])
 	if err != nil {
-		return func() tea.Msg { return commandExecutedMsg{err: err, failure: sshFailureExec} }
+		return nil, err
 	}
 
-	cmd, cleanup, err := newSSHCommand(sshTarget, password, true, command)
+	var remote string
+	var stdin []byte
+	switch p.action {
+	case sshActionCommand:
+		remote = p.command
+	case sshActionScript:
+		if p.script == nil {
+			return nil, fmt.Errorf("no script selected")
+		}
+		remote = p.script.RemoteCommand(p.args)
+		stdin = p.script.Content
+	default:
+		return nil, fmt.Errorf("nothing to run")
+	}
+
+	cmd, cleanup, err := newSSHCommand(sshTarget, password, true, remote)
 	if err != nil {
-		return func() tea.Msg { return commandExecutedMsg{err: err, failure: sshFailureExec} }
+		return nil, err
+	}
+	job, err := startRunJob(cmd, stdin, cleanup)
+	if err != nil {
+		return nil, fmt.Errorf("could not start ssh: %w", err)
 	}
 
-	machineID := machineKey(device)
-	name := displayName(device)
-
-	return func() tea.Msg {
-		defer cleanup()
-		output, err := cmd.CombinedOutput()
-
-		exitCode := 0
-		if err != nil {
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				exitCode = exitErr.ExitCode()
-			}
-		}
-
-		return commandExecutedMsg{
-			machineID:   machineID,
-			machineName: name,
-			command:     command,
-			output:      string(output),
-			exitCode:    exitCode,
-			err:         err,
-			failure:     classifySSHError(err),
-		}
-	}
+	m.beginJobOutput(job, p.label())
+	return tea.Batch(waitRunEvent(job), tickRun(job)), nil
 }
 
 // resolveRemoteOutputPath resolves a relative path in command output to an absolute remote path

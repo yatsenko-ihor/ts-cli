@@ -8,9 +8,9 @@ A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports m
 - **Interactive TUI**: Browse devices with a keyboard-driven split-screen terminal interface
 - **Device Search**: Vim-style incremental search by name, hostname, OS, or IP address
 - **SSH Integration**: Connect to devices via SSH directly from the TUI or CLI
-- **Remote Command Execution**: Run commands on remote devices and capture output in a dedicated panel
-- **Per-Device Command History**: Recall previously executed commands per device with `↑`/`↓`
-- **Output Panel**: View remote command output in a scrollable split panel
+- **Run Panel**: Execute local scripts (`~/.ts-cli/scripts/`), saved commands with `{{placeholders}}`, or one-off commands on the selected machine
+- **Streaming Output**: Output appears line by line while the job runs, with exit status and elapsed time; stop a job with `x`
+- **Recent**: Re-run anything that ran on a machine before, or save it as a named command
 - **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
 - **Profile Filtering**: Filter the device list by account or view all accounts at once
 - **Shell Completion**: Built-in support for bash, zsh, fish, and PowerShell
@@ -123,11 +123,12 @@ ts-cli tui          # alternative alias
 | `a`         | About (version, author info)                      |
 | `d`         | Clear default SSH username                        |
 | `x`         | Dismiss install tip                               |
-| `Tab`       | Cycle panel focus: list → history → output → list |
+| `:`         | Run a one-off command on the selected machine     |
+| `Tab`       | Cycle panel focus: machines → run → output        |
 | `Shift+Tab` | Reverse cycle panel focus                         |
 | `1`         | Jump focus to device list panel                   |
-| `2`         | Jump focus to command history panel               |
-| `3`         | Jump focus to output panel                        |
+| `2`         | Jump focus to the Run panel                       |
+| `3`         | Jump focus to the Output panel                    |
 | `Esc`       | Exit current mode / return to list focus          |
 | `q`         | Quit                                              |
 
@@ -145,10 +146,29 @@ ts-cli tui          # alternative alias
 When the terminal is wide enough, the TUI shows three panels:
 
 - **Left — Device List**: Searchable, filterable device list with online/offline status icons (🟢 / 🔴)
-- **Top-Right — Command History**: Per-device command history; navigate with `↑`/`↓` to recall commands
-- **Bottom-Right — Output Panel**: Scrollable output from the last remote command
+- **Top-Right — Run**: what you can execute on the selected machine, in three tabs (`[` / `]` to switch)
+  - **Scripts**: local files from `~/.ts-cli/scripts/`, streamed over one SSH connection and executed there
+  - **Commands**: saved named commands from `config.json`; `{{placeholders}}` are asked for at run time (`n` new, `e` edit, `d` delete)
+  - **Recent**: what ran on this machine before (`Enter` run again, `s` save as command, `d` forget)
+  - `:` opens an ad-hoc command line from any tab
+- **Bottom-Right — Output**: streams while the job runs; the title shows `● running`, then `✓ exit 0` or `✗ exit N`. `c` copies the selected line as an absolute remote path, `n` only the file name, `x` stops the job.
 
 Focus cycles with `Tab` / `Shift+Tab`, or jump directly with `1`, `2`, `3`.
+
+#### Scripts
+
+Any executable file in `~/.ts-cli/scripts/` shows up in the Scripts tab. The interpreter comes from the shebang (`sh` when there is none). On `Enter` the file is sent over ssh's stdin into a private temp file on the machine, executed with its arguments, and removed; the exit status is propagated. Optional metadata in a comment header:
+
+```bash
+#!/usr/bin/env bash
+# ts-cli: name=Disk usage
+# ts-cli: desc=Largest directories under a path
+# ts-cli: os=linux,darwin
+# ts-cli: args=path
+du -xh --max-depth=1 "${1:-/}" | sort -h | tail -n 15
+```
+
+`os=` hides the script on machines with another OS; `args=` lists positional arguments the TUI asks for before running.
 
 ### Running In tmux
 
@@ -285,8 +305,12 @@ ts-cli/
 │   ├── tailscale.go     # Local tailscale daemon interaction
 │   ├── help.go/.txt     # F1 help screen
 │   ├── config.go        # TUI config persistence helpers
+│   ├── runpanel.go      # Run panel: scripts / saved commands / recent, placeholders
+│   ├── runjob.go        # Streaming execution of a remote job
 │   ├── device_utils.go  # Device filtering, sorting, status
 │   └── utils.go         # Misc helpers
+├── scripts/
+│   └── scripts.go       # Discovery and metadata of ~/.ts-cli/scripts, remote run snippet
 │   ├── sshflow.go       # SSH credential flow (key-first, prompt on failure, save on success)
 ├── config/
 │   └── config.go        # Single owner of ~/.ts-cli/config.json (used by commands and tui)
