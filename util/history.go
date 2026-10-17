@@ -8,14 +8,31 @@ import (
 	"time"
 )
 
+// Kinds of history entries.
+const (
+	HistoryKindCommand = "command" // ad-hoc or saved shell command
+	HistoryKindScript  = "script"  // local script streamed to the machine
+)
+
 // CommandHistory represents a command executed on a machine
 type CommandHistory struct {
-	MachineID   string    `json:"machine_id"`   // Device ID or hostname
-	MachineName string    `json:"machine_name"` // Human-readable name
-	Command     string    `json:"command"`      // The command executed
-	Timestamp   time.Time `json:"timestamp"`    // When it was executed
-	ExitCode    int       `json:"exit_code"`    // Exit code of the command
-	Output      string    `json:"output"`       // Command output (optional, can be limited)
+	MachineID   string    `json:"machine_id"`       // Device ID or hostname
+	MachineName string    `json:"machine_name"`     // Human-readable name
+	Kind        string    `json:"kind,omitempty"`   // HistoryKindCommand (default) or HistoryKindScript
+	Command     string    `json:"command"`          // The command executed, or the script's display name
+	Script      string    `json:"script,omitempty"` // Script file name for HistoryKindScript
+	Args        []string  `json:"args,omitempty"`   // Script arguments
+	Timestamp   time.Time `json:"timestamp"`        // When it was executed
+	ExitCode    int       `json:"exit_code"`        // Exit code of the command
+	Output      string    `json:"output"`           // Command output (optional, can be limited)
+}
+
+// Key identifies "the same thing to run again" for de-duplication.
+func (h CommandHistory) Key() string {
+	if h.Kind == HistoryKindScript {
+		return "script:" + h.Script
+	}
+	return "command:" + h.Command
 }
 
 // HistoryStore manages command history
@@ -76,20 +93,17 @@ func (h *HistoryStore) Save() error {
 	return nil
 }
 
-// AddCommand adds a new command to history
-func (h *HistoryStore) AddCommand(machineID, machineName, command string, exitCode int, output string) {
+// Add appends an entry, truncating its output and capping the store size.
+func (h *HistoryStore) Add(entry CommandHistory) {
 	// Limit output to 1KB to keep history file manageable
-	if len(output) > 1024 {
-		output = output[:1024] + "... (truncated)"
+	if len(entry.Output) > 1024 {
+		entry.Output = entry.Output[:1024] + "... (truncated)"
 	}
-
-	entry := CommandHistory{
-		MachineID:   machineID,
-		MachineName: machineName,
-		Command:     command,
-		Timestamp:   time.Now(),
-		ExitCode:    exitCode,
-		Output:      output,
+	if entry.Kind == "" {
+		entry.Kind = HistoryKindCommand
+	}
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = time.Now()
 	}
 
 	h.commands = append(h.commands, entry)
@@ -100,7 +114,19 @@ func (h *HistoryStore) AddCommand(machineID, machineName, command string, exitCo
 	}
 }
 
-// GetCommandsForMachine returns all commands for a specific machine
+// AddCommand adds a plain command to history
+func (h *HistoryStore) AddCommand(machineID, machineName, command string, exitCode int, output string) {
+	h.Add(CommandHistory{
+		MachineID:   machineID,
+		MachineName: machineName,
+		Kind:        HistoryKindCommand,
+		Command:     command,
+		ExitCode:    exitCode,
+		Output:      output,
+	})
+}
+
+// GetCommandsForMachine returns all entries for a specific machine
 func (h *HistoryStore) GetCommandsForMachine(machineID string) []CommandHistory {
 	var result []CommandHistory
 	for _, cmd := range h.commands {
@@ -116,20 +142,37 @@ func (h *HistoryStore) GetAllCommands() []CommandHistory {
 	return h.commands
 }
 
-// GetUniqueCommands returns unique commands for a machine (deduplicated)
-func (h *HistoryStore) GetUniqueCommands(machineID string) []string {
+// Recent returns the most recent distinct entries for a machine, newest
+// first, at most limit (0 = no limit).
+func (h *HistoryStore) Recent(machineID string, limit int) []CommandHistory {
 	seen := make(map[string]bool)
-	var unique []string
-
-	// Iterate in reverse to get most recent unique commands first
+	var out []CommandHistory
 	for i := len(h.commands) - 1; i >= 0; i-- {
-		cmd := h.commands[i]
-		if cmd.MachineID == machineID && !seen[cmd.Command] {
-			seen[cmd.Command] = true
-			unique = append(unique, cmd.Command)
+		e := h.commands[i]
+		if e.MachineID != machineID {
+			continue
+		}
+		k := e.Key()
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, e)
+		if limit > 0 && len(out) >= limit {
+			break
 		}
 	}
+	return out
+}
 
+// GetUniqueCommands returns unique command strings for a machine (most recent first).
+func (h *HistoryStore) GetUniqueCommands(machineID string) []string {
+	var unique []string
+	for _, e := range h.Recent(machineID, 0) {
+		if e.Kind == HistoryKindCommand || e.Kind == "" {
+			unique = append(unique, e.Command)
+		}
+	}
 	return unique
 }
 
@@ -139,12 +182,16 @@ func (h *HistoryStore) DeleteCommandForMachine(machineID, command string) (int, 
 	if machineID == "" || command == "" {
 		return 0, nil
 	}
+	return h.DeleteEntries(machineID, CommandHistory{Kind: HistoryKindCommand, Command: command}.Key())
+}
 
+// DeleteEntries removes every entry for machineID whose Key() equals key.
+func (h *HistoryStore) DeleteEntries(machineID, key string) (int, error) {
 	filtered := make([]CommandHistory, 0, len(h.commands))
 	removed := 0
 
 	for _, entry := range h.commands {
-		if entry.MachineID == machineID && entry.Command == command {
+		if entry.MachineID == machineID && entry.Key() == key {
 			removed++
 			continue
 		}

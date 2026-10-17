@@ -5,7 +5,7 @@ package tui
 // getMachineListWidth returns the width to use for the machine list panel
 func (m model) getMachineListWidth() int {
 	// Width should depend only on terminal width/mode, not content length.
-	if m.hist.visible {
+	if m.run.visible {
 		listWidth, _ := m.getSplitPanelWidths()
 		return listWidth
 	}
@@ -104,7 +104,7 @@ func (m model) getMaxVisibleItems() int {
 	// Subtract headers, help text, borders, and extra rows
 	headerRows := 7 // approximate header area rows
 	footerRows := 6 // help panel rows
-	if m.hist.visible {
+	if m.run.visible {
 		footerRows = 2
 	}
 

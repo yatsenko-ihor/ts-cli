@@ -174,6 +174,32 @@ func TestLegacyCleartextAPIKeyIsMigrated(t *testing.T) {
 	}
 }
 
+func TestSavedCommandsUpsertDelete(t *testing.T) {
+	cfg := &Config{}
+	cfg.UpsertCommand("", SavedCommand{Name: "uptime", Command: "uptime"})
+	cfg.UpsertCommand("", SavedCommand{Name: "disk", Command: "df -h {{path}}"})
+	cfg.UpsertCommand("", SavedCommand{Name: "uptime", Command: "uptime -p"})
+	if len(cfg.Commands) != 2 || cfg.Commands[0].Command != "uptime -p" {
+		t.Fatalf("upsert by name failed: %+v", cfg.Commands)
+	}
+	cfg.UpsertCommand("disk", SavedCommand{Name: "disk usage", Command: "df -h"})
+	if len(cfg.Commands) != 2 || cfg.Commands[1].Name != "disk usage" {
+		t.Fatalf("rename failed: %+v", cfg.Commands)
+	}
+	if !cfg.DeleteCommand("uptime") || len(cfg.Commands) != 1 || cfg.DeleteCommand("nope") {
+		t.Fatalf("delete failed: %+v", cfg.Commands)
+	}
+
+	useTempConfigDir(t)
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	back, _ := Load()
+	if len(back.Commands) != 1 || back.Commands[0].Name != "disk usage" {
+		t.Fatalf("commands not persisted: %+v", back.Commands)
+	}
+}
+
 func TestLoadRefusesCorruptFile(t *testing.T) {
 	dir := useTempConfigDir(t)
 	if err := os.WriteFile(filepath.Join(dir, fileName), []byte("{not json"), 0600); err != nil {

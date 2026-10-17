@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/yatsenko-ihor/ts-cli/scripts"
 	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
@@ -18,7 +19,7 @@ func (m model) renderDeviceList() string {
 	maxVisible := m.getMaxVisibleItems()
 	splitTargetHeight := 0
 
-	if m.hist.visible {
+	if m.run.visible {
 		_, panelHeight := m.getHistoryPanelSize()
 
 		// Match stacked right panel height (including border compensation)
@@ -63,7 +64,7 @@ func (m model) renderDeviceList() string {
 	if visibleEnd > len(m.list.filteredDevices) {
 		visibleEnd = len(m.list.filteredDevices)
 	}
-	if m.hist.visible && visibleEnd < len(m.list.filteredDevices) && visibleEnd > visibleStart {
+	if m.run.visible && visibleEnd < len(m.list.filteredDevices) && visibleEnd > visibleStart {
 		// Reserve one line for bottom "more below" indicator in split view.
 		visibleEnd--
 	}
@@ -113,7 +114,7 @@ func (m model) renderDeviceList() string {
 	// Render the list in a frame
 	deviceListStyle := listStyle
 
-	if m.hist.visible {
+	if m.run.visible {
 		if splitTargetHeight > 0 {
 			deviceListStyle = deviceListStyle.Height(splitTargetHeight)
 		}
@@ -127,7 +128,7 @@ func (m model) renderDeviceList() string {
 
 	borderColor := lipgloss.Color("#7A7A7A")
 	deviceListStyle = deviceListStyle.Width(m.getMachineListWidth())
-	if m.hist.visible && m.activeFocus == focusList {
+	if m.run.visible && m.activeFocus == focusList {
 		borderColor = lipgloss.Color("#5FAFFF")
 		deviceListStyle = deviceListStyle.BorderForeground(borderColor)
 	} else {
@@ -158,191 +159,223 @@ func (m model) renderDeviceList() string {
 	return applyFrameTitleRaw(listPanel, styledTitle, borderColor)
 }
 
-// renderHistoryPanel renders the command history panel
-func (m model) renderHistoryPanel() string {
-	var historyContent strings.Builder
-	historyWidth, historyHeight := m.getHistoryPanelSize()
-	historyInnerWidth := getPanelInnerWidth(historyWidth)
+// renderRunPanel renders the launcher: tabs (Scripts / Commands / Recent),
+// the active tab's rows, and the ad-hoc ":" command line when open.
+func (m model) renderRunPanel() string {
+	var b strings.Builder
+	width, height := m.getHistoryPanelSize()
+	inner := getPanelInnerWidth(width)
+	focused := m.activeFocus == focusRun
 
-	// Get history for current device
-	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.list.filteredDevices) {
-		return ""
+	device, hasDevice := m.targetDevice()
+
+	// Header: target machine
+	header := "No machine selected"
+	if hasDevice {
+		header = fmt.Sprintf("%s %s", getStatusIcon(device), displayName(device))
 	}
+	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#3F3F3F")).Render(truncateForWidth(header, inner)))
+	b.WriteString("\n")
 
-	device := m.list.filteredDevices[target]
-	machineID := device.ID
-	if machineID == "" {
-		machineID = device.Hostname
+	// Tabs
+	var tabs []string
+	for t := runTab(0); t < tabCount; t++ {
+		label := t.String()
+		if t == m.run.tab {
+			tabs = append(tabs, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#2D6A8C")).Underline(true).Render(label))
+		} else {
+			tabs = append(tabs, grayItalicStyle.Render(label))
+		}
 	}
+	b.WriteString(strings.Join(tabs, grayItalicStyle.Render(" │ ")))
+	b.WriteString("\n")
 
-	machineName := device.Name
-	if machineName == "" {
-		machineName = device.Hostname
+	// Rows of the active tab
+	type row struct {
+		main string
+		sub  string
 	}
-
-	// Check if device is online
-	online := isDeviceOnline(device)
-	statusIcon := "🔴"
-	if online {
-		statusIcon = "🟢"
-	}
-
-	// Header - device name with icon status
-	headerText := truncateForWidth(fmt.Sprintf("%s %s", machineName, statusIcon), historyInnerWidth)
-	machineHeader := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#3F3F3F")).
-		Render(headerText)
-	historyContent.WriteString(machineHeader)
-	historyContent.WriteString("\n")
-
-	// Get unique commands from history
-	var historyCommands []string
-	if m.hist.history != nil {
-		historyCommands = m.hist.history.GetUniqueCommands(machineID)
-	}
-
-	if len(historyCommands) == 0 {
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("No command history for this device", historyInnerWidth)))
-	} else {
-		contentHeight := historyHeight - panelVerticalPadding
-		helpLines := 1
-		if m.input.mode == inputCommand {
-			helpLines = 2
-		}
-		reservedLines := 1 + 1 + helpLines + 1          // header + total + separator + help/input
-		maxVisible := contentHeight - reservedLines - 2 // reserve room for top/bottom indicators
-		if maxVisible < 1 {
-			maxVisible = 1
-		}
-
-		// Render command list
-		startIdx := 0
-		if len(historyCommands) > maxVisible && m.hist.cursor >= maxVisible {
-			startIdx = m.hist.cursor - maxVisible + 1
-		}
-
-		endIdx := startIdx + maxVisible
-		if endIdx > len(historyCommands) {
-			endIdx = len(historyCommands)
-		}
-
-		showTop := startIdx > 0
-		showBottom := endIdx < len(historyCommands)
-
-		maxCmdWidth := historyInnerWidth - 4
-		if maxCmdWidth < 8 {
-			maxCmdWidth = 8
-		}
-
-		if showTop {
-			historyContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
-			historyContent.WriteString("\n")
-		}
-
-		for i := startIdx; i < endIdx; i++ {
-			cmd := historyCommands[i]
-			cursor := "  "
-			style := lipgloss.NewStyle()
-
-			if i == m.hist.cursor && m.activeFocus == focusHistory {
-				cursor = "▸ "
-				style = lipgloss.NewStyle().Foreground(lipgloss.Color("#2D6A8C")).Bold(true)
+	var rows []row
+	var empty string
+	switch m.run.tab {
+	case tabScripts:
+		for _, s := range m.visibleScripts() {
+			sub := s.Description
+			if len(s.Args) > 0 {
+				sub = strings.TrimSpace(sub + "  args: " + strings.Join(s.Args, ", "))
 			}
-
-			displayCmd := truncateForWidth(cmd, maxCmdWidth)
-
-			historyContent.WriteString(style.Render(cursor + displayCmd))
-			historyContent.WriteString("\n")
+			rows = append(rows, row{main: s.Name, sub: sub})
 		}
-
-		if showBottom {
-			historyContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
-			historyContent.WriteString("\n")
+		dir, _ := scripts.Dir()
+		if m.run.scriptsErr != nil {
+			empty = "Cannot read scripts: " + m.run.scriptsErr.Error()
+		} else if len(m.run.scripts) == 0 {
+			empty = "No scripts yet. Put executable files in " + dir
+		} else {
+			empty = "No scripts for this machine's OS (" + device.OS + ")"
 		}
-
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth(fmt.Sprintf("Total: %d commands", len(historyCommands)), historyInnerWidth)))
+	case tabCommands:
+		for _, c := range m.run.commands {
+			rows = append(rows, row{main: c.Name, sub: c.Command})
+		}
+		empty = "No saved commands. Press n to add one, or : to run something now"
+	case tabRecent:
+		for _, e := range m.recentEntries() {
+			main := e.Command
+			if e.Kind == util.HistoryKindScript {
+				main = "⚙ " + e.Command
+				if len(e.Args) > 0 {
+					main += " " + strings.Join(e.Args, " ")
+				}
+			}
+			status := "✓"
+			if e.ExitCode != 0 {
+				status = fmt.Sprintf("✗%d", e.ExitCode)
+			}
+			rows = append(rows, row{main: main, sub: status + " " + e.Timestamp.Local().Format("Jan 2 15:04")})
+		}
+		empty = "Nothing has run on this machine yet"
 	}
 
-	historyContent.WriteString("\n")
+	contentHeight := height - panelVerticalPadding
+	footerLines := 1
 	if m.input.mode == inputCommand {
-		historyContent.WriteString(grayItalicStyle.Render("New command:"))
-		historyContent.WriteString("\n")
-		maxInputWidth := historyInnerWidth - 2
-		if maxInputWidth < 1 {
-			maxInputWidth = 1
-		}
-		historyContent.WriteString(searchLabelStyle.Render("> ") + searchQueryStyle.Render(truncateForWidth(m.input.value+"_", maxInputWidth)))
+		footerLines = 2
+	}
+	// header + tabs + footer; each row takes 1 line (main) — sub shown only for the cursor row
+	maxVisible := contentHeight - 2 - footerLines - 1
+	if maxVisible < 1 {
+		maxVisible = 1
+	}
+
+	if len(rows) == 0 {
+		b.WriteString(grayItalicStyle.Render(truncateForWidth(empty, inner)))
+		b.WriteString("\n")
 	} else {
-		historyContent.WriteString(grayItalicStyle.Render(truncateForWidth("Press 'e' to type a new command • 'd' delete selected", historyInnerWidth)))
+		cursor := m.tabCursor()
+		start := 0
+		if cursor >= maxVisible {
+			start = cursor - maxVisible + 1
+		}
+		end := start + maxVisible
+		if end > len(rows) {
+			end = len(rows)
+		}
+		if start > 0 {
+			b.WriteString(grayItalicStyle.Render("  ↑ more above"))
+			b.WriteString("\n")
+		}
+		for i := start; i < end; i++ {
+			r := rows[i]
+			if i == cursor && focused {
+				b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#2D6A8C")).Bold(true).Render("▸ " + truncateForWidth(r.main, inner-2)))
+			} else if i == cursor {
+				b.WriteString(lipgloss.NewStyle().Bold(true).Render("  " + truncateForWidth(r.main, inner-2)))
+			} else {
+				b.WriteString("  " + truncateForWidth(r.main, inner-2))
+			}
+			b.WriteString("\n")
+		}
+		if end < len(rows) {
+			b.WriteString(grayItalicStyle.Render("  ↓ more below"))
+			b.WriteString("\n")
+		}
+		if cursor >= 0 && cursor < len(rows) && rows[cursor].sub != "" {
+			b.WriteString(grayItalicStyle.Render(truncateForWidth("  "+rows[cursor].sub, inner)))
+			b.WriteString("\n")
+		}
+	}
+
+	// Footer: ad-hoc prompt or key hints
+	if m.input.mode == inputCommand {
+		b.WriteString(grayItalicStyle.Render("Run on " + truncateForWidth(displayName(device), inner-7) + ":"))
+		b.WriteString("\n")
+		b.WriteString(searchLabelStyle.Render(": ") + searchQueryStyle.Render(truncateForWidth(m.input.value+"_", inner-2)))
+	} else {
+		var hint string
+		switch m.run.tab {
+		case tabScripts:
+			hint = "enter run • r reload • : command • [/] tabs"
+		case tabCommands:
+			hint = "enter run • n new • e edit • d delete • : command"
+		case tabRecent:
+			hint = "enter run again • s save as command • d forget • : command"
+		}
+		b.WriteString(grayItalicStyle.Render(truncateForWidth(hint, inner)))
 	}
 
 	borderColor := lipgloss.Color("#4F4F4F")
-	if m.activeFocus == focusHistory {
+	if focused {
 		borderColor = lipgloss.Color("#5FAFFF")
 	}
-
-	return renderTitledPanel(historyContent.String(), historyFrameTitle, historyWidth, historyHeight, borderColor, m.activeFocus == focusHistory)
+	return renderTitledPanel(b.String(), runFrameTitle, width, height, borderColor, focused)
 }
 
-// renderOutputPanel renders the command output panel
+// renderOutputPanel renders the streamed output of the current/last job.
 func (m model) renderOutputPanel() string {
 	outputWidth, outputHeight := m.getHistoryPanelSize()
-	outputInnerWidth := getPanelInnerWidth(outputWidth)
-	selectedOutputStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#2D6A8C")).
-		Bold(true)
+	inner := getPanelInnerWidth(outputWidth)
+	focused := m.activeFocus == focusOutput
+	selectedOutputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2D6A8C")).Bold(true)
 
-	var outputContent strings.Builder
+	var b strings.Builder
 
-	if m.hist.commandOutput != "" {
-		lines := splitOutputLines(m.hist.commandOutput)
-		startIdx, endIdx, showTop, showBottom := outputViewport(len(lines), outputHeight, m.hist.outputScroll)
-		cursor := m.hist.outputCursor
+	lines := m.run.lines
+	if m.run.partial != "" {
+		lines = append(append([]string(nil), lines...), m.run.partial)
+	}
+
+	if len(lines) == 0 {
+		if m.run.running {
+			b.WriteString(grayItalicStyle.Render(truncateForWidth("Waiting for output…", inner)))
+		} else if m.run.finished {
+			b.WriteString(grayItalicStyle.Render(truncateForWidth("(no output)", inner)))
+		} else {
+			b.WriteString(grayItalicStyle.Render(truncateForWidth("No output yet", inner)))
+			b.WriteString("\n")
+			b.WriteString(grayItalicStyle.Render(truncateForWidth("Run a script or command to see its output here", inner)))
+		}
+	} else {
+		startIdx, endIdx, showTop, showBottom := outputViewport(len(lines), outputHeight, m.run.outputScroll)
+		cursor := m.run.outputCursor
 		if cursor < 0 {
 			cursor = 0
 		}
-		if len(lines) > 0 && cursor >= len(lines) {
+		if cursor >= len(lines) {
 			cursor = len(lines) - 1
 		}
-
 		if showTop {
-			outputContent.WriteString(grayItalicStyle.Render("  ↑ more above"))
-			outputContent.WriteString("\n")
+			b.WriteString(grayItalicStyle.Render(fmt.Sprintf("  ↑ %d more", startIdx)))
+			b.WriteString("\n")
 		}
-
-		if endIdx > startIdx {
-			visibleLines := lines[startIdx:endIdx]
-			for i, line := range visibleLines {
-				lineIdx := startIdx + i
-				if lineIdx == cursor {
-					visibleLines[i] = selectedOutputStyle.Render("▸ " + truncateForWidth(line, outputInnerWidth-2))
-				} else {
-					visibleLines[i] = truncateForWidth(line, outputInnerWidth)
-				}
+		for i := startIdx; i < endIdx; i++ {
+			if i == cursor && focused {
+				b.WriteString(selectedOutputStyle.Render("▸ " + truncateForWidth(lines[i], inner-2)))
+			} else {
+				b.WriteString(truncateForWidth(lines[i], inner))
 			}
-			outputContent.WriteString(strings.Join(visibleLines, "\n"))
+			if i < endIdx-1 || showBottom {
+				b.WriteString("\n")
+			}
 		}
-
 		if showBottom {
-			if endIdx > startIdx {
-				outputContent.WriteString("\n")
-			}
-			outputContent.WriteString(grayItalicStyle.Render("  ↓ more below"))
+			b.WriteString(grayItalicStyle.Render(fmt.Sprintf("  ↓ %d more", len(lines)-endIdx)))
 		}
-	} else {
-		outputContent.WriteString(grayItalicStyle.Render(truncateForWidth("No output yet", outputInnerWidth)))
-		outputContent.WriteString("\n")
-		outputContent.WriteString(grayItalicStyle.Render(truncateForWidth("Execute a command to see output here", outputInnerWidth)))
+	}
+
+	title := outputFrameTitle
+	if m.run.label != "" {
+		title += " · " + truncateForWidth(m.run.label, 24)
+	}
+	if status := m.outputStatus(); status != "" {
+		title += "  " + status
 	}
 
 	borderColor := lipgloss.Color("#4F4F4F")
-	if m.activeFocus == focusOutput {
+	if focused {
 		borderColor = lipgloss.Color("#5FAFFF")
 	}
-
-	return renderTitledPanel(outputContent.String(), outputFrameTitle, outputWidth, outputHeight, borderColor, m.activeFocus == focusOutput)
+	return renderTitledPanel(b.String(), title, outputWidth, outputHeight, borderColor, focused)
 }
 
 // renderProfileSelection renders the profile selection view
@@ -516,7 +549,10 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 
 	var content strings.Builder
 	content.WriteString(lipgloss.NewStyle().Bold(true).Render(label))
-	if p := m.ssh.pending; p.machineName != "" {
+	if m.input.mode == inputText && m.input.hint != "" {
+		content.WriteString("\n")
+		content.WriteString(grayItalicStyle.Render(truncateForWidth(m.input.hint, popupWidth-8)))
+	} else if p := m.ssh.pending; p.machineName != "" {
 		content.WriteString("\n")
 		content.WriteString(grayItalicStyle.Render(truncateForWidth(p.machineName, popupWidth-8)))
 	}
@@ -746,30 +782,34 @@ func (m model) renderMachineCredsView() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "↑/k up • ↓/j down • / search • s ssh • c copy • tab history • p profile • S sort • r reload • o options • a about"
-	if m.hist.visible {
-		if m.activeFocus == focusHistory {
-			help = "1/2/3 frame • ↑/k up • ↓/j down • e new-command • d delete • enter execute • tab/shift+tab switch • esc close"
-		} else if m.activeFocus == focusOutput {
-			help = "1/2/3 frame • ↑/k up • ↓/j down • c copy-full-path • n copy-name • tab/shift+tab switch • esc close"
-		} else {
-			help = "1/2/3 frame • ↑/k up • ↓/j down • tab/shift+tab switch • esc close"
+	help := "↑/k up • ↓/j down • / search • s ssh • : run command • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
+	if m.run.visible {
+		switch m.activeFocus {
+		case focusRun:
+			help = "1/2/3 frame • [/] tabs • ↑/k ↓/j • enter run • : command • tab/shift+tab switch • esc close"
+		case focusOutput:
+			help = "1/2/3 frame • ↑/k ↓/j • g/G top/end • c copy path • n copy name • x stop • C clear • tab/shift+tab switch • esc close"
+		default:
+			help = "1/2/3 frame • ↑/k up • ↓/j down • s ssh • : run command • tab/shift+tab switch • esc close"
 		}
 	}
-	if !m.hist.visible {
+	if !m.run.visible {
 		if m.ssh.username != "" {
 			help += " • d clear-user"
 		}
 		help += " • F1 help • q quit"
 	}
 
-	if m.input.mode == inputUsername {
+	switch m.input.mode {
+	case inputUsername:
 		help = "Enter SSH username • esc cancel • enter confirm"
-	} else if m.input.mode == inputPassword {
+	case inputPassword:
 		help = "Enter SSH password • esc cancel • enter save"
-	} else if m.input.mode == inputCommand {
-		help = "Type command to execute • esc cancel • enter execute"
-	} else if m.input.mode == inputSearch {
+	case inputCommand:
+		help = "Type command to run on the selected machine • esc cancel • enter run"
+	case inputText:
+		help = "esc cancel • enter confirm • ctrl+v paste"
+	case inputSearch:
 		help = "Type to search • esc cancel • enter confirm"
 	}
 

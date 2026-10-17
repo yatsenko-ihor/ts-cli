@@ -58,7 +58,6 @@ const (
 	splitRightSpacerWidth  = 0 // no extra spacer: right panels should reach terminal edge
 	splitTerminalSlack     = 0 // no reserved slack: consume full available split width
 
-	listFrameTitle    = "[1] List machines"
-	historyFrameTitle = "[2] Commands over SSH History"
-	outputFrameTitle  = "[3] Command Output"
+	runFrameTitle    = "[2] Run"
+	outputFrameTitle = "[3] Output"
 )

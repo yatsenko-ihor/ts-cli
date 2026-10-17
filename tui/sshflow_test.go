@@ -70,7 +70,7 @@ func TestMigrateCredentialKeysMovesNameToID(t *testing.T) {
 
 func TestBeginSSHPromptsUsernameWhenNothingSaved(t *testing.T) {
 	m := flowModel(t, nil, "")
-	updated, _ := m.beginSSH(0, sshActionSession, "")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
 	m2 := asModel(t, updated)
 	if m2.input.mode != inputUsername {
 		t.Fatalf("expected username prompt, got mode %v", m2.input.mode)
@@ -82,7 +82,7 @@ func TestBeginSSHPromptsUsernameWhenNothingSaved(t *testing.T) {
 
 func TestBeginSSHWithDefaultUserTriesKeyAuthFirst(t *testing.T) {
 	m := flowModel(t, nil, "admin")
-	updated, cmd := m.beginSSH(0, sshActionSession, "")
+	updated, cmd := m.beginSSH(0, sshJob{action: sshActionSession})
 	m2 := asModel(t, updated)
 	if m2.input.mode != inputNone {
 		t.Fatalf("must not prompt for a password before trying key auth, got mode %v", m2.input.mode)
@@ -97,7 +97,7 @@ func TestBeginSSHWithDefaultUserTriesKeyAuthFirst(t *testing.T) {
 
 func TestConnectionFailureAsksForPasswordThenSavesOnSuccess(t *testing.T) {
 	m := flowModel(t, nil, "admin")
-	updated, _ := m.beginSSH(0, sshActionSession, "")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
 	m = asModel(t, updated)
 
 	// Key-based attempt failed (ssh exit 255).
@@ -150,7 +150,7 @@ func TestSavedPasswordIsUsedWithoutPrompting(t *testing.T) {
 	}
 	m.ssh.machineCreds["dev-1"] = machineCredential{name: "laptop", username: "root", passwordEncrypted: enc}
 
-	updated, cmd := m.beginSSH(0, sshActionSession, "")
+	updated, cmd := m.beginSSH(0, sshJob{action: sshActionSession})
 	m2 := asModel(t, updated)
 	if m2.input.mode != inputNone || cmd == nil {
 		t.Fatalf("saved credentials must connect directly; mode=%v cmd=%v", m2.input.mode, cmd != nil)
@@ -164,7 +164,7 @@ func TestRejectedSavedPasswordIsForgottenAndReprompted(t *testing.T) {
 	m := flowModel(t, nil, "")
 	enc, _ := util.EncryptPassword("old")
 	m.ssh.machineCreds["dev-1"] = machineCredential{name: "laptop", username: "root", passwordEncrypted: enc}
-	updated, _ := m.beginSSH(0, sshActionSession, "")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
 	m = asModel(t, updated)
 
 	updated, _ = m.finishSSHAttempt(sshFailureBadPassword, errors.New("exit status 5"))
@@ -186,7 +186,7 @@ func TestRemoteExitKeepsCredentialsAndClearsPending(t *testing.T) {
 	m := flowModel(t, nil, "")
 	enc, _ := util.EncryptPassword("pw")
 	m.ssh.machineCreds["dev-1"] = machineCredential{name: "laptop", username: "root", passwordEncrypted: enc}
-	updated, _ := m.beginSSH(0, sshActionSession, "")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
 	m = asModel(t, updated)
 
 	// Remote shell exited 1: this used to delete the saved password.

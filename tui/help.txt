@@ -5,7 +5,9 @@ KEYBOARD SHORTCUTS
 ──────────────────
   ↑/k, ↓/j      Navigate device list
   s              SSH to selected machine
-  c              Run command on selected machine
+  :              Run a one-off command on the selected machine
+  c              Copy the ssh command for the selected machine
+  Tab            Open the Run panel (Tab/Shift+Tab cycle panels)
   r              Reload device list
   /              Search devices
   Shift+S        Cycle sort mode (Name/Last seen/Added)
@@ -13,10 +15,42 @@ KEYBOARD SHORTCUTS
   a              About screen
   p              Switch profile/account
   u              Run 'tailscale up'
-  1, 2, 3        Focus panels (List, History, Output)
-  n              Copy output item
+  1, 2, 3        Focus panels (Machines, Run, Output)
   q / Ctrl+C     Quit
   F1             This help screen
+
+RUN PANEL [2]
+─────────────
+  Everything you can execute on the selected machine, in three tabs
+  ([ / ] or h / l switch tabs):
+
+  Scripts   Local files from ~/.ts-cli/scripts/. Any executable file
+            works; the interpreter comes from its shebang (no shebang
+            = sh). The script is streamed over one SSH connection into
+            a private temp file, run, and removed. Optional header:
+              # ts-cli: name=Disk usage
+              # ts-cli: desc=Largest directories under /
+              # ts-cli: os=linux,darwin      (hide on other OSes)
+              # ts-cli: args=path,depth      (asked before running)
+            r reloads the list.
+
+  Commands  Saved named commands kept in config.json. {{name}}
+            placeholders are asked for at run time.
+            n new • e edit • d delete.
+
+  Recent    What ran on this machine before, newest first.
+            enter runs again • s saves as a Command • d forgets it.
+
+  :         Ad-hoc command line, works from any tab and from the
+            machine list. Enter runs it immediately.
+
+OUTPUT PANEL [3]
+────────────────
+  Output streams in while the job runs; the title shows "● running",
+  then "✓ exit 0" or "✗ exit N" with the elapsed time.
+  ↑/k ↓/j move • g/G top/end (G re-enables auto-follow)
+  c copy line as absolute remote path • n copy file name only
+  x (or Ctrl+C) stop the running job • C clear
 
 SSH CREDENTIALS
 ───────────────
@@ -33,7 +67,7 @@ SSH CREDENTIALS
     forgotten only when sshpass reports it was rejected; an ordinary
     non-zero exit of the remote shell keeps everything.
 
-  Connection flow (sessions and remote commands alike):
+  Connection flow (sessions, commands and scripts alike):
     1. Saved password → connect directly, no prompt
     2. No saved password → try key-based auth first
        (username: per-machine → default → ask)

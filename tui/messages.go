@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/config"
 	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
@@ -56,15 +57,10 @@ type reloadMsg struct {
 	err      error
 }
 
-// commandExecutedMsg is returned when a remote command completes
-type commandExecutedMsg struct {
-	machineID   string // history key for the device the command ran on
-	machineName string
-	command     string
-	output      string
-	exitCode    int
-	err         error
-	failure     sshFailure // classification of err (see classifySSHError)
+// commandsChangedMsg carries the saved-command list after an edit.
+type commandsChangedMsg struct {
+	commands []config.SavedCommand
+	err      error
 }
 
 // pasteTarget identifies which input field a clipboard paste is destined for.
@@ -78,6 +74,7 @@ const (
 	pasteTargetSearch                      // searchQuery
 	pasteTargetCommand                     // commandInput
 	pasteTargetPassword                    // passwordInput
+	pasteTargetText                        // generic inputText prompt
 )
 
 // pasteMsg is returned when a clipboard read completes.
@@ -104,7 +101,7 @@ type secretStoreChangedMsg struct {
 type panelFocus int
 
 const (
-	focusList    panelFocus = iota
-	focusHistory            // Focus on history panel
-	focusOutput             // Focus on output panel
+	focusList   panelFocus = iota
+	focusRun               // Focus on the Run panel (scripts / commands / recent)
+	focusOutput            // Focus on the Output panel
 )

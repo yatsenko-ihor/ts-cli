@@ -10,11 +10,11 @@ import (
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const (
-	// keyFocusList / keyFocusHistory / keyFocusOutput are the keyboard shortcuts
+	// keyFocusList / keyFocusRun / keyFocusOutput are the keyboard shortcuts
 	// that directly switch focus to the corresponding panel from any mode.
-	keyFocusList    = "1"
-	keyFocusHistory = "2"
-	keyFocusOutput  = "3"
+	keyFocusList   = "1"
+	keyFocusRun    = "2"
+	keyFocusOutput = "3"
 
 	// keyPasteAlt is the macOS-conventional paste shortcut.
 	// On macOS most terminal emulators intercept cmd+v and deliver the clipboard
@@ -58,55 +58,71 @@ var (
 	})
 
 	cmdTabForward = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		if !m.hist.visible {
-			m.hist.visible = true
-			m.activeFocus = focusHistory
-			m.hist.cursor = 0
-			m.hist.outputScroll = 0
-			m.hist.outputCursor = 0
-		} else {
-			switch m.activeFocus {
-			case focusList:
-				m.activeFocus = focusHistory
-				m.hist.cursor = 0
-			case focusHistory:
-				m.activeFocus = focusOutput
-				m.hist.outputScroll = 0
-				m.hist.outputCursor = 0
-			case focusOutput:
-				m.activeFocus = focusList
-			default:
-				m.activeFocus = focusList
-			}
+		if !m.run.visible {
+			return m.openRunPanel(focusRun), nil
+		}
+		switch m.activeFocus {
+		case focusList:
+			m.activeFocus = focusRun
+		case focusRun:
+			m.activeFocus = focusOutput
+		default:
+			m.activeFocus = focusList
 		}
 		return m, nil
 	})
 
 	cmdTabBackward = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		if !m.hist.visible {
-			m.hist.visible = true
+		if !m.run.visible {
+			return m.openRunPanel(focusOutput), nil
+		}
+		switch m.activeFocus {
+		case focusList:
 			m.activeFocus = focusOutput
-			m.hist.cursor = 0
-			m.hist.outputScroll = 0
-			m.hist.outputCursor = 0
-		} else {
-			switch m.activeFocus {
-			case focusList:
-				m.activeFocus = focusOutput
-				m.hist.outputScroll = 0
-				m.hist.outputCursor = 0
-			case focusHistory:
-				m.activeFocus = focusList
-			case focusOutput:
-				m.activeFocus = focusHistory
-				m.hist.cursor = 0
-			default:
-				m.activeFocus = focusList
-			}
+		case focusOutput:
+			m.activeFocus = focusRun
+		default:
+			m.activeFocus = focusList
 		}
 		return m, nil
 	})
 )
+
+// ─── Generic text prompt (inputText) ──────────────────────────────────────────
+
+func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+c":
+		m.input = textInput{mode: inputNone}
+		return m, nil
+	case "enter":
+		submit := m.input.onSubmit
+		value := m.input.value
+		if submit == nil {
+			m.input = textInput{mode: inputNone}
+			return m, nil
+		}
+		return submit(m, value)
+	case "backspace":
+		if len(m.input.value) > 0 {
+			r := []rune(m.input.value)
+			m.input.value = string(r[:len(r)-1])
+		}
+		return m, nil
+	case "ctrl+v", keyPasteAlt:
+		return m, readClipboard(pasteTargetText)
+	}
+	if msg.Paste {
+		m.input.value += sanitizePastedText(string(msg.Runes))
+		return m, nil
+	}
+	if len(msg.Runes) == 1 && msg.Type == tea.KeyRunes {
+		m.input.value += string(msg.Runes)
+	} else if msg.Type == tea.KeySpace {
+		m.input.value += " "
+	}
+	return m, nil
+}
 
 // ─── Username prompt mode ─────────────────────────────────────────────────────
 
@@ -237,8 +253,7 @@ var commandModeHandlers = map[string]keyHandler{
 		}
 		command := util.SanitizeInput(m.input.value)
 		m.input = textInput{mode: inputNone}
-		m.input.value = ""
-		return m.beginSSH(m.getTargetDevice(), sshActionCommand, command)
+		return m.startCommand(command)
 	},
 	"backspace": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.input.value) > 0 {
@@ -267,134 +282,6 @@ func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Append printable single-character input
 	if len(msg.String()) == 1 {
 		m.input.value += msg.String()
-	}
-	return m, nil
-}
-
-// ─── History navigation mode ──────────────────────────────────────────────────
-
-// historyDeviceContext returns the machine ID and history commands for the
-// currently-targeted device. valid is false when no device can be resolved.
-func historyDeviceContext(m model) (machineID string, commands []string, valid bool) {
-	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.list.filteredDevices) {
-		return "", nil, false
-	}
-	device := m.list.filteredDevices[target]
-	machineID = device.ID
-	if machineID == "" {
-		machineID = device.Hostname
-	}
-	if m.hist.history != nil {
-		commands = m.hist.history.GetUniqueCommands(machineID)
-	}
-	return machineID, commands, true
-}
-
-var (
-	cmdHistoryCursorUp = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		if m.hist.cursor > 0 {
-			m.hist.cursor--
-		}
-		return m, nil
-	})
-
-	cmdHistoryCursorDown = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		_, cmds, ok := historyDeviceContext(m)
-		if !ok {
-			return m, nil
-		}
-		if m.hist.cursor < len(cmds)-1 {
-			m.hist.cursor++
-		}
-		return m, nil
-	})
-
-	cmdHistoryDelete = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		machineID, cmds, ok := historyDeviceContext(m)
-		if !ok || m.hist.history == nil || len(cmds) == 0 || m.hist.cursor >= len(cmds) {
-			return m, nil
-		}
-		selected := cmds[m.hist.cursor]
-		removed, err := m.hist.history.DeleteCommandForMachine(machineID, selected)
-		if err != nil {
-			m.notify.sshError = fmt.Errorf("failed to delete command from history: %w", err)
-			return m, nil
-		}
-		if removed > 0 {
-			updated := m.hist.history.GetUniqueCommands(machineID)
-			if len(updated) == 0 {
-				m.hist.cursor = 0
-			} else if m.hist.cursor >= len(updated) {
-				m.hist.cursor = len(updated) - 1
-			}
-		}
-		return m, nil
-	})
-
-	cmdHistoryEnterCommandMode = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		target := m.getTargetDevice()
-		if target < 0 || target >= len(m.list.filteredDevices) {
-			return m, nil
-		}
-		device := m.list.filteredDevices[target]
-		if !isDeviceOnline(device) {
-			deviceName := device.Name
-			if deviceName == "" {
-				deviceName = device.Hostname
-			}
-			m.notify.sshError = fmt.Errorf("machine %q is offline", deviceName)
-			return m, nil
-		}
-		m.input = textInput{mode: inputCommand}
-		m.input.value = ""
-		m.notify.sshError = nil
-		return m, nil
-	})
-
-	cmdHistoryExecute = keyHandler(func(m model) (tea.Model, tea.Cmd) {
-		_, cmds, ok := historyDeviceContext(m)
-		if !ok || len(cmds) == 0 || m.hist.cursor >= len(cmds) {
-			return m, nil
-		}
-		return m.beginSSH(m.getTargetDevice(), sshActionCommand, cmds[m.hist.cursor])
-	})
-)
-
-var historyNavHandlers = map[string]keyHandler{
-	"tab": func(m model) (tea.Model, tea.Cmd) {
-		m.activeFocus = focusOutput
-		m.hist.outputScroll = 0
-		m.hist.outputCursor = 0
-		return m, nil
-	},
-	"shift+tab": func(m model) (tea.Model, tea.Cmd) {
-		m.activeFocus = focusList
-		return m, nil
-	},
-	"backtab": func(m model) (tea.Model, tea.Cmd) {
-		m.activeFocus = focusList
-		return m, nil
-	},
-	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.hist.visible = false
-		m.activeFocus = focusList
-		return m, nil
-	},
-	"ctrl+c": cmdQuit,
-	"q":      cmdQuit,
-	"up":     cmdHistoryCursorUp,
-	"k":      cmdHistoryCursorUp,
-	"down":   cmdHistoryCursorDown,
-	"j":      cmdHistoryCursorDown,
-	"d":      cmdHistoryDelete,
-	"e":      cmdHistoryEnterCommandMode,
-	"enter":  cmdHistoryExecute,
-}
-
-func (m model) handleHistoryNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if newM, cmd, handled := dispatchKey(msg.String(), m, historyNavHandlers); handled {
-		return newM, cmd
 	}
 	return m, nil
 }
@@ -531,20 +418,14 @@ var normalModeHandlers = map[string]keyHandler{
 		return m, nil
 	},
 	"c": func(m model) (tea.Model, tea.Cmd) {
-		if m.hist.visible && m.activeFocus == focusOutput {
-			return m, m.copySelectedOutputItem(false)
-		}
 		target := m.getTargetDevice()
 		if target >= 0 && target < len(m.list.filteredDevices) {
 			return m, m.copySSHCommand(target)
 		}
 		return m, nil
 	},
-	"n": func(m model) (tea.Model, tea.Cmd) {
-		if m.hist.visible && m.activeFocus == focusOutput {
-			return m, m.copySelectedOutputItem(true)
-		}
-		return m, nil
+	":": func(m model) (tea.Model, tea.Cmd) {
+		return m.openAdHocPrompt()
 	},
 	"s": func(m model) (tea.Model, tea.Cmd) {
 		return m.handleSSHRequest()
@@ -613,8 +494,13 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.handleFrameShortcut(msg.String()) {
 		return m, nil
 	}
-	if m.hist.visible && m.activeFocus == focusHistory {
-		return m.handleHistoryNavigation(msg)
+	if m.run.visible {
+		switch m.activeFocus {
+		case focusRun:
+			return m.handleRunPanel(msg)
+		case focusOutput:
+			return m.handleOutputPanel(msg)
+		}
 	}
 	if newM, cmd, handled := dispatchKey(msg.String(), m, normalModeHandlers); handled {
 		return newM, cmd
@@ -627,28 +513,9 @@ func (m model) getTargetDevice() int {
 	return m.list.cursor
 }
 
-// moveCursorUp moves the cursor up and adjusts viewport if needed
+// moveCursorUp moves the device-list cursor up and adjusts viewport if needed.
+// (Run and Output panels handle their own cursors.)
 func (m *model) moveCursorUp() {
-	// Handle different panels based on focus
-	if m.hist.visible {
-		if m.activeFocus == focusHistory {
-			// Scroll history list
-			if m.hist.cursor > 0 {
-				m.hist.cursor--
-			}
-			return
-		} else if m.activeFocus == focusOutput {
-			// Move selection in output panel
-			lines := splitOutputLines(m.hist.commandOutput)
-			if len(lines) > 0 && m.hist.outputCursor > 0 {
-				m.hist.outputCursor--
-				m.ensureOutputCursorVisible()
-			}
-			return
-		}
-	}
-
-	// Default: scroll device list
 	if m.list.cursor > 0 {
 		m.list.cursor--
 		// Scroll up if cursor goes above viewport
@@ -660,36 +527,8 @@ func (m *model) moveCursorUp() {
 	}
 }
 
-// moveCursorDown moves the cursor down and adjusts viewport if needed
+// moveCursorDown moves the device-list cursor down and adjusts viewport if needed.
 func (m *model) moveCursorDown() {
-	// Handle different panels based on focus
-	if m.hist.visible {
-		if m.activeFocus == focusHistory {
-			// Scroll history list
-			if m.hist.history != nil && m.list.cursor >= 0 && m.list.cursor < len(m.list.filteredDevices) {
-				device := m.list.filteredDevices[m.list.cursor]
-				machineID := device.ID
-				if machineID == "" {
-					machineID = device.Hostname
-				}
-				historyCommands := m.hist.history.GetUniqueCommands(machineID)
-				if m.hist.cursor < len(historyCommands)-1 {
-					m.hist.cursor++
-				}
-			}
-			return
-		} else if m.activeFocus == focusOutput {
-			// Move selection in output panel
-			lines := splitOutputLines(m.hist.commandOutput)
-			if len(lines) > 0 && m.hist.outputCursor < len(lines)-1 {
-				m.hist.outputCursor++
-				m.ensureOutputCursorVisible()
-			}
-			return
-		}
-	}
-
-	// Default: scroll device list
 	if m.list.cursor < len(m.list.filteredDevices)-1 {
 		m.list.cursor++
 		// Scroll down if cursor goes below viewport
@@ -729,7 +568,7 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 	// Everything else (account switch, username/password prompts, persistence)
 	// is handled by the credential flow in sshflow.go.
-	return m.beginSSH(target, sshActionSession, "")
+	return m.beginSSH(target, sshJob{action: sshActionSession})
 }
 
 // ─── Options menu constants ───────────────────────────────────────────────────
