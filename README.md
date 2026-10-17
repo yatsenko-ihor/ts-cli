@@ -306,6 +306,8 @@ Key-handling uses a **Command pattern**: each input mode (normal, search, userna
 
 ## Security
 
+See [SECURITY.md](SECURITY.md) for the threat model, where secrets live and how to report a vulnerability.
+
 - Config file stored with `0600` permissions; directory with `0700`
 - SSH passwords and API keys are encrypted at rest; the master key can live in the OS keychain (`ts-cli secrets use keychain`)
 - API keys can be supplied via `TAILSCALE_API_KEY` environment variable to avoid writing them to disk
