@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/yatsenko-ihor/ts-cli/client"
+import (
+	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/util"
+)
 
 // Messages for Bubbletea event handling
 // All message types used in the Update method are defined here
@@ -87,6 +90,14 @@ type pasteMsg struct {
 // machineCredsSavedMsg is returned when per-machine credentials are saved
 type machineCredsSavedMsg struct {
 	err error
+}
+
+// secretStoreChangedMsg is returned when the master key has been moved
+// between the key file and the OS keychain (or the move failed).
+type secretStoreChangedMsg struct {
+	store  util.SecretStore // store in effect after the attempt
+	target util.SecretStore // store the user asked for
+	err    error
 }
 
 // panelFocus represents which panel currently has focus

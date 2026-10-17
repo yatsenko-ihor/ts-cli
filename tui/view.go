@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 // View rendering functions for the TUI application
@@ -633,25 +634,54 @@ func (m model) renderOptionsMenu() string {
 
 	// Option: View machines with saved passwords
 	machineCredsLabel := fmt.Sprintf("Machines with saved passwords (%d)", len(m.ssh.machineCreds))
-	if m.opts.cursor == 0 {
+	if m.opts.cursor == optionMachineCredentials {
 		listContent.WriteString(selectedStyle.Render("▸ " + machineCredsLabel))
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + machineCredsLabel))
+	}
+	listContent.WriteString("\n")
+
+	// Option: where the master key lives
+	store := util.CurrentSecretStore()
+	var secretLabel string
+	if store == util.SecretStoreKeychain {
+		secretLabel = "Encryption key: OS keychain  → switch to key file"
+	} else {
+		secretLabel = "Encryption key: ~/.ts-cli/key  → switch to OS keychain"
+	}
+	if m.opts.secretStoreBusy {
+		secretLabel = "Encryption key: switching…"
+	}
+	if m.opts.cursor == optionSecretStore {
+		listContent.WriteString(selectedStyle.Render("▸ " + secretLabel))
+	} else {
+		listContent.WriteString(normalStyle.Render("  " + secretLabel))
 	}
 
 	b.WriteString(optionsList.Render(listContent.String()))
 	b.WriteString("\n\n")
 
 	// Info text
-	b.WriteString(grayItalicStyle.Render("Passwords are encrypted locally using AES-256-GCM"))
+	b.WriteString(grayItalicStyle.Render("Passwords and API keys are encrypted with AES-256-GCM"))
 	b.WriteString("\n")
 	savedCount := len(m.ssh.machineCreds)
 	if savedCount > 0 {
 		b.WriteString(successStyle.Render(fmt.Sprintf("✓ %d machine(s) with saved credentials", savedCount)))
 	} else {
-		b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine on next SSH connection"))
+		b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine after the first successful SSH connection"))
 	}
 	b.WriteString("\n")
+	if m.opts.secretStoreMsg != "" {
+		style := successStyle
+		if strings.HasPrefix(m.opts.secretStoreMsg, "✗") {
+			style = errorStyle
+		}
+		b.WriteString(style.Render(truncateForWidth(m.opts.secretStoreMsg, listWidth)))
+		b.WriteString("\n")
+	} else if notice := util.KeyStoreNotice(); notice != "" {
+		b.WriteString(infoStyle.Render(truncateForWidth("⚠ "+notice, listWidth)))
+		b.WriteString("\n")
+	}
 
 	b.WriteString("\n")
 	help := "↑/k up • ↓/j down • enter toggle/select • esc/q back"

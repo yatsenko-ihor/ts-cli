@@ -107,6 +107,8 @@ type options struct {
 	cursor             int
 	showMachineCreds   bool // Sub-view: list of machines with saved credentials
 	machineCredsCursor int
+	secretStoreBusy    bool   // A keychain/file switch is in progress
+	secretStoreMsg     string // Result of the last switch attempt
 }
 
 // notifications groups transient UI messages.

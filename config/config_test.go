@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yatsenko-ihor/ts-cli/util"
@@ -121,6 +122,55 @@ func TestLoadSaveRoundTripAndPermissions(t *testing.T) {
 	}
 	if back.SSHUsername != "admin" || back.MachineCredentials["12345"].Name != "laptop" || back.Accounts[0].APIKey != "tskey-api-x" {
 		t.Fatalf("round trip lost data: %+v", back)
+	}
+}
+
+func TestAPIKeysAreEncryptedOnDisk(t *testing.T) {
+	dir := useTempConfigDir(t)
+	cfg := &Config{}
+	cfg.AddAccount("work", "tskey-api-SECRET-VALUE", "work.com", true)
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, fileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "tskey-api-SECRET-VALUE") {
+		t.Fatalf("API key stored in cleartext:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), `"api_key_enc"`) || strings.Contains(string(raw), `"api_key"`) {
+		t.Fatalf("expected only api_key_enc on disk:\n%s", raw)
+	}
+
+	back, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.Accounts[0].APIKey != "tskey-api-SECRET-VALUE" {
+		t.Fatalf("API key not decrypted on load: %+v", back.Accounts[0])
+	}
+}
+
+func TestLegacyCleartextAPIKeyIsMigrated(t *testing.T) {
+	dir := useTempConfigDir(t)
+	legacy := `{"accounts":[{"name":"old","api_key":"tskey-api-legacy","tailnet":"old.com","active":true}],"config_version":"1.0"}`
+	if err := os.WriteFile(filepath.Join(dir, fileName), []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Accounts[0].APIKey != "tskey-api-legacy" {
+		t.Fatalf("legacy key not readable: %+v", cfg.Accounts[0])
+	}
+
+	raw, _ := os.ReadFile(filepath.Join(dir, fileName))
+	if strings.Contains(string(raw), "tskey-api-legacy") {
+		t.Fatal("legacy cleartext key should be re-encrypted on load")
 	}
 }
 

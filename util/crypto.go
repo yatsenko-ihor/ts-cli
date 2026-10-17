@@ -6,77 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/user"
-	"path/filepath"
 )
-
-const (
-	keyFileName = "key"
-	keySize     = 32 // AES-256
-)
-
-// keyFilePath returns the location of the random encryption key.
-func keyFilePath() (string, error) {
-	dir, err := ConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, keyFileName), nil
-}
-
-// loadOrCreateKey returns the random 32-byte key stored in ~/.ts-cli/key,
-// creating it (mode 0600) on first use. Keeping the key in a separate
-// file means a leaked config.json alone is not enough to recover passwords,
-// and the key no longer depends on the hostname (which changes on macOS
-// with network location and breaks decryption silently).
-func loadOrCreateKey() ([]byte, error) {
-	path, err := keyFilePath()
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(path)
-	if err == nil {
-		if len(data) != keySize {
-			return nil, fmt.Errorf("encryption key file %s has invalid length %d", path, len(data))
-		}
-		return data, nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("failed to read encryption key: %w", err)
-	}
-
-	key := make([]byte, keySize)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		return nil, fmt.Errorf("failed to generate encryption key: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return nil, fmt.Errorf("failed to create config directory: %w", err)
-	}
-	// O_EXCL guards against a concurrent first run overwriting a key that
-	// another process just created.
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return loadOrCreateKey()
-		}
-		return nil, fmt.Errorf("failed to create encryption key: %w", err)
-	}
-	if _, err := f.Write(key); err != nil {
-		f.Close()
-		os.Remove(path)
-		return nil, fmt.Errorf("failed to write encryption key: %w", err)
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(path)
-		return nil, fmt.Errorf("failed to write encryption key: %w", err)
-	}
-	return key, nil
-}
 
 // legacyDeriveKey reproduces the pre-key-file derivation
 // (SHA-256 of "ts-cli:<user>:<uid>:<hostname>") so that passwords saved by
@@ -109,10 +43,10 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 	return gcm, nil
 }
 
-// EncryptPassword encrypts a plaintext password using AES-256-GCM.
-// Returns a base64-encoded ciphertext string suitable for storing in config.
-func EncryptPassword(plaintext string) (string, error) {
-	key, err := loadOrCreateKey()
+// Encrypt encrypts plaintext with the master key using AES-256-GCM and
+// returns base64(nonce || ciphertext). Used for SSH passwords and API keys.
+func Encrypt(plaintext string) (string, error) {
+	key, err := masterKey()
 	if err != nil {
 		return "", err
 	}
@@ -131,16 +65,15 @@ func EncryptPassword(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// DecryptPassword decrypts a base64-encoded AES-256-GCM ciphertext
-// back to the original plaintext password. It tries the key file first and
-// falls back to the legacy host-derived key for data saved by older versions.
-func DecryptPassword(encoded string) (string, error) {
+// Decrypt reverses Encrypt. It tries the master key first and falls back to
+// the legacy host-derived key for data saved by older versions.
+func Decrypt(encoded string) (string, error) {
 	ciphertext, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
 	}
 
-	key, err := loadOrCreateKey()
+	key, err := masterKey()
 	if err != nil {
 		return "", err
 	}
@@ -158,6 +91,12 @@ func DecryptPassword(encoded string) (string, error) {
 	}
 	return plaintext, nil
 }
+
+// EncryptPassword is kept as a readable alias for Encrypt.
+func EncryptPassword(plaintext string) (string, error) { return Encrypt(plaintext) }
+
+// DecryptPassword is kept as a readable alias for Decrypt.
+func DecryptPassword(encoded string) (string, error) { return Decrypt(encoded) }
 
 func decryptWith(key, ciphertext []byte) (string, error) {
 	gcm, err := newGCM(key)

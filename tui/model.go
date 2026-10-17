@@ -194,6 +194,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case secretStoreChangedMsg:
+		m.opts.secretStoreBusy = false
+		if msg.err != nil {
+			m.opts.secretStoreMsg = fmt.Sprintf("✗ Could not switch to %s: %v", msg.target, msg.err)
+		} else {
+			m.opts.secretStoreMsg = fmt.Sprintf("✓ Master key moved to %s", msg.store)
+		}
+		return m, nil
+
 	case tailscaleUpMsg:
 		// Tailscale up command completed
 		if msg.err != nil {

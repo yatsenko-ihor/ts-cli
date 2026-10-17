@@ -12,6 +12,14 @@ func useTempKeyDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv(ConfigDirEnv, dir)
+	keyMu.Lock()
+	resetKeyCache()
+	keyMu.Unlock()
+	t.Cleanup(func() {
+		keyMu.Lock()
+		resetKeyCache()
+		keyMu.Unlock()
+	})
 	return dir
 }
 

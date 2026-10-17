@@ -57,10 +57,18 @@ OPTIONS MENU (o)
     View/delete per-machine SSH credentials.
     Press 'd' to delete a machine's saved credentials.
 
+  Encryption key:
+    Move the master key between ~/.ts-cli/key and the OS keychain
+    (macOS Keychain / Linux Secret Service / Windows Credential
+    Manager). Same as `ts-cli secrets use keychain|file`.
+
 ENCRYPTION
 ──────────
-  Passwords are encrypted with AES-256-GCM using a random key stored
-  in ~/.ts-cli/key (mode 0600), separate from config.json. Anyone who
-  can read your home directory can read both files, so protect
-  ~/.ts-cli/ like ~/.ssh/. The password is passed to sshpass over a
-  private file descriptor and never appears in the process list.
+  SSH passwords and Tailscale API keys are encrypted with AES-256-GCM
+  using one random master key. By default the key is in ~/.ts-cli/key
+  (mode 0600); with the keychain option it is held by the OS and never
+  written under ~/.ts-cli, so a copied config directory alone cannot be
+  decrypted. If the keychain is unreachable (headless session), the key
+  file is used when it still exists and a warning is shown. The SSH
+  password is passed to sshpass over a private file descriptor and
+  never appears in the process list.
