@@ -3,8 +3,10 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 // View rendering functions for the TUI application
@@ -514,12 +516,23 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 
 	var content strings.Builder
 	content.WriteString(lipgloss.NewStyle().Bold(true).Render(label))
+	if p := m.ssh.pending; p.machineName != "" {
+		content.WriteString("\n")
+		content.WriteString(grayItalicStyle.Render(truncateForWidth(p.machineName, popupWidth-8)))
+	}
 	content.WriteString("\n\n")
+
+	// Explain why we are asking (key auth failed, password rejected, ...)
+	if m.notify.sshError != nil {
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+		content.WriteString(errStyle.Render(truncateForWidth(m.notify.sshError.Error(), popupWidth-8)))
+		content.WriteString("\n\n")
+	}
 
 	// Show the input value (masked for password)
 	displayValue := value
 	if masked {
-		displayValue = strings.Repeat("•", len(value))
+		displayValue = strings.Repeat("•", utf8.RuneCountInString(value))
 	}
 	inputStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFFFFF")).
@@ -621,25 +634,54 @@ func (m model) renderOptionsMenu() string {
 
 	// Option: View machines with saved passwords
 	machineCredsLabel := fmt.Sprintf("Machines with saved passwords (%d)", len(m.ssh.machineCreds))
-	if m.opts.cursor == 0 {
+	if m.opts.cursor == optionMachineCredentials {
 		listContent.WriteString(selectedStyle.Render("▸ " + machineCredsLabel))
 	} else {
 		listContent.WriteString(normalStyle.Render("  " + machineCredsLabel))
+	}
+	listContent.WriteString("\n")
+
+	// Option: where the master key lives
+	store := util.CurrentSecretStore()
+	var secretLabel string
+	if store == util.SecretStoreKeychain {
+		secretLabel = "Encryption key: OS keychain  → switch to key file"
+	} else {
+		secretLabel = "Encryption key: ~/.ts-cli/key  → switch to OS keychain"
+	}
+	if m.opts.secretStoreBusy {
+		secretLabel = "Encryption key: switching…"
+	}
+	if m.opts.cursor == optionSecretStore {
+		listContent.WriteString(selectedStyle.Render("▸ " + secretLabel))
+	} else {
+		listContent.WriteString(normalStyle.Render("  " + secretLabel))
 	}
 
 	b.WriteString(optionsList.Render(listContent.String()))
 	b.WriteString("\n\n")
 
 	// Info text
-	b.WriteString(grayItalicStyle.Render("Passwords are encrypted locally using AES-256-GCM"))
+	b.WriteString(grayItalicStyle.Render("Passwords and API keys are encrypted with AES-256-GCM"))
 	b.WriteString("\n")
 	savedCount := len(m.ssh.machineCreds)
 	if savedCount > 0 {
 		b.WriteString(successStyle.Render(fmt.Sprintf("✓ %d machine(s) with saved credentials", savedCount)))
 	} else {
-		b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine on next SSH connection"))
+		b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine after the first successful SSH connection"))
 	}
 	b.WriteString("\n")
+	if m.opts.secretStoreMsg != "" {
+		style := successStyle
+		if strings.HasPrefix(m.opts.secretStoreMsg, "✗") {
+			style = errorStyle
+		}
+		b.WriteString(style.Render(truncateForWidth(m.opts.secretStoreMsg, listWidth)))
+		b.WriteString("\n")
+	} else if notice := util.KeyStoreNotice(); notice != "" {
+		b.WriteString(infoStyle.Render(truncateForWidth("⚠ "+notice, listWidth)))
+		b.WriteString("\n")
+	}
 
 	b.WriteString("\n")
 	help := "↑/k up • ↓/j down • enter toggle/select • esc/q back"
@@ -678,7 +720,7 @@ func (m model) renderMachineCredsView() string {
 	} else {
 		for i, id := range machineIDs {
 			cred := m.ssh.machineCreds[id]
-			label := fmt.Sprintf("%s (user: %s)", id, cred.username)
+			label := fmt.Sprintf("%s (user: %s)", m.credDisplayName(id), cred.username)
 			if cred.passwordEncrypted == "" {
 				label += " 🔑" // key-based auth
 			}
@@ -720,7 +762,7 @@ func (m model) getHelpText() string {
 		}
 		help += " • F1 help • q quit"
 	}
-	
+
 	if m.input.mode == inputUsername {
 		help = "Enter SSH username • esc cancel • enter confirm"
 	} else if m.input.mode == inputPassword {

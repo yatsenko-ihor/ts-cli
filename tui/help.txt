@@ -27,15 +27,20 @@ SSH CREDENTIALS
     this default until overridden per-machine.
 
   Per-machine passwords:
-    Each machine stores its own unique encrypted password.
-    Credentials are saved BEFORE the SSH session starts (survives
-    terminal close). If connection fails, saved creds are deleted.
+    Each machine stores its own unique encrypted password, keyed by
+    the device's Tailscale ID (renaming a machine keeps its login).
+    Nothing is saved until a connection succeeds. A saved password is
+    forgotten only when sshpass reports it was rejected; an ordinary
+    non-zero exit of the remote shell keeps everything.
 
-  Connection flow:
-    1. Saved per-machine creds → connect directly (sshpass)
-    2. No per-machine creds, global username → prompt for password
-    3. Nothing saved → prompt for username, then password
-    4. Connection fails → retry menu (change user/pass/both)
+  Connection flow (sessions and remote commands alike):
+    1. Saved password → connect directly, no prompt
+    2. No saved password → try key-based auth first
+       (username: per-machine → default → ask)
+    3. Auth fails → ask for the password, retry with sshpass
+    4. Success → save username (+ password if entered)
+    5. Saved password rejected → forget it, ask again
+    6. Still failing → retry menu (change user/pass/both)
 
 ICONS
 ─────
@@ -52,9 +57,18 @@ OPTIONS MENU (o)
     View/delete per-machine SSH credentials.
     Press 'd' to delete a machine's saved credentials.
 
+  Encryption key:
+    Move the master key between ~/.ts-cli/key and the OS keychain
+    (macOS Keychain / Linux Secret Service / Windows Credential
+    Manager). Same as `ts-cli secrets use keychain|file`.
+
 ENCRYPTION
 ──────────
-  Passwords are encrypted with AES-256-GCM.
-  The encryption key is derived from your OS username, UID, and
-  machine hostname — passwords can only be decrypted on the same
-  machine by the same OS user.
+  SSH passwords and Tailscale API keys are encrypted with AES-256-GCM
+  using one random master key. By default the key is in ~/.ts-cli/key
+  (mode 0600); with the keychain option it is held by the OS and never
+  written under ~/.ts-cli, so a copied config directory alone cannot be
+  decrypted. If the keychain is unreachable (headless session), the key
+  file is used when it still exists and a warning is shown. The SSH
+  password is passed to sshpass over a private file descriptor and
+  never appears in the process list.

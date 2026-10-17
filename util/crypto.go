@@ -12,12 +12,10 @@ import (
 	"os/user"
 )
 
-// deriveKey derives a 32-byte AES key from a machine-specific seed.
-// The seed combines the hostname and current OS user to tie the encrypted
-// data to this machine/user pair. This is NOT a substitute for a proper
-// key management system but provides reasonable protection for locally
-// stored passwords (similar to how tools like KeePass derive keys).
-func deriveKey() ([]byte, error) {
+// legacyDeriveKey reproduces the pre-key-file derivation
+// (SHA-256 of "ts-cli:<user>:<uid>:<hostname>") so that passwords saved by
+// earlier versions can still be decrypted. It is only used as a fallback.
+func legacyDeriveKey() ([]byte, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "unknown-host"
@@ -33,22 +31,29 @@ func deriveKey() ([]byte, error) {
 	return hash[:], nil
 }
 
-// EncryptPassword encrypts a plaintext password using AES-256-GCM.
-// Returns a base64-encoded ciphertext string suitable for storing in config.
-func EncryptPassword(plaintext string) (string, error) {
-	key, err := deriveKey()
+func newGCM(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+	return gcm, nil
+}
+
+// Encrypt encrypts plaintext with the master key using AES-256-GCM and
+// returns base64(nonce || ciphertext). Used for SSH passwords and API keys.
+func Encrypt(plaintext string) (string, error) {
+	key, err := masterKey()
 	if err != nil {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(key)
+	gcm, err := newGCM(key)
 	if err != nil {
-		return "", fmt.Errorf("failed to create cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("failed to create GCM: %w", err)
+		return "", err
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
@@ -60,27 +65,43 @@ func EncryptPassword(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// DecryptPassword decrypts a base64-encoded AES-256-GCM ciphertext
-// back to the original plaintext password.
-func DecryptPassword(encoded string) (string, error) {
-	key, err := deriveKey()
-	if err != nil {
-		return "", err
-	}
-
+// Decrypt reverses Encrypt. It tries the master key first and falls back to
+// the legacy host-derived key for data saved by older versions.
+func Decrypt(encoded string) (string, error) {
 	ciphertext, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
 	}
 
-	block, err := aes.NewCipher(key)
+	key, err := masterKey()
 	if err != nil {
-		return "", fmt.Errorf("failed to create cipher: %w", err)
+		return "", err
+	}
+	if plaintext, err := decryptWith(key, ciphertext); err == nil {
+		return plaintext, nil
 	}
 
-	gcm, err := cipher.NewGCM(block)
+	legacyKey, err := legacyDeriveKey()
 	if err != nil {
-		return "", fmt.Errorf("failed to create GCM: %w", err)
+		return "", err
+	}
+	plaintext, err := decryptWith(legacyKey, ciphertext)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt (wrong key or corrupted data): %w", err)
+	}
+	return plaintext, nil
+}
+
+// EncryptPassword is kept as a readable alias for Encrypt.
+func EncryptPassword(plaintext string) (string, error) { return Encrypt(plaintext) }
+
+// DecryptPassword is kept as a readable alias for Decrypt.
+func DecryptPassword(encoded string) (string, error) { return Decrypt(encoded) }
+
+func decryptWith(key, ciphertext []byte) (string, error) {
+	gcm, err := newGCM(key)
+	if err != nil {
+		return "", err
 	}
 
 	nonceSize := gcm.NonceSize()
@@ -88,11 +109,10 @@ func DecryptPassword(encoded string) (string, error) {
 		return "", fmt.Errorf("ciphertext too short")
 	}
 
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	nonce, body := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, body, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to decrypt (wrong machine or corrupted data): %w", err)
+		return "", err
 	}
-
 	return string(plaintext), nil
 }

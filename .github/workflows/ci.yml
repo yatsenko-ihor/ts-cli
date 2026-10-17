@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: install sshpass (exercises the password-prompt path in tests)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test (race)
+        run: go test -race ./...
+
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
+      - name: gosec
+        # Excluded as intentional for this tool:
+        #   G104 unhandled errors are triaged individually
+        #   G204 the tool's job is to spawn ssh/tailscale with argv slices (never a shell)
+        #   G301/G302/G306 an installed binary in /usr/local/bin must be 0755
+        #   G304/G703 path-taint false positives (paths are constants or $HOME)
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude=G104,G204,G301,G302,G304,G306,G703 ./...
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

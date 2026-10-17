@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,19 +44,6 @@ func (m model) switchAccountForSSH(deviceIndex int, accountName string) tea.Cmd 
 	)
 }
 
-// runTailscaleDown runs 'tailscale down' to disconnect from the network
-func (m model) runTailscaleDown() tea.Cmd {
-	return func() tea.Msg {
-		tailscaleCmd := exec.Command("tailscale", "down")
-		return tea.ExecProcess(tailscaleCmd, func(err error) tea.Msg {
-			if err != nil {
-				return tailscaleDownMsg{err: err}
-			}
-			return tailscaleDownMsg{err: nil}
-		})()
-	}
-}
-
 // runTailscaleUp runs 'tailscale up' command
 func (m model) runTailscaleUp() tea.Cmd {
 	return func() tea.Msg {
@@ -91,9 +79,16 @@ func (m model) createAddAccountScript() *exec.Cmd {
 		execPath = "ts-cli"
 	}
 
-	// Create an interactive shell script that guides the user
+	if runtime.GOOS == "windows" {
+		// The guided flow is a bash script; there is no cmd.exe equivalent yet.
+		return exec.Command("cmd", "/c",
+			"echo Adding accounts from the TUI is not supported on Windows. && "+
+				"echo Run: set TAILSCALE_API_KEY=... ^&^& ts-cli login --tailnet=^<name^> && pause")
+	}
+
+	// Create an interactive shell script that guides the user.
+	// No `set -e`: the login failure branch below must stay reachable.
 	script := fmt.Sprintf(`#!/bin/bash
-set -e
 
 # Colors for better UX
 BLUE='\033[0;34m'
@@ -144,12 +139,11 @@ if [ -z "$API_KEY" ]; then
     exit 1
 fi
 
-# Run the login command
+# Run the login command. The key is passed through the environment so it
+# never shows up in the process list (argv is readable by every local user).
 echo ""
 echo -e "${BLUE}Validating and saving account...${NC}"
-%s login --tailnet="$TAILNET" --api-key="$API_KEY"
-
-if [ $? -eq 0 ]; then
+if TAILSCALE_API_KEY="$API_KEY" %s login --tailnet="$TAILNET"; then
     echo ""
     echo -e "${GREEN}✓ Account added successfully!${NC}"
     echo ""
@@ -161,7 +155,7 @@ else
     read
     exit 1
 fi
-`, execPath)
+`, shellQuote(execPath))
 
 	// Create temp script file
 	tmpFile, err := os.CreateTemp("", "ts-cli-add-account-*.sh")
@@ -186,16 +180,13 @@ fi
 	scriptPath := tmpFile.Name()
 	tmpFile.Close()
 
-	// Create a command that runs the script and then deletes it
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", scriptPath)
-	} else {
-		// Use bash to run the script, then remove it
-		cmd = exec.Command("bash", "-c", fmt.Sprintf("%s; rm -f %s", scriptPath, scriptPath))
-	}
+	// Run the script, then remove it
+	return exec.Command("bash", "-c", fmt.Sprintf("%s; rm -f %s", shellQuote(scriptPath), shellQuote(scriptPath)))
+}
 
-	return cmd
+// shellQuote single-quotes s for safe interpolation into a POSIX shell script.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
 // checkLocalTailscaleStatus checks if Tailscale is running locally
@@ -228,31 +219,11 @@ func getRealTailscaleAccount() string {
 		return "<not connected>"
 	}
 
-	// Parse JSON to get the account email
-	// The status JSON contains a "Self" object with "UserProfile" that has "LoginName"
-	// For simplicity, let's extract it using string parsing
-	outputStr := string(output)
-
-	// Look for "LoginName" field in JSON
-	// Note: JSON is formatted with whitespace, so we need flexible parsing
-	loginNamePattern := `"LoginName"`
-	if idx := strings.Index(outputStr, loginNamePattern); idx != -1 {
-		// Find the colon after "LoginName"
-		afterKey := outputStr[idx+len(loginNamePattern):]
-		colonIdx := strings.Index(afterKey, ":")
-		if colonIdx != -1 {
-			// Find the opening quote
-			afterColon := afterKey[colonIdx+1:]
-			quoteIdx := strings.Index(afterColon, `"`)
-			if quoteIdx != -1 {
-				// Find the closing quote
-				afterQuote := afterColon[quoteIdx+1:]
-				endQuoteIdx := strings.Index(afterQuote, `"`)
-				if endQuoteIdx != -1 {
-					return afterQuote[:endQuoteIdx]
-				}
-			}
-		}
+	// The status JSON lists every known user under "User" (keyed by ID);
+	// the current login is the entry referenced by Self.UserID. Taking the
+	// first "LoginName" in the document could return a shared-node owner.
+	if login := parseLoginName(output); login != "" {
+		return login
 	}
 
 	// Fallback: try to get it from regular status output
@@ -279,6 +250,29 @@ func getRealTailscaleAccount() string {
 	}
 
 	return "<not connected>"
+}
+
+// tailscaleStatus is the subset of `tailscale status --json` we need.
+type tailscaleStatus struct {
+	Self struct {
+		UserID json.Number `json:"UserID"`
+	} `json:"Self"`
+	User map[string]struct {
+		LoginName string `json:"LoginName"`
+	} `json:"User"`
+}
+
+// parseLoginName extracts the current user's LoginName from status JSON.
+// Returns "" when it cannot be determined.
+func parseLoginName(statusJSON []byte) string {
+	var st tailscaleStatus
+	if err := json.Unmarshal(statusJSON, &st); err != nil {
+		return ""
+	}
+	if u, ok := st.User[st.Self.UserID.String()]; ok {
+		return u.LoginName
+	}
+	return ""
 }
 
 // checkIfInstallNeeded checks if ts-cli is properly installed in PATH
@@ -317,14 +311,11 @@ func checkIfInstallNeeded() (bool, bool) {
 	}
 
 	// Not in PATH - check if there's a broken installation
-	// Look for ts-cli in PATH
-	pathCmd := exec.Command("which", "ts-cli")
-	output, err := pathCmd.Output()
-	if err == nil && len(output) > 0 {
-		// Found ts-cli in PATH, but we're not running from there
-
-		// This might be a broken installation
-		foundPath := strings.TrimSpace(string(output))
+	// (ts-cli found in PATH but not the binary we're running from)
+	if foundPath, err := exec.LookPath("ts-cli"); err == nil && foundPath != "" {
+		if resolved, err := filepath.EvalSymlinks(foundPath); err == nil {
+			foundPath = resolved
+		}
 		if foundPath != realPath {
 			return true, true // Show suggestion, installation is broken
 		}

@@ -85,7 +85,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	fmt.Print("\nDo you want to proceed with uninstallation? (y/n): ")
 
 	var response string
-	fmt.Scanln(&response)
+	_, _ = fmt.Scanln(&response) // EOF/empty input falls through to "cancelled"
 	response = strings.ToLower(strings.TrimSpace(response))
 
 	if response != "y" && response != "yes" {

@@ -67,8 +67,8 @@
 - [x] add information how to run tets to README.md
 - [x] add ability to send command over ssh to the machine (remember it is history file)
 - [x] separate frame(right side of terminal), once tab click on machine(check if it's online or not) - on that frame show commands fom history. Navigation in frame also vim like and over enter - command send to remote machine. Output of command should be printed in seprate frame.
-- [x] make "Command History - pi......net 🟢 Online" in 2 lines like:
-      "🖥️ pi-1.tail7338e2.ts.net
+- [x] make "Command History - machine......net 🟢 Online" in 2 lines like:
+      "🖥️ laptop.example.ts.net
       "Command history:"
 - [x] make "Command history" frame a bit narrower
 - [x] make Output frame same height as "Command history" and if enough space - put right after "Command history". If space not enought - put exactly under "Command history" with same width. And height of listm machines frame should be same as "Command history" + "Output" frames

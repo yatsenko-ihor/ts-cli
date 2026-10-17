@@ -1,13 +1,17 @@
 package tui
 
-import "github.com/ihor/ts-cli/client"
+import (
+	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/util"
+)
 
 // Messages for Bubbletea event handling
 // All message types used in the Update method are defined here
 
 // sshMsg is returned when an SSH operation completes
 type sshMsg struct {
-	err error
+	err     error
+	failure sshFailure // classification of err (see classifySSHError)
 }
 
 // copiedMsg is returned when text is copied to clipboard
@@ -32,11 +36,6 @@ type tailscaleUpMsg struct {
 	err error
 }
 
-// tailscaleDownMsg is returned when `tailscale down` completes
-type tailscaleDownMsg struct {
-	err error
-}
-
 // addAccountMsg is returned when adding a new account completes
 type addAccountMsg struct {
 	err error
@@ -52,15 +51,20 @@ type accountSwitchedMsg struct {
 
 // reloadMsg is returned when device list reload completes
 type reloadMsg struct {
-	devices []client.Device
-	err     error
+	devices  []client.Device
+	warnings []error // per-account fetch failures (non-fatal)
+	err      error
 }
 
 // commandExecutedMsg is returned when a remote command completes
 type commandExecutedMsg struct {
-	output   string
-	exitCode int
-	err      error
+	machineID   string // history key for the device the command ran on
+	machineName string
+	command     string
+	output      string
+	exitCode    int
+	err         error
+	failure     sshFailure // classification of err (see classifySSHError)
 }
 
 // pasteTarget identifies which input field a clipboard paste is destined for.
@@ -85,10 +89,15 @@ type pasteMsg struct {
 
 // machineCredsSavedMsg is returned when per-machine credentials are saved
 type machineCredsSavedMsg struct {
-	err       error
-	machineID string
-	username  string
-	encrypted string
+	err error
+}
+
+// secretStoreChangedMsg is returned when the master key has been moved
+// between the key file and the OS keychain (or the move failed).
+type secretStoreChangedMsg struct {
+	store  util.SecretStore // store in effect after the attempt
+	target util.SecretStore // store the user asked for
+	err    error
 }
 
 // panelFocus represents which panel currently has focus

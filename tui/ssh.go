@@ -1,193 +1,211 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/ihor/ts-cli/client"
-	"github.com/ihor/ts-cli/util"
+	"github.com/yatsenko-ihor/ts-cli/client"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
 // SSH operation functions for connecting to and executing commands on remote devices
 
-// sshToDevice initiates an interactive SSH connection to a device
-func (m model) sshToDevice(index int) tea.Cmd {
-	device := m.list.filteredDevices[index]
+// Exit codes used to tell a credential problem apart from an ordinary
+// non-zero exit of the remote shell.
+const (
+	exitSSHPassWrongPassword = 5   // sshpass: "invalid/incorrect password"
+	exitSSHConnectionFailed  = 255 // ssh: connection or authentication error
+)
 
-	// Get the primary IP address
+// sshFailure classifies why an SSH process ended with an error.
+type sshFailure int
+
+const (
+	sshFailureNone        sshFailure = iota
+	sshFailureBadPassword            // sshpass rejected the saved password
+	sshFailureConnection             // ssh could not connect or authenticate
+	sshFailureRemoteExit             // session worked; remote shell exited non-zero
+	sshFailureExec                   // process could not be started at all
+)
+
+// classifySSHError maps the error returned by exec/tea.Exec to an sshFailure.
+func classifySSHError(err error) sshFailure {
+	if err == nil {
+		return sshFailureNone
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return sshFailureExec
+	}
+	switch exitErr.ExitCode() {
+	case exitSSHPassWrongPassword:
+		return sshFailureBadPassword
+	case exitSSHConnectionFailed:
+		return sshFailureConnection
+	default:
+		return sshFailureRemoteExit
+	}
+}
+
+// buildSSHTarget validates username and address and returns "user@addr" or "addr".
+// Both values can come from disk (config.json) or the API, so they are checked
+// here rather than trusted.
+func buildSSHTarget(username, address string) (string, error) {
+	if net.ParseIP(address) == nil {
+		return "", fmt.Errorf("device address %q is not a valid IP", address)
+	}
+	if username == "" {
+		return address, nil
+	}
+	if err := util.ValidateSSHUsername(username); err != nil {
+		return "", fmt.Errorf("invalid SSH username: %w", err)
+	}
+	return username + "@" + address, nil
+}
+
+// newSSHCommand builds the ssh (or sshpass+ssh) process for target.
+//
+// When a password is available and sshpass is installed, the password is
+// written to a private pipe and handed to sshpass via `-d <fd>`, so it never
+// appears in the process argument list. The returned cleanup func must be
+// called once the process has finished to release the pipe.
+//
+// batch requests `-o BatchMode=yes` for non-interactive runs without a
+// password, so ssh fails fast instead of trying to prompt on the TUI's tty.
+func newSSHCommand(target, password string, batch bool, remoteArgs ...string) (*exec.Cmd, func(), error) {
+	sshArgs := []string{"-o", "StrictHostKeyChecking=accept-new"}
+
+	if password != "" {
+		if sshpassPath, err := exec.LookPath("sshpass"); err == nil {
+			r, w, err := os.Pipe()
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to create password pipe: %w", err)
+			}
+			if _, err := io.WriteString(w, password+"\n"); err != nil {
+				w.Close()
+				r.Close()
+				return nil, nil, fmt.Errorf("failed to write password pipe: %w", err)
+			}
+			w.Close()
+
+			// ExtraFiles[0] becomes fd 3 in the child.
+			args := append([]string{"-d", "3", "ssh"}, sshArgs...)
+			args = append(args, target)
+			args = append(args, remoteArgs...)
+			cmd := exec.Command(sshpassPath, args...)
+			cmd.ExtraFiles = []*os.File{r}
+			return cmd, func() { r.Close() }, nil
+		}
+	}
+
+	if batch {
+		sshArgs = append(sshArgs, "-o", "BatchMode=yes")
+	}
+	args := append(sshArgs, target)
+	args = append(args, remoteArgs...)
+	return exec.Command("ssh", args...), func() {}, nil
+}
+
+// bannerExec implements tea.ExecCommand: it prints a connection banner on the
+// freed terminal and then runs the wrapped ssh command. This replaces the
+// previous `sh -c "printf ... && ssh ..."` wrapper.
+type bannerExec struct {
+	banner string
+	cmd    *exec.Cmd
+	stdout io.Writer
+}
+
+func (b *bannerExec) Run() error {
+	if b.stdout != nil && b.banner != "" {
+		fmt.Fprint(b.stdout, b.banner)
+	}
+	return b.cmd.Run()
+}
+func (b *bannerExec) SetStdin(r io.Reader)  { b.cmd.Stdin = r }
+func (b *bannerExec) SetStdout(w io.Writer) { b.stdout = w; b.cmd.Stdout = w }
+func (b *bannerExec) SetStderr(w io.Writer) { b.cmd.Stderr = w }
+
+// sshToDevice starts an interactive SSH session with the given credentials.
+// When no password is available and sshpass is installed, BatchMode makes a
+// failed key login return quickly (exit 255) so the TUI can ask for a
+// password; without sshpass, ssh is left free to prompt on the terminal.
+func (m model) sshToDevice(device client.Device, username, password string) tea.Cmd {
 	if len(device.Addresses) == 0 {
 		return func() tea.Msg {
-			return sshMsg{err: fmt.Errorf("device has no IP addresses")}
+			return sshMsg{err: fmt.Errorf("device has no IP addresses"), failure: sshFailureExec}
 		}
 	}
 
-	address := device.Addresses[0]
-
-	// Build SSH command with username if available
-	var sshTarget string
-	if m.ssh.username != "" {
-		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
-	} else {
-		sshTarget = address
+	target, err := buildSSHTarget(username, device.Addresses[0])
+	if err != nil {
+		return func() tea.Msg { return sshMsg{err: err, failure: sshFailureExec} }
 	}
 
-	// Execute SSH with connection info printed to terminal
-	return tea.ExecProcess(m.buildSSHCommand(sshTarget), func(err error) tea.Msg {
-		if err != nil {
-			return sshMsg{err: err}
-		}
-		return sshMsg{}
+	batch := password == "" && sshpassAvailable()
+	cmd, cleanup, err := newSSHCommand(target, password, batch)
+	if err != nil {
+		return func() tea.Msg { return sshMsg{err: err, failure: sshFailureExec} }
+	}
+
+	banner := fmt.Sprintf("\nConnection to %s (%s)\n", displayName(device), target)
+	return tea.Exec(&bannerExec{banner: banner, cmd: cmd}, func(err error) tea.Msg {
+		cleanup()
+		return sshMsg{err: err, failure: classifySSHError(err)}
 	})
 }
 
-// buildSSHCommand creates the SSH exec.Cmd with sshpass if password is available.
-// Wraps in shell to print connection info after TUI releases the terminal.
-func (m model) buildSSHCommand(sshTarget string) *exec.Cmd {
-	name := m.getTargetDeviceName()
-	ip := m.getTargetDeviceIP()
-
-	target := m.getTargetDevice()
-	var password string
-	if target >= 0 && target < len(m.list.filteredDevices) {
-		password = m.getMachinePassword(m.list.filteredDevices[target])
-	}
-
-	var sshCmdStr string
-	if password != "" {
-		if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
-			sshCmdStr = fmt.Sprintf("sshpass -p %s ssh -o StrictHostKeyChecking=accept-new %s",
-				shellEscape(password), sshTarget)
-		}
-	}
-	if sshCmdStr == "" {
-		sshCmdStr = fmt.Sprintf("ssh %s", sshTarget)
-	}
-
-	// Print connection info then exec SSH
-	username := m.ssh.username
-	script := fmt.Sprintf("printf '\\nConnection to %s@%s (%s)\\n' && %s",
-		shellEscape(username), shellEscape(name), shellEscape(ip), sshCmdStr)
-	return exec.Command("sh", "-c", script)
-}
-
-// shellEscape escapes a string for safe use in shell commands
-func shellEscape(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
-
-// getMachinePassword returns the decrypted password for a machine, if available
-func (m model) getMachinePassword(device client.Device) string {
-	machineID := device.Name
-	if machineID == "" {
-		machineID = device.Hostname
-	}
-	if cred, ok := m.ssh.machineCreds[machineID]; ok && cred.passwordEncrypted != "" {
-		if decrypted, err := util.DecryptPassword(cred.passwordEncrypted); err == nil {
-			return decrypted
-		}
-	}
-	return ""
-}
-
-// getTargetDeviceName returns the name of the currently targeted device
-func (m model) getTargetDeviceName() string {
-	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.list.filteredDevices) {
-		return "unknown"
-	}
-	d := m.list.filteredDevices[target]
-	if d.Name != "" {
-		return d.Name
-	}
-	return d.Hostname
-}
-
-// getTargetDeviceIP returns the IP of the currently targeted device
-func (m model) getTargetDeviceIP() string {
-	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.list.filteredDevices) {
-		return "unknown"
-	}
-	d := m.list.filteredDevices[target]
-	if len(d.Addresses) > 0 {
-		return d.Addresses[0]
-	}
-	return "no-ip"
-}
-
-// executeRemoteCommand executes a command on a remote device via SSH
-func (m model) executeRemoteCommand(command string) tea.Cmd {
-	target := m.getTargetDevice()
-	if target < 0 || target >= len(m.list.filteredDevices) {
-		return func() tea.Msg {
-			return commandExecutedMsg{err: fmt.Errorf("no device selected")}
-		}
-	}
-
-	device := m.list.filteredDevices[target]
-
-	// Get the primary IP address
+// executeRemoteCommand runs command on device via SSH and captures output.
+// Everything that touches model state is resolved here, on the update loop;
+// the returned tea.Cmd only runs the process. History is appended by Update
+// when commandExecutedMsg arrives, so the HistoryStore is never mutated from
+// a background goroutine.
+func (m model) executeRemoteCommand(device client.Device, username, password, command string) tea.Cmd {
 	if len(device.Addresses) == 0 {
 		return func() tea.Msg {
-			return commandExecutedMsg{err: fmt.Errorf("device has no IP addresses")}
+			return commandExecutedMsg{err: fmt.Errorf("device has no IP addresses"), failure: sshFailureExec}
 		}
 	}
 
-	address := device.Addresses[0]
-	name := device.Name
-	if name == "" {
-		name = device.Hostname
+	sshTarget, err := buildSSHTarget(username, device.Addresses[0])
+	if err != nil {
+		return func() tea.Msg { return commandExecutedMsg{err: err, failure: sshFailureExec} }
 	}
 
-	// Build SSH target
-	var sshTarget string
-	if m.ssh.username != "" {
-		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
-	} else {
-		sshTarget = address
+	cmd, cleanup, err := newSSHCommand(sshTarget, password, true, command)
+	if err != nil {
+		return func() tea.Msg { return commandExecutedMsg{err: err, failure: sshFailureExec} }
 	}
 
-	// Get machine ID for history
-	machineID := device.ID
-	if machineID == "" {
-		machineID = device.Hostname
-	}
+	machineID := machineKey(device)
+	name := displayName(device)
 
 	return func() tea.Msg {
-		// Execute command via SSH, using sshpass if password is saved per-machine
-		var cmd *exec.Cmd
-		if password := m.getMachinePassword(device); password != "" {
-			if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
-				cmd = exec.Command("sshpass", "-p", password, "ssh",
-					"-o", "StrictHostKeyChecking=accept-new", sshTarget, command)
-			}
-		}
-		if cmd == nil {
-			cmd = exec.Command("ssh", sshTarget, command)
-		}
+		defer cleanup()
 		output, err := cmd.CombinedOutput()
 
 		exitCode := 0
 		if err != nil {
-			// Try to get exit code
-			if exitErr, ok := err.(*exec.ExitError); ok {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
 				exitCode = exitErr.ExitCode()
 			}
 		}
 
-		// Save to history if history store is available
-		if m.hist.history != nil {
-			m.hist.history.AddCommand(machineID, name, command, exitCode, string(output))
-			_ = m.hist.history.Save() // Ignore save errors
-		}
-
 		return commandExecutedMsg{
-			output:   string(output),
-			exitCode: exitCode,
-			err:      err,
+			machineID:   machineID,
+			machineName: name,
+			command:     command,
+			output:      string(output),
+			exitCode:    exitCode,
+			err:         err,
+			failure:     classifySSHError(err),
 		}
 	}
 }
@@ -204,23 +222,17 @@ func (m model) resolveRemoteOutputPath(entry string) (string, error) {
 		return "", fmt.Errorf("device has no IP addresses")
 	}
 
-	address := device.Addresses[0]
-	sshTarget := address
-	if m.ssh.username != "" {
-		sshTarget = fmt.Sprintf("%s@%s", m.ssh.username, address)
+	sshTarget, err := buildSSHTarget(m.usernameForDevice(device), device.Addresses[0])
+	if err != nil {
+		return "", err
 	}
 
-	// Use sshpass if password is saved per-machine
-	var pwdCmd *exec.Cmd
-	if password := m.getMachinePassword(device); password != "" {
-		if _, lookErr := exec.LookPath("sshpass"); lookErr == nil {
-			pwdCmd = exec.Command("sshpass", "-p", password, "ssh",
-				"-o", "StrictHostKeyChecking=accept-new", sshTarget, "pwd")
-		}
+	pwdCmd, cleanup, err := newSSHCommand(sshTarget, m.passwordForDevice(device), true, "pwd")
+	if err != nil {
+		return "", err
 	}
-	if pwdCmd == nil {
-		pwdCmd = exec.Command("ssh", sshTarget, "pwd")
-	}
+	defer cleanup()
+
 	output, err := pwdCmd.Output()
 	if err != nil {
 		return "", err
@@ -238,22 +250,18 @@ func (m model) resolveRemoteOutputPath(entry string) (string, error) {
 func (m model) copySSHCommand(index int) tea.Cmd {
 	device := m.list.filteredDevices[index]
 
-	// Get the primary IP address
 	if len(device.Addresses) == 0 {
 		return func() tea.Msg {
 			return copiedMsg{success: false, text: ""}
 		}
 	}
 
-	address := device.Addresses[0]
-
-	// Build SSH command with username if available
-	var sshCommand string
-	if m.ssh.username != "" {
-		sshCommand = fmt.Sprintf("ssh %s@%s", m.ssh.username, address)
-	} else {
-		sshCommand = fmt.Sprintf("ssh %s", address)
+	target, err := buildSSHTarget(m.usernameForDevice(device), device.Addresses[0])
+	if err != nil {
+		return func() tea.Msg {
+			return copiedMsg{success: false, text: ""}
+		}
 	}
 
-	return copyTextToClipboard(sshCommand)
+	return copyTextToClipboard("ssh " + target)
 }

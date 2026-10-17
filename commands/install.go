@@ -99,7 +99,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	var response string
-	fmt.Scanln(&response)
+	_, _ = fmt.Scanln(&response) // EOF/empty input falls through to "cancelled"
 	response = strings.ToLower(strings.TrimSpace(response))
 
 	if response != "y" && response != "yes" {
@@ -200,9 +200,17 @@ func installBinary(srcPath, destDir string) error {
 	// Create symlink/copy for tsc alias
 	fmt.Printf("Creating tsc alias at %s...\n", tscPath)
 
-	// Remove existing tsc if it's ours
+	// Only replace an existing tsc when it is our own symlink. Anything
+	// else (typically the TypeScript compiler) must be left alone.
 	if _, err := os.Lstat(tscPath); err == nil {
-		os.Remove(tscPath)
+		if !isOurTscAlias(tscPath) {
+			fmt.Printf("Warning: %s already exists and is not a ts-cli alias; skipping tsc alias.\n", tscPath)
+			return nil
+		}
+		if err := os.Remove(tscPath); err != nil {
+			fmt.Printf("Warning: failed to replace existing tsc alias: %v\n", err)
+			return nil
+		}
 	}
 
 	if runtime.GOOS == "windows" {
@@ -218,6 +226,21 @@ func installBinary(srcPath, destDir string) error {
 	}
 
 	return nil
+}
+
+// isOurTscAlias reports whether path is the tsc alias created by ts-cli.
+// On Unix that is a symlink pointing at "ts-cli"; on Windows the alias is a
+// copy of the binary, which cannot be told apart from anything else, so an
+// existing file is never considered ours.
+func isOurTscAlias(path string) bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	target, err := os.Readlink(path)
+	if err != nil {
+		return false
+	}
+	return target == "ts-cli" || filepath.Base(target) == "ts-cli"
 }
 
 func copyFile(src, dst string) error {
