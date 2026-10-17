@@ -427,6 +427,24 @@ var normalModeHandlers = map[string]keyHandler{
 	":": func(m model) (tea.Model, tea.Cmd) {
 		return m.openAdHocPrompt()
 	},
+	" ": func(m model) (tea.Model, tea.Cmd) {
+		if d, ok := m.targetDevice(); ok {
+			m.toggleMark(d)
+		}
+		return m, nil
+	},
+	"*": func(m model) (tea.Model, tea.Cmd) {
+		m.toggleAllMarks()
+		return m, nil
+	},
+	"esc": func(m model) (tea.Model, tea.Cmd) {
+		if len(m.list.marked) > 0 {
+			m.clearMarks()
+		} else if m.run.visible {
+			m = m.closeRunPanel()
+		}
+		return m, nil
+	},
 	"s": func(m model) (tea.Model, tea.Cmd) {
 		return m.handleSSHRequest()
 	},
