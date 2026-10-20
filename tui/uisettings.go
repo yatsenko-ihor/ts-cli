@@ -19,8 +19,9 @@ const (
 	uiHideOffline    = "hide_offline"
 	uiShowDetails    = "show_details"
 	uiShortNames     = "short_names"
-	uiIcons          = "icons" // "symbols" (default) or "emoji"
-	uiTheme          = "theme" // "light" (default), "dark" or "hacker"
+	uiIcons          = "icons"      // "symbols" (default) or "emoji"
+	uiTmuxSplit      = "tmux_split" // ssh sessions in a tmux pane when running inside tmux
+	uiTheme          = "theme"      // "light" (default), "dark" or "hacker"
 )
 
 // uiSettings are the display options of the machine list.
@@ -31,6 +32,7 @@ type uiSettings struct {
 	shortNames     bool   // strip the tailnet suffix (.tailXXXX.ts.net) from names
 	emojiIcons     bool   // 🟢/🔴/⭕️ instead of coloured ●/○ symbols
 	theme          string // light, dark or hacker
+	tmuxSplit      bool   // open ssh sessions in a tmux split when inside tmux
 }
 
 // loadUISettings builds the settings from the config map; absent keys mean "on".
@@ -43,6 +45,7 @@ func loadUISettings(ui map[string]string) uiSettings {
 		shortNames:     on(uiShortNames),
 		emojiIcons:     ui[uiIcons] == "emoji",
 		theme:          validTheme(ui[uiTheme]),
+		tmuxSplit:      on(uiTmuxSplit),
 	}
 }
 
@@ -58,6 +61,7 @@ var settingItems = []settingItem{
 	{uiHideOffline, "Hide offline machines", "Collapse offline machines into one row; they stay visible while searching (H toggles)"},
 	{uiShowDetails, "Details panel", "Show OS, last seen, key expiry, SSH setup of the highlighted machine when the Run panel is closed"},
 	{uiShortNames, "Short names", "Strip the tailnet suffix (.tailXXXX.ts.net) from machine names"},
+	{uiTmuxSplit, "SSH in a tmux split", "Inside tmux, s opens the session in a pane next to the list (a real terminal: vim, htop, mouse, scrolling)"},
 	{uiTheme, "Theme", "light, dark or hacker (green on black); dark and hacker paint the whole screen"},
 	{uiIcons, "Icon style", "symbols: coloured ● ○ and text flags   emoji: 🟢 🔴 ⭕️ 🔐"},
 }
@@ -79,6 +83,8 @@ func (s uiSettings) value(key string) string {
 		return flag(s.showDetails)
 	case uiShortNames:
 		return flag(s.shortNames)
+	case uiTmuxSplit:
+		return flag(s.tmuxSplit)
 	case uiTheme:
 		return validTheme(s.theme)
 	case uiIcons:
@@ -101,6 +107,8 @@ func (s uiSettings) toggled(key string) uiSettings {
 		s.showDetails = !s.showDetails
 	case uiShortNames:
 		s.shortNames = !s.shortNames
+	case uiTmuxSplit:
+		s.tmuxSplit = !s.tmuxSplit
 	case uiTheme:
 		s.theme = nextTheme(validTheme(s.theme))
 	case uiIcons:

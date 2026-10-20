@@ -24,7 +24,8 @@
 
 - [ ] `ts-cli account import`: create accounts from `TAILSCALE_API_KEY` / `tailscale switch --list`
 - [ ] Per-account default SSH username (today there is one global default)
-- [ ] Embedded terminal: tmux split first (open the SSH session beside the list), PTY emulator later
+- [x] SSH in a tmux split (inside tmux, `s` opens a pane beside the list)
+- [ ] Embedded terminal inside ts-cli itself (PTY emulator) for use outside tmux
 - [ ] Re-enable background auto-ping (`autoPingEnabled` in `tui/ping.go`) once it is cheap enough
 - [x] `UseKeychain` with a lost key: creates a new key, removes the unreadable secrets and says what was removed
 - [x] `runJob.kill` kills the whole process group (sshpass's ssh child too)

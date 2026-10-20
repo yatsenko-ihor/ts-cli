@@ -154,7 +154,7 @@ func (m model) runPendingAttempt() (tea.Model, tea.Cmd) {
 		// A password typed just now is verified first and saved at once, so
 		// how the interactive session ends (dropped connection, ~., exit
 		// 255) can never cost the user the password they just entered.
-		if p.password != "" && !p.verified && sshpassAvailable() {
+		if !p.verified && ((p.password != "" && sshpassAvailable()) || m.tmuxSplitActive(password)) {
 			return m, probeSSH(device, p.username, password)
 		}
 		return m, m.sshToDevice(device, p.username, password)
@@ -327,6 +327,17 @@ func (m model) handleProbe(msg probeMsg) (tea.Model, tea.Cmd) {
 	cmds := m.persistSuccessfulCredentials()
 	m.ssh.pending.verified = true
 	device := m.list.filteredDevices[p.deviceIndex]
+	password := p.password
+	if password == "" {
+		password = m.savedPassword(p.machineID)
+	}
+	if m.tmuxSplitActive(password) {
+		// The session runs in another pane and its end is not observable:
+		// the attempt is complete once the pane is open.
+		m.ssh.pending = pendingSSH{}
+		cmds = append(cmds, openInTmux(device, p.username, password))
+		return m, tea.Batch(cmds...)
+	}
 	cmds = append(cmds, m.sshToDevice(device, p.username, p.password))
 	return m, tea.Batch(cmds...)
 }
