@@ -378,14 +378,14 @@ var normalModeHandlers = map[string]keyHandler{
 	" ": func(m model) (tea.Model, tea.Cmd) {
 		if d, ok := m.targetDevice(); ok {
 			if !m.list.marked[machineKey(d)] && !m.isReachable(d) {
-				m.notify.sshError = fmt.Errorf("machine %q is unreachable; press P to ping it", displayName(d))
+				m.notify.sshError = fmt.Errorf("machine %q is unreachable; press p to ping it", displayName(d))
 				return m, nil
 			}
 			m.toggleMark(d)
 		}
 		return m, nil
 	},
-	"P": func(m model) (tea.Model, tea.Cmd) {
+	"p": func(m model) (tea.Model, tea.Cmd) {
 		return m.pingTargets()
 	},
 	"*": func(m model) (tea.Model, tea.Cmd) {
@@ -419,7 +419,7 @@ var normalModeHandlers = map[string]keyHandler{
 		m.notify.sshError = nil
 		return m, m.reloadDevices()
 	},
-	"p": func(m model) (tea.Model, tea.Cmd) {
+	"P": func(m model) (tea.Model, tea.Cmd) {
 		m.acct.profileSelectMode = true
 		m.acct.profileCursor = profileAllAccountsIndex
 		for i, acc := range m.acct.list {

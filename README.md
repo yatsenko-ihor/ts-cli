@@ -119,7 +119,7 @@ ts-cli tui          # alternative alias
 | `s`         | SSH to selected device                            |
 | `c`         | Copy SSH command to clipboard                     |
 | `r`         | Reload devices                                    |
-| `p`         | Switch profile (account filter)                   |
+| `P`         | Switch profile (account filter)                   |
 | `m`         | Manage accounts                                   |
 | `u`         | Tailscale up                                      |
 | `o`         | Options menu (manage credentials)                 |
@@ -129,7 +129,7 @@ ts-cli tui          # alternative alias
 | `:`         | Run a one-off command on the selected machine(s)  |
 | `Space`     | Mark/unmark the machine for a multi-machine run   |
 | `*`         | Mark all visible machines (again to clear)        |
-| `P`         | Ping the selected machine(s)                      |
+| `p`         | Ping the selected machine(s)                      |
 | `Esc`       | Clear marks / close the right panels              |
 | `Tab`       | Cycle panel focus: machines → run → output        |
 | `Shift+Tab` | Reverse cycle panel focus                         |
@@ -191,7 +191,7 @@ The colour of a machine comes from two sources, combined:
 
 A ping is started:
 
-- manually with `P` for the highlighted or all marked machines;
+- manually with `p` for the highlighted or all marked machines;
 - ~~automatically in the background for the machine under the cursor~~ — **currently disabled** (the code is kept; set `autoPingEnabled = true` in `tui/ping.go` to re-enable: at start and whenever the cursor rests on a machine for half a second, results reused for 60 seconds);
 - as a **pre-flight check** (at most 2 seconds) before `s` or before running a command/script on a single machine, so an unreachable machine fails right away with a clear message instead of waiting for ssh to time out. Press `Esc` to cancel the check.
 
@@ -214,7 +214,7 @@ du -xh --max-depth=1 "${1:-/}" | sort -h | tail -n 15
 
 #### Running on several machines
 
-Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). Unreachable machines (🔴 or ⭕️) cannot be marked and are never run on; press `P` to ping a 🔴 machine, a reply makes it 🟢 and usable even when the Tailscale API still reports it offline. While marks exist, the Run panel and `:` target the whole set:
+Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). Unreachable machines (🔴 or ⭕️) cannot be marked and are never run on; press `p` to ping a 🔴 machine, a reply makes it 🟢 and usable even when the Tailscale API still reports it offline. While marks exist, the Run panel and `:` target the whole set:
 
 - Jobs run in parallel, up to 8 at a time, in list order.
 - No prompts: each machine uses its saved username and password, or the default username. Machines that are offline, have no username, belong to another Tailscale account, or do not match the script's `os=` are listed as **skipped** with the reason. A machine whose key or saved password is rejected is listed as **failed** with a hint to connect once via `s` so the credentials get saved.
@@ -223,7 +223,7 @@ Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clear
 
 Every machine's result is recorded in its own Recent history.
 
-Machines that belong to another Tailscale account than the one currently active on this computer are skipped in a multi-machine run. `tailscale switch` changes the account for the whole computer, so it cannot be done safely in the middle of a parallel run. To cover machines from several accounts, filter with `p` (profile) and do one run per account. A single-machine run still switches the account for you automatically.
+Machines that belong to another Tailscale account than the one currently active on this computer are skipped in a multi-machine run. `tailscale switch` changes the account for the whole computer, so it cannot be done safely in the middle of a parallel run. To cover machines from several accounts, filter with `P` (profile) and do one run per account. A single-machine run still switches the account for you automatically.
 
 **Notes on multi-machine runs**
 
