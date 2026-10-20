@@ -153,6 +153,12 @@ func (m model) runPendingAttempt() (tea.Model, tea.Cmd) {
 
 	switch p.action {
 	case sshActionSession:
+		// A password typed just now is verified first and saved at once, so
+		// how the interactive session ends (dropped connection, ~., exit
+		// 255) can never cost the user the password they just entered.
+		if p.password != "" && !p.verified && sshpassAvailable() {
+			return m, probeSSH(device, p.username, password)
+		}
 		return m, m.sshToDevice(device, p.username, password)
 	case sshActionCommand, sshActionScript:
 		spec := sshJob{action: p.action, command: p.command, script: p.script, args: p.args}
@@ -204,6 +210,13 @@ func (m model) finishSSHAttempt(failure sshFailure, err error) (tea.Model, tea.C
 	p := m.ssh.pending
 	if p.action == sshActionNone {
 		return m, nil
+	}
+	// The probe already proved these credentials. If the interactive session
+	// later ends with ssh's 255 (connection closed), it was an established
+	// session that ended, not a login failure.
+	if p.verified && p.action == sshActionSession && failure == sshFailureConnection {
+		failure = sshFailureRemoteExit
+		err = fmt.Errorf("connection closed: %v", err)
 	}
 
 	switch failure {
@@ -293,6 +306,27 @@ func (m *model) persistSuccessfulCredentials() []tea.Cmd {
 		cmds = append(cmds, storeUsername(p.username))
 	}
 	return cmds
+}
+
+// handleProbe processes the result of the credential probe: on success the
+// credentials are persisted immediately and the interactive session starts;
+// otherwise the normal failure handling (re-prompt / retry menu) applies.
+func (m model) handleProbe(msg probeMsg) (tea.Model, tea.Cmd) {
+	p := m.ssh.pending
+	if p.action != sshActionSession {
+		return m, nil // cancelled while the probe was running
+	}
+	if msg.failure != sshFailureNone && msg.failure != sshFailureRemoteExit {
+		return m.finishSSHAttempt(msg.failure, msg.err)
+	}
+	if p.deviceIndex < 0 || p.deviceIndex >= len(m.list.filteredDevices) {
+		return m.cancelSSHAttempt(), nil
+	}
+	cmds := m.persistSuccessfulCredentials()
+	m.ssh.pending.verified = true
+	device := m.list.filteredDevices[p.deviceIndex]
+	cmds = append(cmds, m.sshToDevice(device, p.username, p.password))
+	return m, tea.Batch(cmds...)
 }
 
 // cancelSSHAttempt aborts the pending flow (Esc in a prompt or retry menu).

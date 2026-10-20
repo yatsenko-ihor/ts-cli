@@ -185,6 +185,15 @@ Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clear
 
 Every machine's result is recorded in its own Recent history.
 
+Machines that belong to another Tailscale account than the one currently active on this computer are skipped in a multi-machine run. `tailscale switch` changes the account for the whole computer, so it cannot be done safely in the middle of a parallel run. To cover machines from several accounts, filter with `p` (profile) and do one run per account. A single-machine run still switches the account for you automatically.
+
+**Notes on multi-machine runs**
+
+- Run once per machine interactively (`s`) to save its login; after that it takes part in batch runs without any prompt.
+- A script that declares `os=` runs only on matching machines; the others are listed as skipped, not as failed.
+- Batch runs use the same non-interactive login as single runs: a saved password via `sshpass`, otherwise key-based auth.
+- Stopping a run (`x`) kills the running ssh processes and marks machines that were still waiting as skipped.
+
 ### Running In tmux
 
 ```bash
@@ -211,7 +220,7 @@ ts-cli stores SSH credentials **per-machine** — each device has its own userna
 1. **Saved password for this machine** → connect directly with it, no questions asked
 2. **No saved password** → try once without a password (key-based auth). The username is the one saved for the machine, else the default username, else you are asked for it
 3. **That attempt fails to authenticate** → you are asked for the password and the connection is retried with `sshpass`
-4. **Connection succeeds** → the username and, if you entered one, the encrypted password are saved for this machine. Nothing is written to disk before success
+4. **Connection succeeds** → the username and, if you entered one, the encrypted password are saved for this machine. Nothing is written to disk before success. For an interactive session a password you just typed is first verified with a quick non-interactive login (`ssh ... true`) and saved right away, then the session opens, so how the session later ends (dropped connection, `~.`, exit code 255) can never cost you the password
 5. **Saved password rejected** (sshpass exit 5) → it is forgotten and you are asked for the current one
 6. **Still failing** (ssh exit 255 after a password, or `sshpass` not installed) → retry menu: change user / password / both
 7. **Remote shell exits non-zero** → shown as information only; nothing is deleted

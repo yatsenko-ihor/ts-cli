@@ -15,6 +15,12 @@ type sshMsg struct {
 	failure sshFailure // classification of err (see classifySSHError)
 }
 
+// probeMsg is returned when the credential probe (ssh ... true) finishes
+type probeMsg struct {
+	err     error
+	failure sshFailure
+}
+
 // copiedMsg is returned when text is copied to clipboard
 type copiedMsg struct {
 	success bool

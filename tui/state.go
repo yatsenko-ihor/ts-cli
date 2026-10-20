@@ -205,6 +205,7 @@ type pendingSSH struct {
 	usedSavedPass   bool     // The attempt used a password loaded from config
 	passwordTried   bool     // A TUI-entered password has already been tried
 	askPasswordNext bool     // After the username prompt, go straight to the password prompt
+	verified        bool     // A probe proved the credentials; a later session ending with an ssh error is not an auth failure
 }
 
 // machineCredential holds per-machine SSH credentials in memory

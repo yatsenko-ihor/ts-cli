@@ -80,7 +80,8 @@ func buildSSHTarget(username, address string) (string, error) {
 // batch requests `-o BatchMode=yes` for non-interactive runs without a
 // password, so ssh fails fast instead of trying to prompt on the TUI's tty.
 func newSSHCommand(target, password string, batch bool, remoteArgs ...string) (*exec.Cmd, func(), error) {
-	sshArgs := []string{"-o", "StrictHostKeyChecking=accept-new"}
+	// ConnectTimeout keeps a dead host from hanging the TUI for minutes.
+	sshArgs := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15"}
 
 	if password != "" {
 		if sshpassPath, err := exec.LookPath("sshpass"); err == nil {
@@ -159,6 +160,29 @@ func (m model) sshToDevice(device client.Device, username, password string) tea.
 		cleanup()
 		return sshMsg{err: err, failure: classifySSHError(err)}
 	})
+}
+
+// probeSSH checks that username/password can log in to device by running
+// `true` non-interactively. Its result does not depend on how a later
+// interactive session ends, so credentials can be saved as soon as it
+// succeeds.
+func probeSSH(device client.Device, username, password string) tea.Cmd {
+	return func() tea.Msg {
+		if len(device.Addresses) == 0 {
+			return probeMsg{err: fmt.Errorf("device has no IP addresses"), failure: sshFailureExec}
+		}
+		target, err := buildSSHTarget(username, device.Addresses[0])
+		if err != nil {
+			return probeMsg{err: err, failure: sshFailureExec}
+		}
+		cmd, cleanup, err := newSSHCommand(target, password, true, "true")
+		if err != nil {
+			return probeMsg{err: err, failure: sshFailureExec}
+		}
+		defer cleanup()
+		err = cmd.Run()
+		return probeMsg{err: err, failure: classifySSHError(err)}
+	}
 }
 
 // startRemoteJob starts spec (a command or a script) on device as a streaming
