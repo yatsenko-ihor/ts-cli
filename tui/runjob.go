@@ -127,6 +127,10 @@ func (j *runJob) readLines(r io.Reader, wg *sync.WaitGroup) {
 	for sc.Scan() {
 		j.lines <- sc.Text()
 	}
+	// If the scanner gave up (a line longer than its 4 MiB limit) the rest of
+	// the stream is discarded, but it must still be drained: a process blocked
+	// writing to a pipe nobody reads would never exit and the job would hang.
+	_, _ = io.Copy(io.Discard, r)
 }
 
 // kill terminates the process. The job then completes through the normal

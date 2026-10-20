@@ -17,6 +17,12 @@ import (
 
 // SSH operation functions for connecting to and executing commands on remote devices
 
+// Test seams: production code always uses the real implementations.
+var (
+	osPipe  = os.Pipe  // creates the private password pipe
+	teaExec = tea.Exec // hands the interactive ssh process to Bubble Tea
+)
+
 // Exit codes used to tell a credential problem apart from an ordinary
 // non-zero exit of the remote shell.
 const (
@@ -85,7 +91,7 @@ func newSSHCommand(target, password string, batch bool, remoteArgs ...string) (*
 
 	if password != "" {
 		if sshpassPath, err := exec.LookPath("sshpass"); err == nil {
-			r, w, err := os.Pipe()
+			r, w, err := osPipe()
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to create password pipe: %w", err)
 			}
@@ -156,7 +162,7 @@ func (m model) sshToDevice(device client.Device, username, password string) tea.
 	}
 
 	banner := fmt.Sprintf("\nConnection to %s (%s)\n", displayName(device), target)
-	return tea.Exec(&bannerExec{banner: banner, cmd: cmd}, func(err error) tea.Msg {
+	return teaExec(&bannerExec{banner: banner, cmd: cmd}, func(err error) tea.Msg {
 		cleanup()
 		return sshMsg{err: err, failure: classifySSHError(err)}
 	})
