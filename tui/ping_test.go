@@ -141,7 +141,28 @@ func TestPingDeviceUsesTailscalePing(t *testing.T) {
 	}
 }
 
+func enableAutoPing(t *testing.T) {
+	t.Helper()
+	old := autoPingEnabled
+	autoPingEnabled = true
+	t.Cleanup(func() { autoPingEnabled = old })
+}
+
+func TestAutoPingIsOffByDefault(t *testing.T) {
+	withFakePing(t, true, func(string) error { return nil })
+	m := pingModel()
+	if autoPingEnabled || m.wantsAutoPing(m.list.devices[0]) || m.scheduleAutoPing() != nil || m.Init() != nil {
+		t.Fatal("auto ping must be disabled by default")
+	}
+	// The pre-flight check before connecting still works.
+	_, cmd := m.withPreflight(m.list.devices[0], func(m model) (tea.Model, tea.Cmd) { return m, nil })
+	if cmd == nil {
+		t.Fatal("pre-flight check must stay enabled")
+	}
+}
+
 func TestAutoPingOnlyForCursorMachineAfterItRests(t *testing.T) {
+	enableAutoPing(t)
 	withFakePing(t, true, func(string) error { return nil })
 	m := pingModel()
 
@@ -184,6 +205,7 @@ func TestAutoPingOnlyForCursorMachineAfterItRests(t *testing.T) {
 }
 
 func TestAutoPingSkippedWithoutCLIOrForOtherAccount(t *testing.T) {
+	enableAutoPing(t)
 	m := pingModel()
 	withFakePing(t, false, func(string) error { return nil })
 	if m.wantsAutoPing(m.list.devices[0]) {

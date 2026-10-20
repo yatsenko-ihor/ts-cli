@@ -113,10 +113,10 @@ STATUS AND PING
   Colour = Tailscale API baseline (connectedToControl, or last seen
   < 5 min), refined by `tailscale ping`, which wins in both directions:
   a reply = 🟢 usable, no reply = ⭕️ unreachable.
-  Pings run: with P; automatically for the machine under the cursor
-  (start, and after it rests 0.5 s); and as a ≤2 s pre-flight check
-  before s / running something on one machine (Esc cancels).
-  Machines of another Tailscale account are not auto-pinged.
+  Pings run: with P; and as a ≤2 s pre-flight check before s /
+  running something on one machine (Esc cancels). Background ping of
+  the machine under the cursor exists but is currently switched off.
+  Machines of another Tailscale account are never auto-pinged.
 
 ICONS
 ─────

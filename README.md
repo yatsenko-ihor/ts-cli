@@ -192,10 +192,10 @@ The colour of a machine comes from two sources, combined:
 A ping is started:
 
 - manually with `P` for the highlighted or all marked machines;
-- automatically in the background for the machine under the cursor, at start and whenever the cursor rests on a machine for half a second (results are reused for 60 seconds, and a reload with `r` forgets them);
+- ~~automatically in the background for the machine under the cursor~~ — **currently disabled** (the code is kept; set `autoPingEnabled = true` in `tui/ping.go` to re-enable: at start and whenever the cursor rests on a machine for half a second, results reused for 60 seconds);
 - as a **pre-flight check** (at most 2 seconds) before `s` or before running a command/script on a single machine, so an unreachable machine fails right away with a clear message instead of waiting for ssh to time out. Press `Esc` to cancel the check.
 
-Machines that belong to another Tailscale account than the active one are not pinged automatically, because this computer cannot reach them until the account is switched; their colour stays the API baseline. Nothing is pinged if the `tailscale` CLI is not installed, and a missing CLI never blocks a connection.
+Machines that belong to another Tailscale account than the active one are never pinged automatically (and are skipped by the pre-flight check), because this computer cannot reach them until the account is switched; their colour stays the API baseline. Nothing is pinged if the `tailscale` CLI is not installed, and a missing CLI never blocks a connection.
 
 #### Scripts
 
