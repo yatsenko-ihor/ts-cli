@@ -82,6 +82,12 @@ type preflight struct {
 	next func(model) (tea.Model, tea.Cmd)
 }
 
+// autoPingEnabled switches the background ping of the machine under the
+// cursor on or off. It is currently OFF: the code stays in place, set it to
+// true to bring the behaviour back. Manual pings (P) and the pre-flight
+// check before connecting are not affected.
+var autoPingEnabled = false
+
 // Seams for tests.
 var (
 	tailscaleAvailable = func() bool { _, err := exec.LookPath("tailscale"); return err == nil }
@@ -168,7 +174,7 @@ func (m model) canPing(d client.Device) bool {
 
 // wantsAutoPing reports whether a background ping of d is worthwhile.
 func (m model) wantsAutoPing(d client.Device) bool {
-	return m.canPing(d) && !m.pinging[machineKey(d)] && !m.pingIsFresh(d)
+	return autoPingEnabled && m.canPing(d) && !m.pinging[machineKey(d)] && !m.pingIsFresh(d)
 }
 
 // startAutoPing marks d as being pinged and returns the ping command.
