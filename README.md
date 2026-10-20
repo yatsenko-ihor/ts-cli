@@ -11,7 +11,7 @@ A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports m
 - **Run Panel**: Execute local scripts (`~/.ts-cli/scripts/`), saved commands with `{{placeholders}}`, or one-off commands on the selected machine
 - **Streaming Output**: Output appears line by line while the job runs, with exit status and elapsed time; stop a job with `x`
 - **Recent**: Re-run anything that ran on a machine before, or save it as a named command
-- **Ping and status icons**: 🟢 online, 🔴 offline, ⭕️ no reply to the last ping, 🔐 a password is saved for the machine. See [Machine status and ping](#machine-status-and-ping)
+- **Ping and status icons**: coloured ● online, ● offline, ○ no reply to the last ping, `pw` a password is saved, `exp` the device key expired (switchable to the 🟢/🔴/⭕️/🔐 emoji style in Settings). See [Machine status and ping](#machine-status-and-ping)
 - **Resume where you left off**: on start the cursor is placed on the machine you connected to last time (if it is online)
 - **Multi-machine runs**: mark machines with `Space` (or `*` for all), then run a script or command on all of them in parallel; the output is split into one section per machine
 - **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
@@ -181,6 +181,16 @@ When the terminal is wide enough, the TUI shows three panels:
 - **Bottom-Right — Output**: streams while the job runs; the title shows `● running`, then `✓ exit 0` or `✗ exit N`. `c` copies the selected line as an absolute remote path, `n` only the file name, `x` stops the job.
 
 Focus cycles with `Tab` / `Shift+Tab`, or jump directly with `1`, `2`, `3`.
+
+#### List appearance and settings (F12)
+
+Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to close). Choices are saved in `~/.ts-cli/config.json` under `ui`:
+
+- **Short names**: the tailnet suffix is stripped (`box-043.tail813b1c.ts.net` → `box-043`; a name that would become ambiguous keeps a ` ·tailnet` hint).
+- **Hide offline machines**: offline machines collapse into one `▸ N offline hidden` row. `H` toggles it; searching always includes offline machines.
+- **Details panel**: with the Run panel closed and a terminal at least 100 columns wide, the highlighted machine's OS, address, last seen, key expiry, SSH setup and ping result are shown on the right.
+- **Group by account**: section headers per account (only with more than one account).
+- **Icon style**: coloured symbols (default) or emoji.
 
 #### Machine status and ping
 

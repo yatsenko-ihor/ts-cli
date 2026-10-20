@@ -388,6 +388,14 @@ var normalModeHandlers = map[string]keyHandler{
 	"p": func(m model) (tea.Model, tea.Cmd) {
 		return m.pingTargets()
 	},
+	"H": func(m model) (tea.Model, tea.Cmd) {
+		return m.applySetting(uiHideOffline)
+	},
+	"f12": func(m model) (tea.Model, tea.Cmd) {
+		m.settingsMode = true
+		m.settingsCursor = 0
+		return m, nil
+	},
 	"*": func(m model) (tea.Model, tea.Cmd) {
 		m.toggleAllMarks()
 		return m, nil
@@ -498,45 +506,21 @@ func (m model) getTargetDevice() int {
 	return m.list.cursor
 }
 
-// ensureListCursorVisible scrolls the device list so the cursor is on screen
-// (needed when the cursor starts below the first page, e.g. a remembered
-// machine, and once the real terminal height is known).
-func (m *model) ensureListCursorVisible() {
-	maxVisible := m.getMaxVisibleItems()
-	if m.list.cursor < m.list.viewportTop {
-		m.list.viewportTop = m.list.cursor
-	} else if m.list.cursor >= m.list.viewportTop+maxVisible {
-		m.list.viewportTop = m.list.cursor - maxVisible + 1
-	}
-	if m.list.viewportTop < 0 {
-		m.list.viewportTop = 0
-	}
-}
-
-// moveCursorUp moves the device-list cursor up and adjusts viewport if needed.
+// moveCursorUp moves the device-list cursor up.
 // (Run and Output panels handle their own cursors.)
 func (m *model) moveCursorUp() {
 	if m.list.cursor > 0 {
 		m.list.cursor--
-		// Scroll up if cursor goes above viewport
-		if m.list.cursor < m.list.viewportTop {
-			m.list.viewportTop = m.list.cursor
-		}
-		// Clear SSH error when moving cursor
+		m.ensureListCursorVisible()
 		m.notify.sshError = nil
 	}
 }
 
-// moveCursorDown moves the device-list cursor down and adjusts viewport if needed.
+// moveCursorDown moves the device-list cursor down.
 func (m *model) moveCursorDown() {
 	if m.list.cursor < len(m.list.filteredDevices)-1 {
 		m.list.cursor++
-		// Scroll down if cursor goes below viewport
-		maxVisible := m.getMaxVisibleItems()
-		if m.list.cursor >= m.list.viewportTop+maxVisible {
-			m.list.viewportTop = m.list.cursor - maxVisible + 1
-		}
-		// Clear SSH error when moving cursor
+		m.ensureListCursorVisible()
 		m.notify.sshError = nil
 	}
 }
