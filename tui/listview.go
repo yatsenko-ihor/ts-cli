@@ -38,7 +38,7 @@ func (m model) renderDeviceList() string {
 	hasMarks := len(m.list.marked) > 0
 	cols := m.listColumns(hasMarks)
 	inner := getPanelInnerWidth(m.getMachineListWidth())
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#435871"))
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(cur.header)
 
 	if top > 0 {
 		content.WriteString(normalStyle.Render("  ↑ more above ↑"))
@@ -73,18 +73,18 @@ func (m model) renderDeviceList() string {
 	} else if h := m.listFrameHeight(); h > 0 {
 		style = style.Height(h)
 	}
-	borderColor := lipgloss.Color("#7A7A7A")
+	borderColor := cur.border
 	if m.run.visible && m.activeFocus == focusList {
-		borderColor = lipgloss.Color("#5FAFFF")
+		borderColor = cur.borderFocus
 	}
 	panel := style.Width(m.getMachineListWidth()).BorderForeground(borderColor).Render(content.String())
 
 	// Title: counts for the whole profile (hidden machines included) and sort mode
 	online, offline := m.statusCounts()
 	focused := m.activeFocus == focusList
-	labelColor := lipgloss.Color("#435871")
+	labelColor := cur.header
 	if focused {
-		labelColor = lipgloss.Color("#232e3b")
+		labelColor = cur.headerStrong
 	}
 	dot := func(icon string, color lipgloss.Color, n int) string {
 		return lipgloss.NewStyle().Bold(true).Foreground(color).Render(fmt.Sprintf(" %s %d", icon, n))
@@ -95,7 +95,7 @@ func (m model) renderDeviceList() string {
 	}
 	title := lipgloss.NewStyle().Bold(focused).Foreground(labelColor).Render("[1] Machines") +
 		dot(onIcon, colorOnline, online) + dot(offIcon, colorOffline, offline) +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#232e3b")).Render(fmt.Sprintf(" ⇅ %s", m.list.sort.String()))
+		lipgloss.NewStyle().Foreground(cur.headerStrong).Render(fmt.Sprintf(" ⇅ %s", m.list.sort.String()))
 	if n := len(m.markedDevices()); n > 0 {
 		title += lipgloss.NewStyle().Bold(true).Foreground(colorSel).Render(fmt.Sprintf(" ✔ %d selected", n))
 	}

@@ -133,6 +133,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		version:     version,
 		reloading:   false,
 	}
+	applyTheme(m.set.theme)
 	m.filterDevices()
 	// Start on the machine connected to last time, if it is online and listed.
 	if lastMachine != "" {
@@ -427,7 +428,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View renders the screen, painted with the theme background if it has one.
 func (m model) View() string {
+	return paintScreen(m.viewBody(), m.width, m.height)
+}
+
+func (m model) viewBody() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
@@ -600,7 +606,7 @@ func (m model) View() string {
 	if m.width > 0 && m.height > 0 && (m.width < minWidth || m.height < minHeight) {
 		b.WriteString("\n")
 		warningStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#8A6D3B")).
+			Foreground(cur.info).
 			Bold(true)
 
 		warningMsg := fmt.Sprintf("⚠️  Warning: Terminal size (%dx%d) is too small. Minimum recommended: %dx%d for optimal display.",

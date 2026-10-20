@@ -20,15 +20,17 @@ const (
 	uiShowDetails    = "show_details"
 	uiShortNames     = "short_names"
 	uiIcons          = "icons" // "symbols" (default) or "emoji"
+	uiTheme          = "theme" // "light" (default), "dark" or "hacker"
 )
 
 // uiSettings are the display options of the machine list.
 type uiSettings struct {
-	groupByAccount bool // section headers per Tailscale account (when there are several)
-	hideOffline    bool // collapse offline machines into a "N offline hidden" row
-	showDetails    bool // details panel for the highlighted machine
-	shortNames     bool // strip the tailnet suffix (.tailXXXX.ts.net) from names
-	emojiIcons     bool // 🟢/🔴/⭕️ instead of coloured ●/○ symbols
+	groupByAccount bool   // section headers per Tailscale account (when there are several)
+	hideOffline    bool   // collapse offline machines into a "N offline hidden" row
+	showDetails    bool   // details panel for the highlighted machine
+	shortNames     bool   // strip the tailnet suffix (.tailXXXX.ts.net) from names
+	emojiIcons     bool   // 🟢/🔴/⭕️ instead of coloured ●/○ symbols
+	theme          string // light, dark or hacker
 }
 
 // loadUISettings builds the settings from the config map; absent keys mean "on".
@@ -40,6 +42,7 @@ func loadUISettings(ui map[string]string) uiSettings {
 		showDetails:    on(uiShowDetails),
 		shortNames:     on(uiShortNames),
 		emojiIcons:     ui[uiIcons] == "emoji",
+		theme:          validTheme(ui[uiTheme]),
 	}
 }
 
@@ -55,6 +58,7 @@ var settingItems = []settingItem{
 	{uiHideOffline, "Hide offline machines", "Collapse offline machines into one row; they stay visible while searching (H toggles)"},
 	{uiShowDetails, "Details panel", "Show OS, last seen, key expiry, SSH setup of the highlighted machine when the Run panel is closed"},
 	{uiShortNames, "Short names", "Strip the tailnet suffix (.tailXXXX.ts.net) from machine names"},
+	{uiTheme, "Theme", "light, dark or hacker (green on black); dark and hacker paint the whole screen"},
 	{uiIcons, "Icon style", "symbols: coloured ● ○ and text flags   emoji: 🟢 🔴 ⭕️ 🔐"},
 }
 
@@ -75,6 +79,8 @@ func (s uiSettings) value(key string) string {
 		return flag(s.showDetails)
 	case uiShortNames:
 		return flag(s.shortNames)
+	case uiTheme:
+		return validTheme(s.theme)
 	case uiIcons:
 		if s.emojiIcons {
 			return "emoji"
@@ -95,6 +101,8 @@ func (s uiSettings) toggled(key string) uiSettings {
 		s.showDetails = !s.showDetails
 	case uiShortNames:
 		s.shortNames = !s.shortNames
+	case uiTheme:
+		s.theme = nextTheme(validTheme(s.theme))
 	case uiIcons:
 		s.emojiIcons = !s.emojiIcons
 	}
@@ -119,6 +127,9 @@ func saveUISetting(key, value string) tea.Cmd {
 // applySetting flips a setting, refreshes the list for it and persists it.
 func (m model) applySetting(key string) (tea.Model, tea.Cmd) {
 	m.set = m.set.toggled(key)
+	if key == uiTheme {
+		applyTheme(m.set.theme)
+	}
 	m.refilterKeepCursor()
 	return m, saveUISetting(key, m.set.value(key))
 }
@@ -159,7 +170,7 @@ func (m model) renderSettings() string {
 	}
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
+		BorderForeground(cur.border).
 		Padding(1, 2).
 		Width(width)
 
@@ -168,7 +179,7 @@ func (m model) renderSettings() string {
 		val := m.set.value(it.key)
 		var mark string
 		switch {
-		case it.key == uiIcons:
+		case it.key == uiIcons, it.key == uiTheme:
 			mark = "‹" + val + "›"
 		case val == "on":
 			mark = "[x]"
