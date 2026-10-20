@@ -59,6 +59,7 @@ type Config struct {
 	SSHUsername        string                 `json:"ssh_username,omitempty"`
 	MachineCredentials map[string]MachineAuth `json:"machine_credentials,omitempty"`
 	Commands           []SavedCommand         `json:"commands,omitempty"`
+	LastMachine        string                 `json:"last_machine,omitempty"` // key of the machine connected to most recently
 	ConfigVersion      string                 `json:"config_version"`
 }
 
