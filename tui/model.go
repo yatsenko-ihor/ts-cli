@@ -34,12 +34,13 @@ type model struct {
 	aboutMode   bool
 	helpMode    bool
 	helpScroll  int
+	lastMachine string // key of the machine connected to most recently
 }
 
 // NewModel builds the initial TUI state. machineCreds is the per-machine
 // credential map from config.json (keyed by device ID; older files keyed by
 // device name are migrated on first run). savedCommands feeds the Run panel.
-func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth, savedCommands []config.SavedCommand) model {
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth, savedCommands []config.SavedCommand, lastMachine string) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -77,11 +78,23 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	}
 	credsDirty := migrateCredentialKeys(mCreds, devices)
 
+	// Start on the machine connected to last time, if it is online.
+	startCursor := 0
+	if lastMachine != "" {
+		for i, d := range devices {
+			if machineKey(d) == lastMachine && isDeviceOnline(d) {
+				startCursor = i
+				break
+			}
+		}
+	}
+
 	return model{
+		lastMachine: lastMachine,
 		list: deviceList{
 			devices:         devices,
 			filteredDevices: devices,
-			cursor:          0,
+			cursor:          startCursor,
 			selected:        -1,
 			viewportTop:     0,
 			searchQuery:     "",
@@ -159,6 +172,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.ensureListCursorVisible()
 		return m, nil
 
 	case sshMsg:

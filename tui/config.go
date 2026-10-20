@@ -27,6 +27,18 @@ func clearUsername() tea.Cmd {
 	return storeUsername("")
 }
 
+// storeLastMachine remembers the machine connected to most recently so the
+// next start can pre-select it.
+func storeLastMachine(key string) tea.Cmd {
+	return func() tea.Msg {
+		err := config.Update(func(cfg *config.Config) error {
+			cfg.LastMachine = key
+			return nil
+		})
+		return usernameStoredMsg{err: err}
+	}
+}
+
 // storeMachineCredential saves one machine's SSH credentials to config.json
 func storeMachineCredential(key string, cred machineCredential) tea.Cmd {
 	return func() tea.Msg {

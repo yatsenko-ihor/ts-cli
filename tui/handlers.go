@@ -531,6 +531,21 @@ func (m model) getTargetDevice() int {
 	return m.list.cursor
 }
 
+// ensureListCursorVisible scrolls the device list so the cursor is on screen
+// (needed when the cursor starts below the first page, e.g. a remembered
+// machine, and once the real terminal height is known).
+func (m *model) ensureListCursorVisible() {
+	maxVisible := m.getMaxVisibleItems()
+	if m.list.cursor < m.list.viewportTop {
+		m.list.viewportTop = m.list.cursor
+	} else if m.list.cursor >= m.list.viewportTop+maxVisible {
+		m.list.viewportTop = m.list.cursor - maxVisible + 1
+	}
+	if m.list.viewportTop < 0 {
+		m.list.viewportTop = 0
+	}
+}
+
 // moveCursorUp moves the device-list cursor up and adjusts viewport if needed.
 // (Run and Output panels handle their own cursors.)
 func (m *model) moveCursorUp() {
