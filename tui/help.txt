@@ -152,7 +152,8 @@ ACCOUNTS WINDOW (m)
 LIST VIEW
 ─────────
   F12  Settings: short names, hide offline, details panel,
-       group by account, icon style (saved in config.json)
+       group by account, theme (light/dark/hacker), icon style
+       (saved in config.json)
   H    Show/hide offline machines (search always finds them)
   ▸ N offline hidden   Row that stands for the hidden machines
 

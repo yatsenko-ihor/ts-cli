@@ -52,7 +52,7 @@ func (m model) renderHelp() string {
 		Width(width).
 		Height(height).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7D56F4")).
+		BorderForeground(cur.highlight).
 		Padding(1, 2)
 
 	return lipgloss.Place(m.width, m.height,

@@ -510,7 +510,7 @@ func (m model) renderAccountManagement() string {
 
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
+		BorderForeground(cur.border).
 		Padding(1, 2).
 		Width(width)
 	b.WriteString(panel.Render(strings.TrimRight(rows.String(), "\n")))

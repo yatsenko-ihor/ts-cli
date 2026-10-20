@@ -12,11 +12,11 @@ import (
 // "offline hidden" note), aligned columns, short names, coloured status.
 
 var (
-	colorOnline  = lipgloss.Color("#4CAF50")
-	colorOffline = lipgloss.Color("#EF5350")
-	colorWarn    = lipgloss.Color("#E8A33D")
-	colorDim     = lipgloss.Color("#8A8A8A")
-	colorSel     = lipgloss.Color("#2D6A8C")
+	colorOnline  lipgloss.Color // set by applyTheme
+	colorOffline lipgloss.Color
+	colorWarn    lipgloss.Color
+	colorDim     lipgloss.Color
+	colorSel     lipgloss.Color
 )
 
 // ─── Names ────────────────────────────────────────────────────────────────────

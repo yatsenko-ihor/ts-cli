@@ -207,6 +207,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Hide offline machines**: offline machines collapse into one `▸ N offline hidden` row. `H` toggles it; searching always includes offline machines.
 - **Details panel**: with the Run panel closed and a terminal at least 100 columns wide, the highlighted machine's OS, address, last seen, key expiry, SSH setup and ping result are shown on the right.
 - **Group by account**: section headers per account (only with more than one account).
+- **Theme**: `light` (default, keeps your terminal background), `dark` or `hacker` (green on black). `dark` and `hacker` paint the whole screen, so they look the same on any terminal background.
 - **Icon style**: coloured symbols (default) or emoji.
 
 #### Machine status and ping
