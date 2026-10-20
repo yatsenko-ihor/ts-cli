@@ -53,3 +53,11 @@ UPDATE_TRACE=1 go test ./verification       # regenerate docs/do178c/traceabilit
 - Put `// Verifies: REQ-AREA-001, REQ-AREA-002` in the comment block directly above the `func Test…`.
 - A table-driven test must contain the boundary and the hostile case, not only the happy path.
 - Do not lower a threshold in `coverage-targets.txt` to make a build pass; add the test or document the unreachable code in the requirement file.
+
+## Results
+
+- `coverage.md`: statement coverage of the gated files (all 100%), regenerate with `go run ./verification/cmd/covergate -report docs/do178c/coverage.md`.
+- `traceability.md`: every requirement and the test that verifies it.
+- Condition coverage with `gobco` was run on the gated packages while the tests were written; every condition in the gated files of `tui` is covered both true and false. It is not part of CI.
+- Defects found while writing the tests (fixed): a leftover temp file holding the master key after a failed rename (`util/keystore.go`), the first account being stored inactive (`config/config.go`), a key being reported as rejected from error text (`client/tailscale.go`), a job hanging on a line over 4 MiB (`tui/runjob.go`).
+- Open items are in `todo.md`.

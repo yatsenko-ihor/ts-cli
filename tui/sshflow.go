@@ -24,6 +24,9 @@ import (
 //  5. A saved password is rejected           → it is deleted and the user is
 //     asked for a new one.
 
+// encryptPassword is a test seam; production always uses util.EncryptPassword.
+var encryptPassword = util.EncryptPassword
+
 // machineKey returns the stable credential/history key for a device.
 func machineKey(d client.Device) string {
 	if d.ID != "" {
@@ -280,7 +283,7 @@ func (m *model) persistSuccessfulCredentials() []tea.Cmd {
 		changed = true
 	}
 	if p.password != "" {
-		if enc, err := util.EncryptPassword(p.password); err == nil {
+		if enc, err := encryptPassword(p.password); err == nil {
 			cred.passwordEncrypted = enc
 			changed = true
 		} else {
