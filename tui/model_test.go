@@ -319,3 +319,49 @@ func TestRunPanelShiftTabToList(t *testing.T) {
 		t.Fatalf("expected shift+tab in run panel to move focus to list, got %v", m2.activeFocus)
 	}
 }
+
+func TestNewModelPreselectsLastConnectedOnlineMachine(t *testing.T) {
+	t.Setenv("TS_CLI_CONFIG_DIR", t.TempDir())
+	now := time.Now()
+	mk := func() []client.Device {
+		return []client.Device{
+			{ID: "a", Name: "alpha", LastSeen: now},
+			{ID: "b", Name: "bravo", LastSeen: now},
+			{ID: "c", Name: "charlie", LastSeen: now},
+		}
+	}
+
+	m := NewModel(mk(), "t", "", nil, nil, nil, "c")
+	if got := m.list.filteredDevices[m.list.cursor].ID; got != "c" {
+		t.Fatalf("expected last machine c selected, got %s", got)
+	}
+
+	// Offline last machine: fall back to the first row.
+	devs := mk()
+	devs[2].LastSeen = now.Add(-time.Hour)
+	m = NewModel(devs, "t", "", nil, nil, nil, "c")
+	if m.list.cursor != 0 {
+		t.Fatalf("offline last machine must not be preselected, cursor=%d", m.list.cursor)
+	}
+
+	// Unknown or empty key: first row.
+	if m = NewModel(mk(), "t", "", nil, nil, nil, "zzz"); m.list.cursor != 0 {
+		t.Fatal("unknown key")
+	}
+	if m = NewModel(mk(), "t", "", nil, nil, nil, ""); m.list.cursor != 0 {
+		t.Fatal("empty key")
+	}
+}
+
+func TestListCursorScrollsIntoViewOnResize(t *testing.T) {
+	devs := make([]client.Device, 40)
+	for i := range devs {
+		devs[i] = client.Device{ID: string(rune('A' + i%26)), Name: "n", LastSeen: time.Now()}
+	}
+	m := model{list: deviceList{devices: devs, filteredDevices: devs, cursor: 35}}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m2 := updated.(model)
+	if m2.list.viewportTop == 0 || m2.list.cursor < m2.list.viewportTop || m2.list.cursor >= m2.list.viewportTop+m2.getMaxVisibleItems() {
+		t.Fatalf("cursor %d not visible with viewportTop %d", m2.list.cursor, m2.list.viewportTop)
+	}
+}

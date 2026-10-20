@@ -305,6 +305,10 @@ func (m *model) persistSuccessfulCredentials() []tea.Cmd {
 		m.ssh.username = p.username
 		cmds = append(cmds, storeUsername(p.username))
 	}
+
+	// Remember this machine so the next start pre-selects it.
+	m.lastMachine = p.machineID
+	cmds = append(cmds, storeLastMachine(p.machineID))
 	return cmds
 }
 

@@ -273,3 +273,14 @@ func TestProbeFailureReprompts(t *testing.T) {
 		t.Fatal("nothing may be saved when the probe fails")
 	}
 }
+
+func TestSuccessfulConnectionRemembersLastMachine(t *testing.T) {
+	m := flowModel(t, nil, "pi")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
+	m = asModel(t, updated)
+	updated, _ = m.finishSSHAttempt(sshFailureNone, nil)
+	m = asModel(t, updated)
+	if m.lastMachine != "dev-1" {
+		t.Fatalf("lastMachine = %q", m.lastMachine)
+	}
+}
