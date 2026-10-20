@@ -207,6 +207,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Hide offline machines**: offline machines collapse into one `▸ N offline hidden` row. `H` toggles it; searching always includes offline machines.
 - **Details panel**: with the Run panel closed and a terminal at least 100 columns wide, the highlighted machine's OS, address, last seen, key expiry, SSH setup and ping result are shown on the right.
 - **Group by account**: section headers per account (only with more than one account).
+- **SSH in a tmux split**: inside tmux, `s` opens the session in a new pane to the right of the list instead of taking over ts-cli's terminal (see [Running In tmux](#running-in-tmux)). On by default; has no effect outside tmux.
 - **Theme**: `light` (default, keeps your terminal background), `dark` or `hacker` (green on black). `dark` and `hacker` paint the whole screen, so they look the same on any terminal background.
 - **Icon style**: coloured symbols (default) or emoji.
 
@@ -261,6 +262,15 @@ Machines that belong to another Tailscale account than the one currently active 
 - Stopping a run (`x`) kills the running ssh processes and marks machines that were still waiting as skipped.
 
 ### Running In tmux
+
+**Sessions in a split.** If ts-cli itself runs inside tmux, `s` runs `tmux split-window -h` and opens the ssh session there: the list stays on the left and a real terminal is on the right, so vim, htop, the mouse, scrolling and copying work as usual (no terminal emulation in ts-cli). Details:
+
+- The credentials are proven first with a quick non-interactive login (key, typed password or saved password), exactly as for a typed password in a normal session; only then is the pane opened. A wrong saved password is therefore still forgotten and asked for again, and a good one is saved before the pane opens.
+- A password never appears in the arguments of tmux, sshpass or ssh: it is written to a private named pipe (0600, in a 0700 temp directory) that the pane's shell opens as file descriptor 3 for `sshpass -d 3`; the pipe holds no data on disk and its directory is removed right away.
+- If the session ends with an error, the pane prints the status and waits for Enter so the message can be read.
+- Turn it off in `F12` → *SSH in a tmux split*. Runs of commands and scripts (`:`, Run panel) are not affected; they stream into the Output panel as before.
+
+Other tmux layouts for ts-cli itself:
 
 ```bash
 # Split horizontally
