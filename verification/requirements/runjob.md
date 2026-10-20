@@ -18,6 +18,8 @@ killing it. Intent: no output is lost or reordered, a finished process always pr
 - **REQ-JOB-012** waitRunEvent shall return the next line, together with every further line already buffered, as one runLinesMsg that names the job; with a single buffered line and an open channel it shall return a one-line batch without blocking for more.
 - **REQ-JOB-013** waitRunEvent shall return at most 200 lines per message; the remainder is delivered by the following calls (199, 200, 201 and 450 buffered lines checked).
 - **REQ-JOB-014** When the line channel is closed and drained, waitRunEvent shall return a runDoneMsg naming the job and carrying the result; lines buffered before the close shall still be delivered first, in order.
+- **REQ-JOB-016** The job's process shall run in its own process group and kill shall terminate the whole group, so that a child of the process which holds the output pipes is killed too and the job completes promptly with killed = true (POSIX; on Windows only the process itself is killed).
+- **REQ-JOB-017** When the process does not lead a process group, kill shall fall back to killing the process alone.
 - **REQ-JOB-015** tickRun shall deliver a runTickMsg naming the job after about one second.
 
 ## MC/DC
@@ -38,6 +40,6 @@ Derived behaviour:
 - The line channel holds 256 entries and the job result channel one entry; the output buffer cap `maxOutputLines` is applied by the caller (runpanel.go), not here.
 - A kill that arrives after the process already ended on its own still sets `killed`; if the completion has not been published yet the result is reported as killed. Harmless to credentials (a killed job counts as connected).
 
-Known limitation, not tested: kill sends SIGKILL to the direct child only. If the child has children that keep the stdout pipe open (for example `sh -c 'a; sleep 30'`, or sshpass leaving its ssh child), the job completes only when they exit. The tests kill a process that has no children (`exec sleep`). Changing this (process groups) was judged out of scope for a test-only change.
+Former limitation, now fixed (REQ-JOB-016, REQ-JOB-017): kill used to signal only the direct child, so grandchildren holding the output pipe (sshpass's ssh) kept the job from finishing. The job process now leads its own process group and the whole group is killed. On Windows only the process itself is killed (no process groups). A grandchild that deliberately leaves the group (setsid) is still not reached.
 
 Unreachable code: none. Every statement of tui/runjob.go is executed (100 % statement coverage, every condition true and false under gobco).
