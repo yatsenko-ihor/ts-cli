@@ -20,6 +20,7 @@ KEYBOARD SHORTCUTS
   o              Options menu
   a              About screen
   P              Switch profile/account (Shift+P)
+  m              Accounts window (add/edit/remove/show-hide/switch)
   u              Run 'tailscale up'
   1, 2, 3        Focus panels (Machines, Run, Output)
   q / Ctrl+C     Quit
@@ -137,6 +138,16 @@ ICONS
   🔑  Device key expires in the future (device list)
   🔑  Key-based auth, no password stored (credentials list)
   ⚠️   Key expiry warning
+
+ACCOUNTS WINDOW (m)
+───────────────────
+  ↑/↓ move   Enter use (switch this computer)   Space show/hide
+  a add   e edit (name / replace API key)   d remove (asks y/N)
+  c re-check API keys   Esc close
+  ◉ = this computer is logged in to that account. Hidden accounts'
+  machines are not listed. Each row shows online/total machines and
+  the API key state (valid, days until expiry, rejected). The main
+  screen warns when a key expires within 14 days.
 
 LIST VIEW
 ─────────

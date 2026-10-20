@@ -249,3 +249,47 @@ func TestMigrateOldConfig(t *testing.T) {
 		t.Fatal("new config should be written")
 	}
 }
+
+func TestUpdateAccountRenameAndKey(t *testing.T) {
+	cfg := &Config{Accounts: []Account{
+		{Name: "a", Tailnet: "a.com", APIKey: "k1"},
+		{Name: "b", Tailnet: "b.com", APIKey: "k2"},
+	}}
+	if err := cfg.UpdateAccount("a.com", "work", "k3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Accounts[0]; got.Name != "work" || got.APIKey != "k3" {
+		t.Fatalf("account = %+v", got)
+	}
+	if err := cfg.UpdateAccount("work", "b", ""); err == nil {
+		t.Fatal("renaming onto another account's name must fail")
+	}
+	if err := cfg.UpdateAccount("zzz", "x", ""); err == nil {
+		t.Fatal("unknown account must fail")
+	}
+	if err := cfg.UpdateAccount("work", "", ""); err != nil || cfg.Accounts[0].Name != "work" {
+		t.Fatal("empty arguments change nothing")
+	}
+}
+
+func TestHiddenAccountSurvivesSaveAndLoad(t *testing.T) {
+	useTempConfigDir(t)
+	err := Update(func(c *Config) error {
+		c.AddAccount("a", "tskey-api-kID-0123456789abcdef", "a.com", true)
+		c.AddAccount("b", "tskey-api-kID-0123456789abcdeg", "b.com", false)
+		if !c.SetAccountHidden("b", true) || c.SetAccountHidden("nope", true) {
+			t.Fatal("SetAccountHidden result")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Accounts[0].Hidden || !cfg.Accounts[1].Hidden {
+		t.Fatalf("hidden flags lost: %+v", cfg.Accounts)
+	}
+}

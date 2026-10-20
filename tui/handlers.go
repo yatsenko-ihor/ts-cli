@@ -93,7 +93,11 @@ var (
 func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+c":
+		cancel := m.input.onCancel
 		m.input = textInput{mode: inputNone}
+		if cancel != nil {
+			m = cancel(m)
+		}
 		return m, nil
 	case "enter":
 		submit := m.input.onSubmit
@@ -292,61 +296,6 @@ func (m model) handleProfileSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ─── Account management mode ──────────────────────────────────────────────────
-
-var accountManageHandlers = map[string]keyHandler{
-	"esc": func(m model) (tea.Model, tea.Cmd) {
-		m.acct.accountManageMode = false
-		return m, nil
-	},
-	"ctrl+c": func(m model) (tea.Model, tea.Cmd) {
-		m.acct.accountManageMode = false
-		return m, nil
-	},
-	"q": func(m model) (tea.Model, tea.Cmd) {
-		m.acct.accountManageMode = false
-		return m, nil
-	},
-	"enter": func(m model) (tea.Model, tea.Cmd) {
-		m.acct.accountManageMode = false
-		if m.acct.manageCursor == addAccountMenuIndex {
-			return m, m.runAddAccount()
-		}
-		return m, nil
-	},
-	"up": func(m model) (tea.Model, tea.Cmd) {
-		if m.acct.manageCursor > addAccountMenuIndex {
-			m.acct.manageCursor--
-		}
-		return m, nil
-	},
-	"k": func(m model) (tea.Model, tea.Cmd) {
-		if m.acct.manageCursor > addAccountMenuIndex {
-			m.acct.manageCursor--
-		}
-		return m, nil
-	},
-	"down": func(m model) (tea.Model, tea.Cmd) {
-		if m.acct.manageCursor < accountManageOptionCount-1 {
-			m.acct.manageCursor++
-		}
-		return m, nil
-	},
-	"j": func(m model) (tea.Model, tea.Cmd) {
-		if m.acct.manageCursor < accountManageOptionCount-1 {
-			m.acct.manageCursor++
-		}
-		return m, nil
-	},
-}
-
-func (m model) handleAccountManagement(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if newM, cmd, handled := dispatchKey(msg.String(), m, accountManageHandlers); handled {
-		return newM, cmd
-	}
-	return m, nil
-}
-
 // ─── Normal mode ──────────────────────────────────────────────────────────────
 
 var normalModeHandlers = map[string]keyHandler{
@@ -416,7 +365,9 @@ var normalModeHandlers = map[string]keyHandler{
 	},
 	"m": func(m model) (tea.Model, tea.Cmd) {
 		m.acct.accountManageMode = true
-		m.acct.manageCursor = addAccountMenuIndex
+		m.acct.manageCursor = 0
+		m.acct.confirmDelete = ""
+		m.acct.status = ""
 		return m, nil
 	},
 	"r": func(m model) (tea.Model, tea.Cmd) {

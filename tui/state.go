@@ -34,6 +34,9 @@ type textInput struct {
 	cursor int       // Cursor position in runes within value
 	label  string    // Prompt title for inputText popups
 	hint   string    // Optional helper line under the label
+	masked bool      // Show bullets instead of the typed text (secrets)
+	// onCancel, when set, runs on Esc instead of just closing the prompt.
+	onCancel func(m model) model
 	// onSubmit receives the entered value for inputText prompts and returns
 	// the next state; it may open another prompt (chained questions).
 	onSubmit func(m model, value string) (tea.Model, tea.Cmd)
@@ -171,6 +174,11 @@ type accounts struct {
 	profileCursor          int
 	accountManageMode      bool
 	manageCursor           int
+	health                 map[string]accountHealth // API key checks by account name
+	confirmDelete          string                   // account awaiting a delete confirmation
+	status                 string                   // result line of the last account action
+	statusErr              bool
+	busy                   bool // an account action is running
 }
 
 // ssh groups SSH connection related state.

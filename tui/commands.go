@@ -17,9 +17,3 @@ const (
 )
 
 // Account management menu constants.
-const (
-	// accountManageOptionCount is the number of items in the account management menu.
-	accountManageOptionCount = 1
-	// addAccountMenuIndex is the cursor index for the "Add Account" option.
-	addAccountMenuIndex = 0
-)

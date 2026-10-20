@@ -43,11 +43,6 @@ type tailscaleUpMsg struct {
 	err error
 }
 
-// addAccountMsg is returned when adding a new account completes
-type addAccountMsg struct {
-	err error
-}
-
 // accountSwitchedMsg is returned when account switching completes
 type accountSwitchedMsg struct {
 	accountName    string

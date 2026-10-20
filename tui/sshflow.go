@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/yatsenko-ihor/ts-cli/client"
@@ -99,11 +98,7 @@ func (m model) needsAccountSwitch(device client.Device) bool {
 	if device.AccountTailnet == "" || m.acct.tailscaleActiveAccount == "" {
 		return false
 	}
-	deviceAccount := strings.ToLower(device.AccountTailnet)
-	activeAccount := strings.ToLower(m.acct.tailscaleActiveAccount)
-	// The status output may truncate the login ("user@"), so accept a prefix match either way.
-	return !strings.HasPrefix(deviceAccount, strings.TrimSuffix(activeAccount, "@")) &&
-		!strings.HasPrefix(activeAccount, strings.TrimSuffix(deviceAccount, "@"))
+	return !sameTailnet(device.AccountTailnet, m.acct.tailscaleActiveAccount)
 }
 
 // continueSSH resolves the username (prompting if unknown) and runs the attempt.

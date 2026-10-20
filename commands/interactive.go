@@ -75,6 +75,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 						APIKey:  acc.APIKey,
 						Tailnet: acc.Tailnet,
 						Active:  acc.Active,
+						Hidden:  acc.Hidden,
 					}
 				}
 
