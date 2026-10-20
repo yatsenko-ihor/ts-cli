@@ -902,6 +902,46 @@ func TestUseKeychainLostItemCreatesNewKey(t *testing.T) {
 	if k, err := keychainGetKey(); err != nil || len(k) != keySize {
 		t.Fatalf("%v %v", k, err)
 	}
+	if !KeyWasReset() {
+		t.Fatal("a lost key must be reported so the caller can remove the unreadable secrets")
+	}
+	// A later, ordinary switch clears the flag.
+	if err := UseFile(); err != nil {
+		t.Fatal(err)
+	}
+	if err := UseKeychain(); err != nil {
+		t.Fatal(err)
+	}
+	if KeyWasReset() {
+		t.Fatal("a normal move of an existing key is not a reset")
+	}
+}
+
+// Verifies: REQ-KEY-044
+func TestUseKeychainFromFileStoreIsNotAReset(t *testing.T) {
+	useMockKeychain(t)
+	if err := UseKeychain(); err != nil {
+		t.Fatal(err)
+	}
+	if KeyWasReset() {
+		t.Fatal("first move into the keychain must not look like a lost key")
+	}
+}
+
+// Verifies: REQ-KEY-044
+func TestUseKeychainWithFileKeyFallbackIsNotAReset(t *testing.T) {
+	// Keychain is the configured store, its item is gone, but the key file is
+	// still there: the existing key is moved, nothing is lost.
+	useMockKeychain(t)
+	dir, _ := ConfigDir()
+	writeStoreFile(t, dir, "keychain\n")
+	writeKeyFile(t, dir, key32(0x42))
+	if err := UseKeychain(); err != nil {
+		t.Fatal(err)
+	}
+	if KeyWasReset() {
+		t.Fatal("the key file still held the key: not a reset")
+	}
 }
 
 // Verifies: REQ-KEY-033

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -1313,4 +1314,187 @@ func TestMigrationOnlyWhenConfigJSONIsMissing(t *testing.T) {
 			t.Fatalf("%+v %v", cfg, ok)
 		}
 	})
+}
+
+// ─── DropUnreadableSecrets ───────────────────────────────────────────────────
+
+// writeRawConfig stores cfg as JSON exactly as given (encrypted fields are
+// opaque markers; the decryptSecret seam decides which are "readable").
+func writeRawConfig(t *testing.T, cfg *Config) string {
+	t.Helper()
+	dir, _ := util.EnsureConfigDir()
+	data, err := marshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath(dir), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// onlyReadable makes decryptSecret succeed for the listed markers only.
+func onlyReadable(t *testing.T, readable ...string) {
+	t.Helper()
+	swapDecrypt(t, func(s string) (string, error) {
+		for _, r := range readable {
+			if s == r {
+				return "plain-" + s, nil
+			}
+		}
+		return "", errors.New("wrong key")
+	})
+}
+
+// Verifies: REQ-CFG-038
+func TestDropUnreadableSecretsRemovesOnlyWhatCannotBeDecrypted(t *testing.T) {
+	useTempConfigDir(t)
+	dir := writeRawConfig(t, &Config{
+		Accounts: []Account{
+			{Name: "lost", Tailnet: "lost.com", APIKeyEncrypted: "enc-lost", Active: true},
+			{Name: "kept", Tailnet: "kept.com", APIKeyEncrypted: "enc-kept"},
+			{Name: "legacy", Tailnet: "legacy.com", APIKey: "tskey-api-clear"},
+		},
+		SSHUsername: "root",
+		MachineCredentials: map[string]MachineAuth{
+			"id-1": {Name: "pi", Username: "pi", PasswordEncrypted: "enc-pw-lost"},
+			"id-2": {Username: "ubuntu", PasswordEncrypted: "enc-pw-lost"},
+			"id-3": {Name: "ok", Username: "me", PasswordEncrypted: "enc-pw-ok"},
+			"id-4": {Name: "keyauth", Username: "k"},
+		},
+		Commands: []SavedCommand{{Name: "up", Command: "uptime"}},
+	})
+	onlyReadable(t, "enc-kept", "enc-pw-ok")
+
+	got, err := DropUnreadableSecrets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Accounts) != 1 || got.Accounts[0] != "lost" {
+		t.Fatalf("dropped accounts = %v", got.Accounts)
+	}
+	if strings.Join(got.Passwords, ",") != "id-2,pi" { // sorted; name falls back to the machine key
+		t.Fatalf("dropped passwords = %v", got.Passwords)
+	}
+
+	var disk Config
+	if err := json.Unmarshal(mustRead(t, cfgPath(dir)), &disk); err != nil {
+		t.Fatal(err)
+	}
+	if len(disk.Accounts) != 2 || disk.Accounts[0].Name != "kept" || disk.Accounts[1].Name != "legacy" {
+		t.Fatalf("accounts after drop = %+v", disk.Accounts)
+	}
+	if !disk.Accounts[0].Active {
+		t.Fatal("when the active account is removed the first remaining one becomes active")
+	}
+	if disk.MachineCredentials["id-1"].PasswordEncrypted != "" || disk.MachineCredentials["id-1"].Username != "pi" {
+		t.Fatalf("unreadable password must be cleared and the username kept: %+v", disk.MachineCredentials["id-1"])
+	}
+	if disk.MachineCredentials["id-3"].PasswordEncrypted != "enc-pw-ok" || disk.MachineCredentials["id-4"].Username != "k" {
+		t.Fatal("readable and absent passwords stay")
+	}
+	if disk.SSHUsername != "root" || len(disk.Commands) != 1 {
+		t.Fatal("unrelated settings must survive")
+	}
+	if fileMode(t, cfgPath(dir)) != 0600 {
+		t.Fatal("file mode must stay 0600")
+	}
+	noTempFiles(t, dir)
+}
+
+// Verifies: REQ-CFG-039
+func TestDropUnreadableSecretsWritesNothingWhenAllReadable(t *testing.T) {
+	useTempConfigDir(t)
+	dir := writeRawConfig(t, &Config{
+		Accounts:           []Account{{Name: "a", Tailnet: "a.com", APIKeyEncrypted: "enc-a", Active: true}},
+		MachineCredentials: map[string]MachineAuth{"id": {PasswordEncrypted: "enc-pw"}},
+	})
+	before := mustRead(t, cfgPath(dir))
+	onlyReadable(t, "enc-a", "enc-pw")
+	got, err := DropUnreadableSecrets()
+	if err != nil || len(got.Accounts) != 0 || len(got.Passwords) != 0 {
+		t.Fatalf("got %+v, err %v", got, err)
+	}
+	if !bytes.Equal(before, mustRead(t, cfgPath(dir))) {
+		t.Fatal("an unchanged configuration must not be rewritten")
+	}
+}
+
+// Verifies: REQ-CFG-040
+func TestDropUnreadableSecretsKeepsActiveAccountWhenItIsReadable(t *testing.T) {
+	useTempConfigDir(t)
+	dir := writeRawConfig(t, &Config{Accounts: []Account{
+		{Name: "lost", Tailnet: "lost.com", APIKeyEncrypted: "enc-lost"},
+		{Name: "kept", Tailnet: "kept.com", APIKeyEncrypted: "enc-kept"},
+		{Name: "active", Tailnet: "active.com", APIKeyEncrypted: "enc-active", Active: true},
+	}})
+	onlyReadable(t, "enc-kept", "enc-active")
+	if _, err := DropUnreadableSecrets(); err != nil {
+		t.Fatal(err)
+	}
+	var disk Config
+	_ = json.Unmarshal(mustRead(t, cfgPath(dir)), &disk)
+	if disk.Accounts[0].Active || !disk.Accounts[1].Active {
+		t.Fatalf("the surviving active account must stay the only active one: %+v", disk.Accounts)
+	}
+
+	// Removing every account leaves an empty list and nothing to activate.
+	useTempConfigDir(t)
+	dir = writeRawConfig(t, &Config{Accounts: []Account{{Name: "x", Tailnet: "x.com", APIKeyEncrypted: "enc-x", Active: true}}})
+	onlyReadable(t)
+	if _, err := DropUnreadableSecrets(); err != nil {
+		t.Fatal(err)
+	}
+	disk = Config{}
+	_ = json.Unmarshal(mustRead(t, cfgPath(dir)), &disk)
+	if len(disk.Accounts) != 0 {
+		t.Fatalf("accounts = %+v", disk.Accounts)
+	}
+}
+
+// Verifies: REQ-CFG-041
+func TestDropUnreadableSecretsErrors(t *testing.T) {
+	// no file: nothing to do
+	useTempConfigDir(t)
+	if got, err := DropUnreadableSecrets(); err != nil || len(got.Accounts)+len(got.Passwords) != 0 {
+		t.Fatalf("missing file: %+v %v", got, err)
+	}
+
+	// corrupt file: error, file untouched
+	dir := t.TempDir()
+	t.Setenv(util.ConfigDirEnv, dir)
+	if err := os.WriteFile(cfgPath(dir), []byte("{not json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DropUnreadableSecrets(); err == nil || !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("corrupt: %v", err)
+	}
+	if string(mustRead(t, cfgPath(dir))) != "{not json" {
+		t.Fatal("a corrupt file must be left alone")
+	}
+
+	// unreadable file (a directory in its place)
+	dir = t.TempDir()
+	t.Setenv(util.ConfigDirEnv, dir)
+	if err := os.Mkdir(cfgPath(dir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DropUnreadableSecrets(); err == nil || !strings.Contains(err.Error(), "read") {
+		t.Fatalf("unreadable: %v", err)
+	}
+
+	// config directory cannot be determined / created
+	dirIsAFile(t)
+	if _, err := DropUnreadableSecrets(); err == nil {
+		t.Fatal("bad config dir must be an error")
+	}
+
+	// the rewrite fails: error is returned
+	useTempConfigDir(t)
+	writeRawConfig(t, &Config{Accounts: []Account{{Name: "x", Tailnet: "x.com", APIKeyEncrypted: "enc-x"}}})
+	onlyReadable(t)
+	swapMarshal(t, func(any, string, string) ([]byte, error) { return nil, errors.New("boom") })
+	if _, err := DropUnreadableSecrets(); err == nil {
+		t.Fatal("a failed rewrite must be reported")
+	}
 }

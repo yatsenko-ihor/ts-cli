@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -153,6 +154,76 @@ func load() (*Config, error) {
 		_ = save(&cfg)
 	}
 	return &cfg, nil
+}
+
+// DroppedSecrets lists what DropUnreadableSecrets removed.
+type DroppedSecrets struct {
+	Accounts  []string // accounts removed because their API key could not be decrypted
+	Passwords []string // names of machines whose saved SSH password was removed
+}
+
+// DropUnreadableSecrets removes every stored secret that cannot be decrypted
+// with the current master key (for instance after the key was lost and a new
+// one was created): accounts whose API key is unreadable are removed, saved
+// SSH passwords are cleared (the machine's username stays). Readable secrets
+// and everything else in the file are kept. Nothing is written when nothing
+// is unreadable.
+func DropUnreadableSecrets() (DroppedSecrets, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	var dropped DroppedSecrets
+	path, err := Path()
+	if err != nil {
+		return dropped, err
+	}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return dropped, nil
+	}
+	if err != nil {
+		return dropped, fmt.Errorf("failed to read config file: %w", err)
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return dropped, fmt.Errorf("failed to parse config file %s: %w", path, err)
+	}
+
+	kept := cfg.Accounts[:0]
+	for _, acc := range cfg.Accounts {
+		if acc.APIKeyEncrypted != "" {
+			if _, err := decryptSecret(acc.APIKeyEncrypted); err != nil {
+				dropped.Accounts = append(dropped.Accounts, acc.Name)
+				continue
+			}
+		}
+		kept = append(kept, acc)
+	}
+	cfg.Accounts = kept
+	if len(dropped.Accounts) > 0 && cfg.GetActiveAccount() == nil && len(cfg.Accounts) > 0 {
+		cfg.Accounts[0].Active = true
+	}
+
+	for id, cred := range cfg.MachineCredentials {
+		if cred.PasswordEncrypted == "" {
+			continue
+		}
+		if _, err := decryptSecret(cred.PasswordEncrypted); err != nil {
+			name := cred.Name
+			if name == "" {
+				name = id
+			}
+			dropped.Passwords = append(dropped.Passwords, name)
+			cred.PasswordEncrypted = ""
+			cfg.MachineCredentials[id] = cred
+		}
+	}
+	sort.Strings(dropped.Passwords)
+
+	if len(dropped.Accounts) == 0 && len(dropped.Passwords) == 0 {
+		return dropped, nil
+	}
+	return dropped, save(&cfg)
 }
 
 // forDisk returns a copy of cfg with every API key encrypted and the
