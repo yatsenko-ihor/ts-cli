@@ -83,14 +83,18 @@ func (m *model) toggleMark(d client.Device) {
 // toggleAllMarks marks every visible machine, or clears all marks when every
 // visible machine is already marked.
 func (m *model) toggleAllMarks() {
-	all := len(m.list.filteredDevices) > 0
+	all, any := true, false
 	for _, d := range m.list.filteredDevices {
+		if !m.isReachable(d) {
+			continue // unreachable machines are never marked
+		}
+		any = true
 		if !m.list.marked[machineKey(d)] {
 			all = false
 			break
 		}
 	}
-	if all {
+	if all && any {
 		m.list.marked = nil
 		return
 	}
@@ -98,7 +102,9 @@ func (m *model) toggleAllMarks() {
 		m.list.marked = map[string]bool{}
 	}
 	for _, d := range m.list.filteredDevices {
-		m.list.marked[machineKey(d)] = true
+		if m.isReachable(d) {
+			m.list.marked[machineKey(d)] = true
+		}
 	}
 }
 
@@ -111,7 +117,7 @@ func (m model) targetsLabel() string {
 	case 0:
 		return "No machine selected"
 	case 1:
-		return fmt.Sprintf("%s %s", getStatusIcon(t[0]), displayName(t[0]))
+		return fmt.Sprintf("%s %s", m.statusIcon(t[0]), displayName(t[0]))
 	}
 	names := make([]string, 0, len(t))
 	for _, d := range t {
@@ -384,11 +390,13 @@ func (m model) launch(spec sshJob) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if !isDeviceOnline(dev) {
+	if !m.isReachable(dev) {
 		m.notify.sshError = fmt.Errorf("machine %q is offline", displayName(dev))
 		return m, nil
 	}
-	return m.beginSSH(m.indexOf(dev), spec)
+	return m.withPreflight(dev, func(m model) (tea.Model, tea.Cmd) {
+		return m.beginSSH(m.indexOf(dev), spec)
+	})
 }
 
 // indexOf returns the position of d in the filtered list (or the cursor).
@@ -514,8 +522,8 @@ func (m model) startMultiRun(spec sshJob) (tea.Model, tea.Cmd) {
 	for _, d := range targets {
 		mr := &machineRun{device: d, status: runPending}
 		switch {
-		case !isDeviceOnline(d):
-			mr.status, mr.note = runSkipped, "offline"
+		case !m.isReachable(d):
+			mr.status, mr.note = runSkipped, "unreachable"
 		case m.needsAccountSwitch(d):
 			mr.status, mr.note = runSkipped, "belongs to another account (active: "+m.acct.tailscaleActiveAccount+")"
 		case spec.action == sshActionScript && spec.script != nil && !spec.script.SupportsOS(d.OS):
@@ -726,7 +734,7 @@ func (m model) outputLines() []outputLine {
 
 // runHeader renders a machine's section header.
 func (m model) runHeader(mr *machineRun) string {
-	return fmt.Sprintf("── %s %s  %s ──", getStatusIcon(mr.device), displayName(mr.device), runStatusText(mr))
+	return fmt.Sprintf("── %s %s  %s ──", m.statusIcon(mr.device), displayName(mr.device), runStatusText(mr))
 }
 
 // runStatusText renders one machine's state.
@@ -914,19 +922,21 @@ func (m *model) jumpToOutputEnd() {
 func (m model) promptNewCommand(initial config.SavedCommand, oldName string) (tea.Model, tea.Cmd) {
 	m = m.openRunPanel(focusRun)
 	m.input = textInput{
-		mode:  inputText,
-		label: "Command name",
-		value: initial.Name,
+		mode:   inputText,
+		label:  "Command name",
+		value:  initial.Name,
+		cursor: len([]rune(initial.Name)),
 		onSubmit: func(m model, name string) (tea.Model, tea.Cmd) {
 			name = strings.TrimSpace(name)
 			if name == "" {
 				return m, nil
 			}
 			m.input = textInput{
-				mode:  inputText,
-				label: "Command for \"" + name + "\"",
-				hint:  "Use {{name}} placeholders to be asked for values at run time",
-				value: initial.Command,
+				mode:   inputText,
+				label:  "Command for \"" + name + "\"",
+				hint:   "Use {{name}} placeholders to be asked for values at run time",
+				value:  initial.Command,
+				cursor: len([]rune(initial.Command)),
 				onSubmit: func(m model, command string) (tea.Model, tea.Cmd) {
 					command = util.SanitizeInput(command)
 					if command == "" {

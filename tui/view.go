@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yatsenko-ihor/ts-cli/scripts"
@@ -49,7 +48,7 @@ func (m model) renderDeviceList() string {
 	listContent.WriteString("\n")
 
 	if m.input.mode == inputSearch {
-		listContent.WriteString(searchLabelStyle.Render("> Search: ") + searchQueryStyle.Render(m.list.searchQuery+"_"))
+		listContent.WriteString(searchLabelStyle.Render("> Search: ") + searchQueryStyle.Render(renderEditable(m.list.searchQuery, m.list.searchCursor, false, "_", 0)))
 		listContent.WriteString("\n")
 	} else if m.list.searchQuery != "" {
 		listContent.WriteString(searchLabelStyle.Render("Search: ") + searchQueryStyle.Render(m.list.searchQuery))
@@ -105,12 +104,15 @@ func (m model) renderDeviceList() string {
 			address = device.Addresses[0]
 		}
 
-		statusIcon := getStatusIcon(device)
+		statusIcon := m.statusIcon(device)
 		expiryIcon := getKeyExpiryIcon(device)
 
 		line := fmt.Sprintf("%s%s%s %-28s %s", cursor, mark, statusIcon, name, address)
 		if expiryIcon != "" {
 			line += " " + expiryIcon
+		}
+		if m.hasSavedPassword(device) {
+			line += " 🔐" // a password is saved for this machine
 		}
 		listContent.WriteString(style.Render(line) + "\n")
 	}
@@ -148,7 +150,7 @@ func (m model) renderDeviceList() string {
 	// Dynamic title with online/offline count and sort mode
 	online := 0
 	for _, d := range m.list.filteredDevices {
-		if isDeviceOnline(d) {
+		if m.isReachable(d) {
 			online++
 		}
 	}
@@ -305,7 +307,7 @@ func (m model) renderRunPanel() string {
 		}
 		b.WriteString(grayItalicStyle.Render("Run on " + truncateForWidth(where, inner-7) + ":"))
 		b.WriteString("\n")
-		b.WriteString(searchLabelStyle.Render(": ") + searchQueryStyle.Render(truncateForWidth(m.input.value+"_", inner-2)))
+		b.WriteString(searchLabelStyle.Render(": ") + searchQueryStyle.Render(renderEditable(m.input.value, m.input.cursor, false, "_", inner-2)))
 	} else {
 		var hint string
 		switch m.run.tab {
@@ -588,16 +590,12 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 	}
 
 	// Show the input value (masked for password)
-	displayValue := value
-	if masked {
-		displayValue = strings.Repeat("•", utf8.RuneCountInString(value))
-	}
 	inputStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFFFFF")).
 		Background(lipgloss.Color("#333333")).
 		Padding(0, 1).
 		Width(popupWidth - 8)
-	content.WriteString(inputStyle.Render(displayValue + "▌"))
+	content.WriteString(inputStyle.Render(renderEditable(value, m.input.cursor, masked, "▌", popupWidth-12)))
 	content.WriteString("\n\n")
 	content.WriteString(grayItalicStyle.Render("enter confirm • esc cancel • ctrl+v paste"))
 
@@ -804,7 +802,7 @@ func (m model) renderMachineCredsView() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "↑/k ↓/j • space select • * all • / search • s ssh • : run • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
+	help := "↑/k ↓/j • space select • * all • P ping • / search • s ssh • : run • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
 	if m.run.visible {
 		switch m.activeFocus {
 		case focusRun:

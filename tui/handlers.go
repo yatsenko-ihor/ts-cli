@@ -103,24 +103,10 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return submit(m, value)
-	case "backspace":
-		if len(m.input.value) > 0 {
-			r := []rune(m.input.value)
-			m.input.value = string(r[:len(r)-1])
-		}
-		return m, nil
 	case "ctrl+v", keyPasteAlt:
 		return m, readClipboard(pasteTargetText)
 	}
-	if msg.Paste {
-		m.input.value += sanitizePastedText(string(msg.Runes))
-		return m, nil
-	}
-	if len(msg.Runes) == 1 && msg.Type == tea.KeyRunes {
-		m.input.value += string(msg.Runes)
-	} else if msg.Type == tea.KeySpace {
-		m.input.value += " "
-	}
+	m.editInput(msg)
 	return m, nil
 }
 
@@ -150,12 +136,6 @@ var usernamePromptHandlers = map[string]keyHandler{
 		m.ssh.pending.username = sanitized
 		return m.continueSSH()
 	},
-	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.input.value) > 0 {
-			m.input.value = m.input.value[:len(m.input.value)-1]
-		}
-		return m, nil
-	},
 	"ctrl+v": func(m model) (tea.Model, tea.Cmd) {
 		return m, readClipboard(pasteTargetUsername)
 	},
@@ -168,16 +148,8 @@ func (m model) handleUsernamePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, usernamePromptHandlers); handled {
 		return newM, cmd
 	}
-	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
-	// delivers the full text as a single KeyMsg with Paste:true.
-	if msg.Paste {
-		m.input.value += sanitizePastedText(string(msg.Runes))
-		return m, nil
-	}
-	// Append printable single-character input
-	if len(msg.String()) == 1 {
-		m.input.value += msg.String()
-	}
+	// Cursor movement, word-wise Option/Alt+arrows, deletions, typing, paste.
+	m.editInput(msg)
 	return m, nil
 }
 
@@ -200,13 +172,6 @@ var searchModeHandlers = map[string]keyHandler{
 		m.input = textInput{mode: inputNone}
 		return m, nil
 	},
-	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.list.searchQuery) > 0 {
-			m.list.searchQuery = m.list.searchQuery[:len(m.list.searchQuery)-1]
-			m.filterDevices()
-		}
-		return m, nil
-	},
 	"ctrl+v": func(m model) (tea.Model, tea.Cmd) {
 		return m, readClipboard(pasteTargetSearch)
 	},
@@ -219,17 +184,13 @@ func (m model) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, searchModeHandlers); handled {
 		return newM, cmd
 	}
-	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
-	// delivers the full text as a single KeyMsg with Paste:true.
-	if msg.Paste {
-		m.list.searchQuery += sanitizePastedText(string(msg.Runes))
-		m.filterDevices()
-		return m, nil
-	}
-	// Append printable single-character input
-	if len(msg.String()) == 1 {
-		m.list.searchQuery += msg.String()
-		m.filterDevices()
+	v, c, handled := editLine(m.list.searchQuery, m.list.searchCursor, msg)
+	if handled {
+		changed := v != m.list.searchQuery
+		m.list.searchQuery, m.list.searchCursor = v, c
+		if changed {
+			m.filterDevices()
+		}
 	}
 	return m, nil
 }
@@ -255,12 +216,6 @@ var commandModeHandlers = map[string]keyHandler{
 		m.input = textInput{mode: inputNone}
 		return m.startCommand(command)
 	},
-	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.input.value) > 0 {
-			m.input.value = m.input.value[:len(m.input.value)-1]
-		}
-		return m, nil
-	},
 	"ctrl+v": func(m model) (tea.Model, tea.Cmd) {
 		return m, readClipboard(pasteTargetCommand)
 	},
@@ -273,16 +228,8 @@ func (m model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, commandModeHandlers); handled {
 		return newM, cmd
 	}
-	// Bracketed paste: terminal wraps Cmd+V in escape sequences; bubbletea
-	// delivers the full text as a single KeyMsg with Paste:true.
-	if msg.Paste {
-		m.input.value += sanitizePastedText(string(msg.Runes))
-		return m, nil
-	}
-	// Append printable single-character input
-	if len(msg.String()) == 1 {
-		m.input.value += msg.String()
-	}
+	// Cursor movement, word-wise Option/Alt+arrows, deletions, typing, paste.
+	m.editInput(msg)
 	return m, nil
 }
 
@@ -415,6 +362,7 @@ var normalModeHandlers = map[string]keyHandler{
 	"/": func(m model) (tea.Model, tea.Cmd) {
 		m.input = textInput{mode: inputSearch}
 		m.list.searchQuery = ""
+		m.list.searchCursor = 0
 		return m, nil
 	},
 	"c": func(m model) (tea.Model, tea.Cmd) {
@@ -429,9 +377,16 @@ var normalModeHandlers = map[string]keyHandler{
 	},
 	" ": func(m model) (tea.Model, tea.Cmd) {
 		if d, ok := m.targetDevice(); ok {
+			if !m.list.marked[machineKey(d)] && !m.isReachable(d) {
+				m.notify.sshError = fmt.Errorf("machine %q is unreachable; press P to ping it", displayName(d))
+				return m, nil
+			}
 			m.toggleMark(d)
 		}
 		return m, nil
+	},
+	"P": func(m model) (tea.Model, tea.Cmd) {
+		return m.pingTargets()
 	},
 	"*": func(m model) (tea.Model, tea.Cmd) {
 		m.toggleAllMarks()
@@ -509,6 +464,18 @@ var normalModeHandlers = map[string]keyHandler{
 }
 
 func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	before := m.list.cursor
+	updated, cmd := m.handleNormalModeKeys(msg)
+	nm := updated.(model)
+	if nm.list.cursor != before {
+		if tick := nm.scheduleAutoPing(); tick != nil {
+			return nm, tea.Batch(cmd, tick)
+		}
+	}
+	return nm, cmd
+}
+
+func (m model) handleNormalModeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.handleFrameShortcut(msg.String()) {
 		return m, nil
 	}
@@ -584,7 +551,7 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	device := m.list.filteredDevices[target]
 
 	// Check if device is offline
-	if !isDeviceOnline(device) {
+	if !m.isReachable(device) {
 		deviceName := device.Name
 		if deviceName == "" {
 			deviceName = device.Hostname
@@ -601,7 +568,9 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 	// Everything else (account switch, username/password prompts, persistence)
 	// is handled by the credential flow in sshflow.go.
-	return m.beginSSH(target, sshJob{action: sshActionSession})
+	return m.withPreflight(device, func(m model) (tea.Model, tea.Cmd) {
+		return m.beginSSH(m.indexOf(device), sshJob{action: sshActionSession})
+	})
 }
 
 // ─── Options menu constants ───────────────────────────────────────────────────
@@ -845,12 +814,6 @@ var passwordPromptHandlers = map[string]keyHandler{
 		m.ssh.pending.passwordTried = true
 		return m.runPendingAttempt()
 	},
-	"backspace": func(m model) (tea.Model, tea.Cmd) {
-		if len(m.input.value) > 0 {
-			m.input.value = m.input.value[:len(m.input.value)-1]
-		}
-		return m, nil
-	},
 	"ctrl+v": func(m model) (tea.Model, tea.Cmd) {
 		return m, readClipboard(pasteTargetPassword)
 	},
@@ -863,12 +826,7 @@ func (m model) handlePasswordPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if newM, cmd, handled := dispatchKey(msg.String(), m, passwordPromptHandlers); handled {
 		return newM, cmd
 	}
-	if msg.Paste {
-		m.input.value += sanitizePastedText(string(msg.Runes))
-		return m, nil
-	}
-	if len(msg.String()) == 1 {
-		m.input.value += msg.String()
-	}
+	// Cursor movement, word-wise Option/Alt+arrows, deletions, typing, paste.
+	m.editInput(msg)
 	return m, nil
 }

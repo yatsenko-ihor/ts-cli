@@ -11,6 +11,7 @@ A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports m
 - **Run Panel**: Execute local scripts (`~/.ts-cli/scripts/`), saved commands with `{{placeholders}}`, or one-off commands on the selected machine
 - **Streaming Output**: Output appears line by line while the job runs, with exit status and elapsed time; stop a job with `x`
 - **Recent**: Re-run anything that ran on a machine before, or save it as a named command
+- **Ping and status icons**: 🟢 online, 🔴 offline, ⭕️ no reply to the last ping, 🔐 a password is saved for the machine. See [Machine status and ping](#machine-status-and-ping)
 - **Resume where you left off**: on start the cursor is placed on the machine you connected to last time (if it is online)
 - **Multi-machine runs**: mark machines with `Space` (or `*` for all), then run a script or command on all of them in parallel; the output is split into one section per machine
 - **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
@@ -128,6 +129,7 @@ ts-cli tui          # alternative alias
 | `:`         | Run a one-off command on the selected machine(s)  |
 | `Space`     | Mark/unmark the machine for a multi-machine run   |
 | `*`         | Mark all visible machines (again to clear)        |
+| `P`         | Ping the selected machine(s)                      |
 | `Esc`       | Clear marks / close the right panels              |
 | `Tab`       | Cycle panel focus: machines → run → output        |
 | `Shift+Tab` | Reverse cycle panel focus                         |
@@ -137,14 +139,34 @@ ts-cli tui          # alternative alias
 | `Esc`       | Exit current mode / return to list focus          |
 | `q`         | Quit                                              |
 
-#### Input Mode Shortcuts (search / command / username prompts)
+#### Text Editing (search, command line, username/password and other prompts)
 
-| Key                | Action                 |
-| ------------------ | ---------------------- |
-| `ctrl+v` / `cmd+v` | Paste from clipboard   |
-| `Backspace`        | Delete last character  |
-| `Enter`            | Confirm input          |
-| `Esc` / `ctrl+c`   | Cancel and clear input |
+All single-line inputs have a real cursor and the usual shell-style editing keys:
+
+| Key                                         | Action                              |
+| ------------------------------------------- | ----------------------------------- |
+| `←` / `→`                                   | Move one character                  |
+| `Option+←` / `Option+→` (macOS)             | Move one word back / forward        |
+| `Alt+←` / `Alt+→`, `Ctrl+←` / `Ctrl+→`     | Same, on Linux/Windows terminals    |
+| `Alt+b` / `Alt+f`                           | Same (what many terminals actually send) |
+| `Home` / `Ctrl+A`, `End` / `Ctrl+E`         | Start / end of line                 |
+| `Backspace`                                 | Delete the previous character       |
+| `Delete` / `Ctrl+D`                         | Delete the next character           |
+| `Option+Backspace` / `Ctrl+W`               | Delete the previous word            |
+| `Alt+D`                                     | Delete the next word                |
+| `Ctrl+U` / `Ctrl+K`                         | Delete to the start / end of line   |
+| `ctrl+v` / `cmd+v`                          | Paste from clipboard at the cursor  |
+| `Enter`                                     | Confirm input                       |
+| `Esc` / `ctrl+c`                            | Cancel and clear input              |
+
+Words are runs of letters, digits and `_`, as in bash, so `/var/log` is two words.
+
+**Option+arrows in your terminal.** ts-cli can only react to the keys the terminal sends. Terminals report `Option+←/→` in two ways and both work:
+
+- as `Esc b` / `Esc f` — iTerm2 with the *Natural Text Editing* preset or *Left Option key = Esc+* (Settings → Profiles → Keys), and Terminal.app with *Use Option as Meta key*;
+- as modified arrow sequences (`Esc[1;3D` / `Esc[1;3C`) — kitty, WezTerm, Alacritty, and most Linux terminals with `Alt`.
+
+If Option+arrows do nothing, the terminal is not sending either form: enable one of the settings above (iTerm2: Profiles → Keys → Key Mappings → Presets → *Natural Text Editing*). Typing of non-ASCII text (for example Ukrainian) works in all inputs.
 
 #### Three-Panel Layout
 
@@ -159,6 +181,21 @@ When the terminal is wide enough, the TUI shows three panels:
 - **Bottom-Right — Output**: streams while the job runs; the title shows `● running`, then `✓ exit 0` or `✗ exit N`. `c` copies the selected line as an absolute remote path, `n` only the file name, `x` stops the job.
 
 Focus cycles with `Tab` / `Shift+Tab`, or jump directly with `1`, `2`, `3`.
+
+#### Machine status and ping
+
+The colour of a machine comes from two sources, combined:
+
+1. **Tailscale API baseline**, shown instantly: a machine is 🟢 when the API reports `connectedToControl` (it recently kept a TCP connection to Tailscale's control server; the API omits `lastSeen` while this is true) or was last seen less than 5 minutes ago. Otherwise 🔴.
+2. **`tailscale ping`** refines it for the machines you are about to use, and overrides the baseline in both directions: a reply makes a machine 🟢 (and usable) even if the API says offline, no reply makes it ⭕️ (unreachable) even if the API says online.
+
+A ping is started:
+
+- manually with `P` for the highlighted or all marked machines;
+- ~~automatically in the background for the machine under the cursor~~ — **currently disabled** (the code is kept; set `autoPingEnabled = true` in `tui/ping.go` to re-enable: at start and whenever the cursor rests on a machine for half a second, results reused for 60 seconds);
+- as a **pre-flight check** (at most 2 seconds) before `s` or before running a command/script on a single machine, so an unreachable machine fails right away with a clear message instead of waiting for ssh to time out. Press `Esc` to cancel the check.
+
+Machines that belong to another Tailscale account than the active one are never pinged automatically (and are skipped by the pre-flight check), because this computer cannot reach them until the account is switched; their colour stays the API baseline. Nothing is pinged if the `tailscale` CLI is not installed, and a missing CLI never blocks a connection.
 
 #### Scripts
 
@@ -177,7 +214,7 @@ du -xh --max-depth=1 "${1:-/}" | sort -h | tail -n 15
 
 #### Running on several machines
 
-Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). While marks exist, the Run panel and `:` target the whole set:
+Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). Unreachable machines (🔴 or ⭕️) cannot be marked and are never run on; press `P` to ping a 🔴 machine, a reply makes it 🟢 and usable even when the Tailscale API still reports it offline. While marks exist, the Run panel and `:` target the whole set:
 
 - Jobs run in parallel, up to 8 at a time, in list order.
 - No prompts: each machine uses its saved username and password, or the default username. Machines that are offline, have no username, belong to another Tailscale account, or do not match the script's `os=` are listed as **skipped** with the reason. A machine whose key or saved password is rejected is listed as **failed** with a hint to connect once via `s` so the credentials get saved.

@@ -29,10 +29,11 @@ const (
 
 // textInput holds the transient state for any single-line text input prompt.
 type textInput struct {
-	mode  inputMode // Which input is active (inputNone = no input active)
-	value string    // Current text being typed
-	label string    // Prompt title for inputText popups
-	hint  string    // Optional helper line under the label
+	mode   inputMode // Which input is active (inputNone = no input active)
+	value  string    // Current text being typed
+	cursor int       // Cursor position in runes within value
+	label  string    // Prompt title for inputText popups
+	hint   string    // Optional helper line under the label
 	// onSubmit receives the entered value for inputText prompts and returns
 	// the next state; it may open another prompt (chained questions).
 	onSubmit func(m model, value string) (tea.Model, tea.Cmd)
@@ -48,6 +49,7 @@ type deviceList struct {
 	searchQuery     string          // Persisted search filter
 	selectedProfile string          // Active profile filter (empty = all)
 	sort            sortMode        // Current sort mode
+	searchCursor    int             // Cursor position (runes) inside searchQuery
 	marked          map[string]bool // Machines selected for a multi-machine run, by machineKey
 }
 
@@ -230,6 +232,7 @@ type notifications struct {
 	copiedText    string
 	reloadSuccess string
 	sshError      error
+	info          string // neutral status line (e.g. ping progress/result)
 }
 
 // install groups PATH installation suggestion state.

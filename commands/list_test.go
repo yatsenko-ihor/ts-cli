@@ -50,3 +50,20 @@ func TestWriteDevicesJSONIsValidJSON(t *testing.T) {
 		t.Fatalf("nil addresses should encode as [], got %v", decoded[1]["addresses"])
 	}
 }
+
+func TestListHandlesConnectedDevicesWithoutLastSeen(t *testing.T) {
+	var buf bytes.Buffer
+	if err := writeDevicesJSON(&buf, []client.Device{{ID: "1", Hostname: "live", ConnectedToControl: true}}); err != nil {
+		t.Fatal(err)
+	}
+	var decoded []map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded[0]["connectedToControl"] != true {
+		t.Fatalf("connectedToControl missing: %v", decoded[0])
+	}
+	if _, has := decoded[0]["lastSeen"]; has {
+		t.Fatal("a missing lastSeen must be omitted, not printed as year 0001")
+	}
+}
