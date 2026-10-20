@@ -331,7 +331,7 @@ func TestNewModelPreselectsLastConnectedOnlineMachine(t *testing.T) {
 		}
 	}
 
-	m := NewModel(mk(), "t", "", nil, nil, nil, "c")
+	m := NewModel(mk(), "t", "", nil, nil, nil, "c", nil)
 	if got := m.list.filteredDevices[m.list.cursor].ID; got != "c" {
 		t.Fatalf("expected last machine c selected, got %s", got)
 	}
@@ -339,16 +339,16 @@ func TestNewModelPreselectsLastConnectedOnlineMachine(t *testing.T) {
 	// Offline last machine: fall back to the first row.
 	devs := mk()
 	devs[2].LastSeen = now.Add(-time.Hour)
-	m = NewModel(devs, "t", "", nil, nil, nil, "c")
+	m = NewModel(devs, "t", "", nil, nil, nil, "c", nil)
 	if m.list.cursor != 0 {
 		t.Fatalf("offline last machine must not be preselected, cursor=%d", m.list.cursor)
 	}
 
 	// Unknown or empty key: first row.
-	if m = NewModel(mk(), "t", "", nil, nil, nil, "zzz"); m.list.cursor != 0 {
+	if m = NewModel(mk(), "t", "", nil, nil, nil, "zzz", nil); m.list.cursor != 0 {
 		t.Fatal("unknown key")
 	}
-	if m = NewModel(mk(), "t", "", nil, nil, nil, ""); m.list.cursor != 0 {
+	if m = NewModel(mk(), "t", "", nil, nil, nil, "", nil); m.list.cursor != 0 {
 		t.Fatal("empty key")
 	}
 }

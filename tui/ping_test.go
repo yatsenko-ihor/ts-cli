@@ -18,7 +18,7 @@ func pingModel() model {
 		{ID: "on", Name: "online", Addresses: []string{"100.64.0.1"}, LastSeen: now},
 		{ID: "off", Name: "offline", Addresses: []string{"100.64.0.2"}, LastSeen: now.Add(-time.Hour)},
 	}
-	return model{list: deviceList{devices: devs, filteredDevices: devs}, ssh: ssh{machineCreds: map[string]machineCredential{}}}
+	return model{set: uiSettings{emojiIcons: true}, list: deviceList{devices: devs, filteredDevices: devs}, ssh: ssh{machineCreds: map[string]machineCredential{}}}
 }
 
 func TestStatusIconAndReachability(t *testing.T) {
@@ -303,7 +303,7 @@ func TestKeysAreIgnoredDuringPreflightExceptCancel(t *testing.T) {
 	}
 }
 
-func TestDeviceRowsAlignIconsInColumns(t *testing.T) {
+func TestDeviceRowsAlignColumns(t *testing.T) {
 	now := time.Now()
 	devs := []client.Device{
 		{ID: "1", Name: "box-043.tail813b1c.ts.net", Addresses: []string{"100.76.50.39"}, LastSeen: now},
@@ -311,29 +311,24 @@ func TestDeviceRowsAlignIconsInColumns(t *testing.T) {
 		{ID: "3", Name: "SkopasLinux", Addresses: []string{"100.107.26.80"}, LastSeen: now, Expires: now.Add(24 * time.Hour)},
 		{ID: "4", Name: "cm4", Addresses: nil, LastSeen: now},
 	}
-	m := model{width: 140, height: 40, list: deviceList{devices: devs, filteredDevices: devs},
-		ssh: ssh{machineCreds: map[string]machineCredential{"1": {passwordEncrypted: "x"}, "4": {passwordEncrypted: "x"}}}}
-	cols := m.listColumns(false)
-
-	var widths []int
-	for _, d := range devs {
-		row := m.deviceRow(d, cols)
-		widths = append(widths, lipgloss.Width(row))
-		// the address column starts at the same cell in every row
-		prefix := row[:strings.Index(row, deviceAddress(d))]
-		if w := lipgloss.Width(prefix); w != iconSlotWidth+1+cols.name+1 {
-			t.Fatalf("address column misaligned in %q: starts at %d", row, w)
+	for _, emoji := range []bool{false, true} {
+		m := model{width: 140, height: 40, set: uiSettings{emojiIcons: emoji}, list: deviceList{devices: devs, filteredDevices: devs},
+			ssh: ssh{machineCreds: map[string]machineCredential{"1": {passwordEncrypted: "x"}, "4": {passwordEncrypted: "x"}}}}
+		cols := m.listColumns(false)
+		var widths []int
+		for i, d := range devs {
+			row := m.renderListDevice(i, cols, false)
+			widths = append(widths, lipgloss.Width(row))
+			if want := 2 + 2 + m.statusWidth() + 1 + cols.name + 1; !strings.Contains(row, deviceAddress(d)) ||
+				lipgloss.Width(row[:strings.Index(row, deviceAddress(d))]) != want {
+				t.Fatalf("emoji=%v: address column misaligned in %q", emoji, row)
+			}
 		}
-	}
-	for _, w := range widths[1:] {
-		if w != widths[0] {
-			t.Fatalf("rows must have equal width so the icon slots line up: %v", widths)
+		for _, w := range widths[1:] {
+			if w != widths[0] {
+				t.Fatalf("emoji=%v: rows must have equal width: %v", emoji, widths)
+			}
 		}
-	}
-	// the password icon sits in the same final slot whether or not an expiry icon is present
-	r1, r2 := m.deviceRow(devs[0], cols), m.deviceRow(devs[1], cols)
-	if !strings.HasSuffix(r1, "🔐") || strings.Contains(r2, "🔐") {
-		t.Fatalf("password icon only for saved passwords: %q / %q", r1, r2)
 	}
 }
 

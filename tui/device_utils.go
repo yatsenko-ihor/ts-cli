@@ -103,12 +103,12 @@ func getKeyExpiryIcon(device client.Device) string {
 	return "🔑"
 }
 
-// filterDevices filters the device list based on the search query and profile filter
+// filterDevices rebuilds filteredDevices from the profile filter, the search
+// query, the hide-offline option and the grouping/sort order, and puts the
+// cursor back on the first row.
 func (m *model) filterDevices() {
-	// Start with all devices
 	filtered := m.list.devices
 
-	// Apply profile filter first
 	if m.list.selectedProfile != "" {
 		profileFiltered := []client.Device{}
 		for _, device := range filtered {
@@ -119,7 +119,6 @@ func (m *model) filterDevices() {
 		filtered = profileFiltered
 	}
 
-	// Apply search filter if query exists
 	if m.list.searchQuery != "" {
 		query := strings.ToLower(m.list.searchQuery)
 		searchFiltered := []client.Device{}
@@ -137,7 +136,6 @@ func (m *model) filterDevices() {
 				continue
 			}
 
-			// Search in addresses
 			for _, addr := range device.Addresses {
 				if strings.Contains(strings.ToLower(addr), query) {
 					searchFiltered = append(searchFiltered, device)
@@ -148,11 +146,71 @@ func (m *model) filterDevices() {
 		filtered = searchFiltered
 	}
 
-	// Sort devices based on current sort mode
+	// Offline machines are collapsed, except while searching: a search should
+	// find a machine whatever its state.
+	m.list.hiddenOffline = 0
+	if m.set.hideOffline && m.list.searchQuery == "" {
+		visible := make([]client.Device, 0, len(filtered))
+		for _, d := range filtered {
+			if m.isReachable(d) {
+				visible = append(visible, d)
+			} else {
+				m.list.hiddenOffline++
+			}
+		}
+		filtered = visible
+	}
+
+	// sortDevices sorts in place; work on a copy so m.list.devices keeps its order.
+	filtered = append([]client.Device(nil), filtered...)
 	sortDevices(filtered, m.list.sort)
+	if m.set.groupByAccount {
+		rank := m.accountRank()
+		sort.SliceStable(filtered, func(i, j int) bool {
+			return rank[filtered[i].AccountName] < rank[filtered[j].AccountName]
+		})
+	}
 
 	m.list.filteredDevices = filtered
-	// Reset cursor to top of filtered list
 	m.list.cursor = 0
 	m.list.viewportTop = 0
+}
+
+// accountRank orders accounts as configured (then alphabetically) for grouping.
+func (m model) accountRank() map[string]int {
+	rank := map[string]int{}
+	for i, a := range m.acct.list {
+		rank[a.Name] = i
+	}
+	extra := []string{}
+	for _, d := range m.list.devices {
+		if _, ok := rank[d.AccountName]; !ok {
+			rank[d.AccountName] = -1
+			extra = append(extra, d.AccountName)
+		}
+	}
+	sort.Strings(extra)
+	for i, n := range extra {
+		rank[n] = len(m.acct.list) + i
+	}
+	return rank
+}
+
+// refilterKeepCursor re-applies the filters and keeps the cursor on the same
+// machine when it is still listed.
+func (m *model) refilterKeepCursor() {
+	key := ""
+	if d, ok := m.targetDevice(); ok {
+		key = machineKey(d)
+	}
+	m.filterDevices()
+	if key != "" {
+		for i, d := range m.list.filteredDevices {
+			if machineKey(d) == key {
+				m.list.cursor = i
+				break
+			}
+		}
+	}
+	m.ensureListCursorVisible()
 }

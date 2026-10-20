@@ -14,6 +14,17 @@ func (m model) getMachineListWidth() int {
 		return 70
 	}
 
+	// With the details panel next to it the list takes about 60% of the width.
+	if m.detailsVisible() {
+		w := (m.width - 8) * 60 / 100
+		if w < 50 {
+			w = 50
+		} else if w > 84 {
+			w = 84
+		}
+		return w
+	}
+
 	// In non-split view keep list comfortably wide and stable.
 	w := m.width - 4
 	if w < 48 {
