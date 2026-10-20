@@ -7,6 +7,7 @@ KEYBOARD SHORTCUTS
   Space          Mark/unmark machine for a multi-machine run
   *              Mark all visible machines (again to clear)
   Esc            Clear marks / close right panels
+  P              Ping the selected machine(s) with `tailscale ping`
   s              SSH to selected machine
   :              Run a one-off command on the selected machine(s)
   c              Copy the ssh command for the selected machine
@@ -109,8 +110,10 @@ SSH CREDENTIALS
 
 ICONS
 ─────
-  🟢  Device is online
-  🔴  Device is offline
+  🟢  Device is online (or answered a ping)
+  🔴  Device is offline (last seen > 5 min ago)
+  ⭕️  Last ping got no reply: treated as unreachable
+  🔐  A password is saved for this machine
   🔑  Device key expires in the future (device list)
   🔑  Key-based auth, no password stored (credentials list)
   🔒  Device key has expired

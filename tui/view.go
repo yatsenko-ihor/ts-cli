@@ -104,12 +104,15 @@ func (m model) renderDeviceList() string {
 			address = device.Addresses[0]
 		}
 
-		statusIcon := getStatusIcon(device)
+		statusIcon := m.statusIcon(device)
 		expiryIcon := getKeyExpiryIcon(device)
 
 		line := fmt.Sprintf("%s%s%s %-28s %s", cursor, mark, statusIcon, name, address)
 		if expiryIcon != "" {
 			line += " " + expiryIcon
+		}
+		if m.hasSavedPassword(device) {
+			line += " 🔐" // a password is saved for this machine
 		}
 		listContent.WriteString(style.Render(line) + "\n")
 	}
@@ -147,7 +150,7 @@ func (m model) renderDeviceList() string {
 	// Dynamic title with online/offline count and sort mode
 	online := 0
 	for _, d := range m.list.filteredDevices {
-		if isDeviceOnline(d) {
+		if m.isReachable(d) {
 			online++
 		}
 	}
@@ -799,7 +802,7 @@ func (m model) renderMachineCredsView() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "↑/k ↓/j • space select • * all • / search • s ssh • : run • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
+	help := "↑/k ↓/j • space select • * all • P ping • / search • s ssh • : run • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
 	if m.run.visible {
 		switch m.activeFocus {
 		case focusRun:

@@ -11,6 +11,7 @@ A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports m
 - **Run Panel**: Execute local scripts (`~/.ts-cli/scripts/`), saved commands with `{{placeholders}}`, or one-off commands on the selected machine
 - **Streaming Output**: Output appears line by line while the job runs, with exit status and elapsed time; stop a job with `x`
 - **Recent**: Re-run anything that ran on a machine before, or save it as a named command
+- **Ping and status icons**: `P` pings the selected (or marked) machines with `tailscale ping`. 🟢 online, 🔴 offline, ⭕️ no reply to the last ping, 🔐 a password is saved for the machine
 - **Resume where you left off**: on start the cursor is placed on the machine you connected to last time (if it is online)
 - **Multi-machine runs**: mark machines with `Space` (or `*` for all), then run a script or command on all of them in parallel; the output is split into one section per machine
 - **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
@@ -128,6 +129,7 @@ ts-cli tui          # alternative alias
 | `:`         | Run a one-off command on the selected machine(s)  |
 | `Space`     | Mark/unmark the machine for a multi-machine run   |
 | `*`         | Mark all visible machines (again to clear)        |
+| `P`         | Ping the selected machine(s)                      |
 | `Esc`       | Clear marks / close the right panels              |
 | `Tab`       | Cycle panel focus: machines → run → output        |
 | `Shift+Tab` | Reverse cycle panel focus                         |
@@ -197,7 +199,7 @@ du -xh --max-depth=1 "${1:-/}" | sort -h | tail -n 15
 
 #### Running on several machines
 
-Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). While marks exist, the Run panel and `:` target the whole set:
+Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). Unreachable machines (🔴 or ⭕️) cannot be marked and are never run on; press `P` to ping a 🔴 machine, a reply makes it 🟢 and usable even when the Tailscale API still reports it offline. While marks exist, the Run panel and `:` target the whole set:
 
 - Jobs run in parallel, up to 8 at a time, in list order.
 - No prompts: each machine uses its saved username and password, or the default username. Machines that are offline, have no username, belong to another Tailscale account, or do not match the script's `os=` are listed as **skipped** with the reason. A machine whose key or saved password is rejected is listed as **failed** with a hint to connect once via `s` so the credentials get saved.

@@ -377,9 +377,16 @@ var normalModeHandlers = map[string]keyHandler{
 	},
 	" ": func(m model) (tea.Model, tea.Cmd) {
 		if d, ok := m.targetDevice(); ok {
+			if !m.list.marked[machineKey(d)] && !m.isReachable(d) {
+				m.notify.sshError = fmt.Errorf("machine %q is unreachable; press P to ping it", displayName(d))
+				return m, nil
+			}
 			m.toggleMark(d)
 		}
 		return m, nil
+	},
+	"P": func(m model) (tea.Model, tea.Cmd) {
+		return m.pingTargets()
 	},
 	"*": func(m model) (tea.Model, tea.Cmd) {
 		m.toggleAllMarks()
@@ -532,7 +539,7 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	device := m.list.filteredDevices[target]
 
 	// Check if device is offline
-	if !isDeviceOnline(device) {
+	if !m.isReachable(device) {
 		deviceName := device.Name
 		if deviceName == "" {
 			deviceName = device.Hostname

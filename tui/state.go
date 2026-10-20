@@ -232,6 +232,7 @@ type notifications struct {
 	copiedText    string
 	reloadSuccess string
 	sshError      error
+	info          string // neutral status line (e.g. ping progress/result)
 }
 
 // install groups PATH installation suggestion state.
