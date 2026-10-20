@@ -344,16 +344,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil || msg.text == "" {
 			return m, nil
 		}
-		switch msg.target {
-		case pasteTargetUsername:
-			m.input.value += msg.text
-		case pasteTargetSearch:
-			m.list.searchQuery += msg.text
+		if msg.target == pasteTargetSearch {
+			m.list.searchQuery, m.list.searchCursor = insertText(m.list.searchQuery, m.list.searchCursor, msg.text)
 			m.filterDevices()
-		case pasteTargetCommand:
-			m.input.value += msg.text
-		case pasteTargetPassword, pasteTargetText:
-			m.input.value += msg.text
+		} else {
+			m.input.value, m.input.cursor = insertText(m.input.value, m.input.cursor, msg.text)
 		}
 		return m, nil
 

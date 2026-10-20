@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yatsenko-ihor/ts-cli/scripts"
@@ -49,7 +48,7 @@ func (m model) renderDeviceList() string {
 	listContent.WriteString("\n")
 
 	if m.input.mode == inputSearch {
-		listContent.WriteString(searchLabelStyle.Render("> Search: ") + searchQueryStyle.Render(m.list.searchQuery+"_"))
+		listContent.WriteString(searchLabelStyle.Render("> Search: ") + searchQueryStyle.Render(renderEditable(m.list.searchQuery, m.list.searchCursor, false, "_", 0)))
 		listContent.WriteString("\n")
 	} else if m.list.searchQuery != "" {
 		listContent.WriteString(searchLabelStyle.Render("Search: ") + searchQueryStyle.Render(m.list.searchQuery))
@@ -305,7 +304,7 @@ func (m model) renderRunPanel() string {
 		}
 		b.WriteString(grayItalicStyle.Render("Run on " + truncateForWidth(where, inner-7) + ":"))
 		b.WriteString("\n")
-		b.WriteString(searchLabelStyle.Render(": ") + searchQueryStyle.Render(truncateForWidth(m.input.value+"_", inner-2)))
+		b.WriteString(searchLabelStyle.Render(": ") + searchQueryStyle.Render(renderEditable(m.input.value, m.input.cursor, false, "_", inner-2)))
 	} else {
 		var hint string
 		switch m.run.tab {
@@ -588,16 +587,12 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 	}
 
 	// Show the input value (masked for password)
-	displayValue := value
-	if masked {
-		displayValue = strings.Repeat("•", utf8.RuneCountInString(value))
-	}
 	inputStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFFFFF")).
 		Background(lipgloss.Color("#333333")).
 		Padding(0, 1).
 		Width(popupWidth - 8)
-	content.WriteString(inputStyle.Render(displayValue + "▌"))
+	content.WriteString(inputStyle.Render(renderEditable(value, m.input.cursor, masked, "▌", popupWidth-12)))
 	content.WriteString("\n\n")
 	content.WriteString(grayItalicStyle.Render("enter confirm • esc cancel • ctrl+v paste"))
 

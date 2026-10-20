@@ -22,6 +22,20 @@ KEYBOARD SHORTCUTS
   q / Ctrl+C     Quit
   F1             This help screen
 
+TEXT EDITING (all inputs)
+─────────────────────────
+  ←/→            Move by character
+  Option+←/→     Move by word (also Alt+←/→, Ctrl+←/→, Alt+b/f)
+  Home/Ctrl+A    Start of line      End/Ctrl+E   End of line
+  Backspace      Delete previous character
+  Delete/Ctrl+D  Delete next character
+  Option+Backspace / Ctrl+W   Delete previous word
+  Alt+D          Delete next word
+  Ctrl+U / Ctrl+K   Delete to start / end of line
+  ctrl+v/cmd+v   Paste at the cursor
+  If Option+arrows do nothing, set iTerm2 Profiles → Keys → Presets →
+  "Natural Text Editing" (or Left Option key = Esc+).
+
 RUN PANEL [2]
 ─────────────
   Everything you can execute on the selected machine, in three tabs

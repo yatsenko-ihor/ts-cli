@@ -914,19 +914,21 @@ func (m *model) jumpToOutputEnd() {
 func (m model) promptNewCommand(initial config.SavedCommand, oldName string) (tea.Model, tea.Cmd) {
 	m = m.openRunPanel(focusRun)
 	m.input = textInput{
-		mode:  inputText,
-		label: "Command name",
-		value: initial.Name,
+		mode:   inputText,
+		label:  "Command name",
+		value:  initial.Name,
+		cursor: len([]rune(initial.Name)),
 		onSubmit: func(m model, name string) (tea.Model, tea.Cmd) {
 			name = strings.TrimSpace(name)
 			if name == "" {
 				return m, nil
 			}
 			m.input = textInput{
-				mode:  inputText,
-				label: "Command for \"" + name + "\"",
-				hint:  "Use {{name}} placeholders to be asked for values at run time",
-				value: initial.Command,
+				mode:   inputText,
+				label:  "Command for \"" + name + "\"",
+				hint:   "Use {{name}} placeholders to be asked for values at run time",
+				value:  initial.Command,
+				cursor: len([]rune(initial.Command)),
 				onSubmit: func(m model, command string) (tea.Model, tea.Cmd) {
 					command = util.SanitizeInput(command)
 					if command == "" {
