@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/yatsenko-ihor/ts-cli/client"
@@ -24,6 +23,9 @@ import (
 //     if one was entered). Nothing is written before success.
 //  5. A saved password is rejected           → it is deleted and the user is
 //     asked for a new one.
+
+// encryptPassword is a test seam; production always uses util.EncryptPassword.
+var encryptPassword = util.EncryptPassword
 
 // machineKey returns the stable credential/history key for a device.
 func machineKey(d client.Device) string {
@@ -99,11 +101,7 @@ func (m model) needsAccountSwitch(device client.Device) bool {
 	if device.AccountTailnet == "" || m.acct.tailscaleActiveAccount == "" {
 		return false
 	}
-	deviceAccount := strings.ToLower(device.AccountTailnet)
-	activeAccount := strings.ToLower(m.acct.tailscaleActiveAccount)
-	// The status output may truncate the login ("user@"), so accept a prefix match either way.
-	return !strings.HasPrefix(deviceAccount, strings.TrimSuffix(activeAccount, "@")) &&
-		!strings.HasPrefix(activeAccount, strings.TrimSuffix(deviceAccount, "@"))
+	return !sameTailnet(device.AccountTailnet, m.acct.tailscaleActiveAccount)
 }
 
 // continueSSH resolves the username (prompting if unknown) and runs the attempt.
@@ -285,7 +283,7 @@ func (m *model) persistSuccessfulCredentials() []tea.Cmd {
 		changed = true
 	}
 	if p.password != "" {
-		if enc, err := util.EncryptPassword(p.password); err == nil {
+		if enc, err := encryptPassword(p.password); err == nil {
 			cred.passwordEncrypted = enc
 			changed = true
 		} else {

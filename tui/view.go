@@ -24,7 +24,7 @@ func (m model) renderRunPanel() string {
 	targets := m.targets()
 
 	// Header: target machine(s)
-	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#3F3F3F")).Render(truncateForWidth(m.targetsLabel(), inner)))
+	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(cur.title).Render(truncateForWidth(m.targetsLabel(), inner)))
 	b.WriteString("\n")
 
 	// Tabs
@@ -32,7 +32,7 @@ func (m model) renderRunPanel() string {
 	for t := runTab(0); t < tabCount; t++ {
 		label := t.String()
 		if t == m.run.tab {
-			tabs = append(tabs, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#2D6A8C")).Underline(true).Render(label))
+			tabs = append(tabs, lipgloss.NewStyle().Bold(true).Foreground(cur.accent).Underline(true).Render(label))
 		} else {
 			tabs = append(tabs, grayItalicStyle.Render(label))
 		}
@@ -120,7 +120,7 @@ func (m model) renderRunPanel() string {
 		for i := start; i < end; i++ {
 			r := rows[i]
 			if i == cursor && focused {
-				b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#2D6A8C")).Bold(true).Render("▸ " + truncateForWidth(r.main, inner-2)))
+				b.WriteString(lipgloss.NewStyle().Foreground(cur.accent).Bold(true).Render("▸ " + truncateForWidth(r.main, inner-2)))
 			} else if i == cursor {
 				b.WriteString(lipgloss.NewStyle().Bold(true).Render("  " + truncateForWidth(r.main, inner-2)))
 			} else {
@@ -160,9 +160,9 @@ func (m model) renderRunPanel() string {
 		b.WriteString(grayItalicStyle.Render(truncateForWidth(hint, inner)))
 	}
 
-	borderColor := lipgloss.Color("#4F4F4F")
+	borderColor := cur.borderDim
 	if focused {
-		borderColor = lipgloss.Color("#5FAFFF")
+		borderColor = cur.borderFocus
 	}
 	return renderTitledPanel(b.String(), runFrameTitle, width, height, borderColor, focused)
 }
@@ -172,10 +172,10 @@ func (m model) renderOutputPanel() string {
 	outputWidth, outputHeight := m.getHistoryPanelSize()
 	inner := getPanelInnerWidth(outputWidth)
 	focused := m.activeFocus == focusOutput
-	selectedOutputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2D6A8C")).Bold(true)
+	selectedOutputStyle := lipgloss.NewStyle().Foreground(cur.accent).Bold(true)
 
 	var b strings.Builder
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#435871"))
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(cur.header)
 	noteStyle := grayItalicStyle
 
 	lines := m.outputLines()
@@ -234,9 +234,9 @@ func (m model) renderOutputPanel() string {
 		title += "  " + status
 	}
 
-	borderColor := lipgloss.Color("#4F4F4F")
+	borderColor := cur.borderDim
 	if focused {
-		borderColor = lipgloss.Color("#5FAFFF")
+		borderColor = cur.borderFocus
 	}
 	return renderTitledPanel(b.String(), title, outputWidth, outputHeight, borderColor, focused)
 }
@@ -259,7 +259,7 @@ func (m model) renderProfileSelection() string {
 
 	profileList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
+		BorderForeground(cur.border).
 		Padding(1, 2).
 		Width(listWidth)
 
@@ -306,47 +306,6 @@ func (m model) renderProfileSelection() string {
 	return b.String()
 }
 
-// renderAccountManagement renders the account management view
-func (m model) renderAccountManagement() string {
-	var b strings.Builder
-
-	title := fmt.Sprintf("Account Management (ts-cli v%s)", m.version)
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
-	listWidth := 60
-	if m.width > 0 && m.width < 80 {
-		listWidth = m.width - 10
-		if listWidth < 40 {
-			listWidth = 40
-		}
-	}
-
-	optionsList := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
-		Padding(1, 2).
-		Width(listWidth)
-
-	var listContent strings.Builder
-
-	// Add account option
-	addLabel := "Add Account"
-	if m.acct.manageCursor == 0 {
-		listContent.WriteString(selectedStyle.Render("▸ " + addLabel))
-	} else {
-		listContent.WriteString(normalStyle.Render("  " + addLabel))
-	}
-
-	b.WriteString(optionsList.Render(listContent.String()))
-	b.WriteString("\n\n")
-
-	help := "↑/k up • ↓/j down • enter select • esc/q cancel"
-	b.WriteString(helpStyle.Render(help))
-
-	return b.String()
-}
-
 // renderAbout renders the about/info screen
 func (m model) renderAbout() string {
 	var b strings.Builder
@@ -365,7 +324,7 @@ func (m model) renderAbout() string {
 
 	aboutBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
+		BorderForeground(cur.border).
 		Padding(1, 2).
 		Width(listWidth)
 
@@ -406,7 +365,7 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 
 	popupStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#5FAFFF")).
+		BorderForeground(cur.borderFocus).
 		Padding(1, 2).
 		Width(popupWidth)
 
@@ -423,15 +382,15 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 
 	// Explain why we are asking (key auth failed, password rejected, ...)
 	if m.notify.sshError != nil {
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+		errStyle := lipgloss.NewStyle().Foreground(cur.errc)
 		content.WriteString(errStyle.Render(truncateForWidth(m.notify.sshError.Error(), popupWidth-8)))
 		content.WriteString("\n\n")
 	}
 
 	// Show the input value (masked for password)
 	inputStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#333333")).
+		Foreground(cur.inputFg).
+		Background(cur.inputBg).
 		Padding(0, 1).
 		Width(popupWidth - 8)
 	content.WriteString(inputStyle.Render(renderEditable(value, m.input.cursor, masked, "▌", popupWidth-12)))
@@ -452,7 +411,7 @@ func (m model) renderSSHRetryMenu() string {
 
 	// Show the error
 	if m.notify.sshError != nil {
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+		errStyle := lipgloss.NewStyle().Foreground(cur.errc)
 		b.WriteString(errStyle.Render(fmt.Sprintf("  ✗ %v", m.notify.sshError)))
 		b.WriteString("\n\n")
 	}
@@ -467,7 +426,7 @@ func (m model) renderSSHRetryMenu() string {
 
 	popupStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#FFAF00")).
+		BorderForeground(cur.warn).
 		Padding(1, 2).
 		Width(popupWidth)
 
@@ -521,7 +480,7 @@ func (m model) renderOptionsMenu() string {
 
 	optionsList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
+		BorderForeground(cur.border).
 		Padding(1, 2).
 		Width(listWidth)
 
@@ -602,7 +561,7 @@ func (m model) renderMachineCredsView() string {
 
 	optionsList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
+		BorderForeground(cur.border).
 		Padding(1, 2).
 		Width(listWidth)
 
@@ -683,7 +642,7 @@ func (m model) getHelpText() string {
 func (m model) renderHelpPanel() string {
 	helpPanelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
+		BorderForeground(cur.border).
 		Padding(0, 1)
 
 	if m.width > 0 {

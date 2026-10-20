@@ -35,6 +35,9 @@ jobs:
       - name: go test (race)
         run: go test -race ./...
 
+      - name: coverage gate (critical files, DO-178C-style)
+        run: go run ./verification/cmd/covergate
+
       - name: staticcheck
         run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 

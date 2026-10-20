@@ -150,7 +150,7 @@ func (m model) renderDetailsPanel(width, height int) string {
 		b.WriteString(row("Run", fmt.Sprintf("%s · %s", plainCount(len(m.run.scripts), "script"), plainCount(len(m.run.commands), "saved command"))))
 	}
 
-	borderColor := lipgloss.Color("#7A7A7A")
+	borderColor := cur.border
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
@@ -159,7 +159,7 @@ func (m model) renderDetailsPanel(width, height int) string {
 	if height > 0 {
 		style = style.Height(height)
 	}
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color("#435871")).Render("Details")
+	title := lipgloss.NewStyle().Foreground(cur.header).Render("Details")
 	return applyFrameTitleRaw(style.Render(b.String()), title, borderColor)
 }
 

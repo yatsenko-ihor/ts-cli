@@ -12,16 +12,24 @@ import (
 	"os/user"
 )
 
+// Test seams: replaced only by tests to provoke otherwise unreachable
+// failures; production behaviour is the default value.
+var (
+	osHostname    = os.Hostname
+	osCurrentUser = user.Current
+	cipherNewGCM  = cipher.NewGCM
+)
+
 // legacyDeriveKey reproduces the pre-key-file derivation
 // (SHA-256 of "ts-cli:<user>:<uid>:<hostname>") so that passwords saved by
 // earlier versions can still be decrypted. It is only used as a fallback.
 func legacyDeriveKey() ([]byte, error) {
-	hostname, err := os.Hostname()
+	hostname, err := osHostname()
 	if err != nil {
 		hostname = "unknown-host"
 	}
 
-	u, err := user.Current()
+	u, err := osCurrentUser()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current user: %w", err)
 	}
@@ -36,7 +44,7 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := cipherNewGCM(block)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCM: %w", err)
 	}

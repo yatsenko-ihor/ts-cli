@@ -133,6 +133,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		version:     version,
 		reloading:   false,
 	}
+	applyTheme(m.set.theme)
 	m.filterDevices()
 	// Start on the machine connected to last time, if it is online and listed.
 	if lastMachine != "" {
@@ -157,6 +158,7 @@ func (m model) Init() tea.Cmd {
 	if d, ok := m.targetDevice(); ok && m.wantsAutoPing(d) {
 		cmds = append(cmds, pingDevice(d, pingAuto, manualPingWait))
 	}
+	cmds = append(cmds, m.checkAllHealth())
 	return tea.Batch(cmds...)
 }
 
@@ -250,15 +252,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case addAccountMsg:
-		// Handle account addition result
-		if msg.err != nil {
-			m.notify.sshError = fmt.Errorf("failed to add account: %w", msg.err)
-		} else {
-			// Account added successfully, could reload devices here
-			// For now, just clear any previous errors
-			m.notify.sshError = nil
+	case accountsChangedMsg:
+		return m.handleAccountsChanged(msg)
+
+	case accountHealthMsg:
+		if m.acct.health == nil {
+			m.acct.health = map[string]accountHealth{}
 		}
+		m.acct.health[msg.name] = accountHealth{checked: true, h: msg.h}
 		return m, nil
 
 	case accountSwitchedMsg:
@@ -427,7 +428,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View renders the screen, painted with the theme background if it has one.
 func (m model) View() string {
+	return paintScreen(m.viewBody(), m.width, m.height)
+}
+
+func (m model) viewBody() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
@@ -441,7 +447,7 @@ func (m model) View() string {
 	}
 
 	// Show account management view if in account management mode
-	if m.acct.accountManageMode {
+	if m.acct.accountManageMode && m.input.mode == inputNone {
 		return m.renderAccountManagement()
 	}
 
@@ -473,7 +479,7 @@ func (m model) View() string {
 		return m.renderInputPopup("SSH Password", m.input.value, true)
 	}
 	if m.input.mode == inputText {
-		return m.renderInputPopup(m.input.label, m.input.value, false)
+		return m.renderInputPopup(m.input.label, m.input.value, m.input.masked)
 	}
 
 	var b strings.Builder
@@ -497,6 +503,11 @@ func (m model) View() string {
 	// Show real active Tailscale account at the top
 	if m.acct.tailscaleActiveAccount != "" {
 		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Active account: %s", m.acct.tailscaleActiveAccount)))
+		b.WriteString("\n")
+	}
+
+	if w := m.keyWarning(); w != "" {
+		b.WriteString(lipgloss.NewStyle().Foreground(colorWarn).Render(w))
 		b.WriteString("\n")
 	}
 
@@ -595,7 +606,7 @@ func (m model) View() string {
 	if m.width > 0 && m.height > 0 && (m.width < minWidth || m.height < minHeight) {
 		b.WriteString("\n")
 		warningStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#8A6D3B")).
+			Foreground(cur.info).
 			Bold(true)
 
 		warningMsg := fmt.Sprintf("⚠️  Warning: Terminal size (%dx%d) is too small. Minimum recommended: %dx%d for optimal display.",

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDevicesPathEscapesTailnet(t *testing.T) {
@@ -110,5 +111,62 @@ func TestDeviceParsesConnectedToControlAndOmittedLastSeen(t *testing.T) {
 	}
 	if devices[1].ConnectedToControl || devices[1].LastSeen.IsZero() {
 		t.Fatalf("gone device: %+v", devices[1])
+	}
+}
+
+func TestAPIKeyID(t *testing.T) {
+	for in, want := range map[string]string{
+		"tskey-api-kABC123CNTRL-secretpart": "kABC123CNTRL",
+		"tskey-auth-kABC-secret":            "",
+		"tskey-api-nodash":                  "",
+		"":                                  "",
+	} {
+		if got := APIKeyID(in); got != want {
+			t.Errorf("APIKeyID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCheckAccount(t *testing.T) {
+	expires := time.Now().Add(10 * 24 * time.Hour).UTC().Truncate(time.Second)
+	withTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/devices"):
+			_, _ = w.Write([]byte(`{"devices":[]}`))
+		case strings.HasSuffix(r.URL.Path, "/keys/kID"):
+			_, _ = w.Write([]byte(`{"expires":"` + expires.Format(time.RFC3339) + `"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	h := CheckAccount(AccountInfo{APIKey: "tskey-api-kID-secret", Tailnet: "example.com"})
+	if !h.Valid || !h.HasExpiry || !h.Expires.Equal(expires) {
+		t.Fatalf("health = %+v", h)
+	}
+
+	// A token that cannot read its own record is valid with unknown expiry.
+	h = CheckAccount(AccountInfo{APIKey: "tskey-api-other-secret", Tailnet: "example.com"})
+	if !h.Valid || h.HasExpiry || h.ExpiryNote == "" {
+		t.Fatalf("unreadable expiry must not be an error: %+v", h)
+	}
+}
+
+func TestCheckAccountRejectedAndRevoked(t *testing.T) {
+	withTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"message":"nope"}`, http.StatusUnauthorized)
+	})
+	if h := CheckAccount(AccountInfo{APIKey: "tskey-api-kID-secret", Tailnet: "x.com"}); h.Valid || !h.Unauth {
+		t.Fatalf("401 must be rejected: %+v", h)
+	}
+
+	withTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/devices") {
+			_, _ = w.Write([]byte(`{"devices":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"expires":"2030-01-01T00:00:00Z","revoked":"2025-01-01T00:00:00Z"}`))
+	})
+	if h := CheckAccount(AccountInfo{APIKey: "tskey-api-kID-secret", Tailnet: "x.com"}); h.Valid || !h.Unauth {
+		t.Fatalf("revoked key must be rejected: %+v", h)
 	}
 }

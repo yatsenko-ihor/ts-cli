@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,10 @@ import (
 // baseURL is the Tailscale API root. It is a variable so tests can point the
 // client at an httptest server.
 var baseURL = "https://api.tailscale.com/api/v2"
+
+// errInvalidKey is returned when the API rejects the key (401/403). Callers
+// classify on it with errors.Is rather than on server-supplied text.
+var errInvalidKey = errors.New("invalid API key or insufficient permissions")
 
 // maxResponseBytes caps how much of an API response we are willing to
 // buffer; device lists are small, so this is purely a safety limit.
@@ -163,7 +168,7 @@ func (c *Client) ValidateAPIKey(tailnet string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("invalid API key or insufficient permissions")
+		return errInvalidKey
 	}
 
 	if resp.StatusCode >= 400 {
@@ -263,4 +268,91 @@ type AccountInfo struct {
 	APIKey  string
 	Tailnet string
 	Active  bool
+	Hidden  bool
+}
+
+// KeyInfo is what the API reports about an API access token.
+type KeyInfo struct {
+	Expires time.Time
+	Revoked bool
+	Invalid bool
+}
+
+// APIKeyID extracts the key ID from a "tskey-api-<id>-<secret>" token. It
+// returns "" for tokens of another shape.
+func APIKeyID(apiKey string) string {
+	rest, ok := strings.CutPrefix(apiKey, "tskey-api-")
+	if !ok {
+		return ""
+	}
+	id, _, ok := strings.Cut(rest, "-")
+	if !ok {
+		return ""
+	}
+	return id
+}
+
+// KeyInfo reads the expiry of the API key itself. Not every token may read
+// its own record, so callers treat an error as "unknown", not as invalid.
+func (c *Client) KeyInfo(tailnet, keyID string) (KeyInfo, error) {
+	resp, err := c.doRequest("GET", "/tailnet/"+url.PathEscape(tailnet)+"/keys/"+url.PathEscape(keyID))
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return KeyInfo{}, apiError(resp)
+	}
+	body, err := readBody(resp)
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	var raw struct {
+		Expires time.Time `json:"expires"`
+		Revoked time.Time `json:"revoked"`
+		Invalid bool      `json:"invalid"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return KeyInfo{}, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return KeyInfo{Expires: raw.Expires, Revoked: !raw.Revoked.IsZero(), Invalid: raw.Invalid}, nil
+}
+
+// Health is the result of checking one account's API key.
+type Health struct {
+	Valid      bool      // the key can list devices
+	Err        error     // why it is not valid (or the network error)
+	Unauth     bool      // the API rejected the key (401/403)
+	Expires    time.Time // zero when unknown
+	HasExpiry  bool
+	ExpiryNote string // why the expiry is unknown, if it is
+}
+
+// CheckAccount verifies the key and, best effort, reads its expiry.
+func CheckAccount(acc AccountInfo) Health {
+	c := NewClient(acc.APIKey)
+	h := Health{}
+	if err := c.ValidateAPIKey(acc.Tailnet); err != nil {
+		h.Err = err
+		h.Unauth = errors.Is(err, errInvalidKey)
+		return h
+	}
+	h.Valid = true
+	id := APIKeyID(acc.APIKey)
+	if id == "" {
+		h.ExpiryNote = "unknown key format"
+		return h
+	}
+	info, err := c.KeyInfo(acc.Tailnet, id)
+	switch {
+	case err != nil:
+		h.ExpiryNote = "expiry not readable"
+	case info.Revoked || info.Invalid:
+		h.Valid = false
+		h.Unauth = true
+		h.Err = fmt.Errorf("API key is revoked or expired")
+	case !info.Expires.IsZero():
+		h.Expires, h.HasExpiry = info.Expires, true
+	}
+	return h
 }

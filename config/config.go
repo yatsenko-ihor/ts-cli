@@ -35,6 +35,7 @@ type Account struct {
 	APIKeyEncrypted string `json:"api_key_enc,omitempty"` // Tailscale API key, encrypted (on disk)
 	Tailnet         string `json:"tailnet"`               // Tailnet name
 	Active          bool   `json:"active"`                // Whether this is the active account
+	Hidden          bool   `json:"hidden,omitempty"`      // Machines of this account are not shown in the list
 }
 
 // MachineAuth stores per-machine SSH credentials. The map key is the stable
@@ -66,6 +67,24 @@ type Config struct {
 
 // mu serialises every read-modify-write of the file within this process.
 var mu sync.Mutex
+
+// tmpFile is the part of *os.File that save uses. Together with the package
+// variables below it is a test seam: tests substitute failing implementations
+// to reach I/O error paths that cannot be provoked portably through the
+// filesystem. Production behaviour is the standard library's.
+type tmpFile interface {
+	Name() string
+	Chmod(os.FileMode) error
+	Write([]byte) (int, error)
+	Close() error
+}
+
+var (
+	encryptSecret = util.Encrypt
+	decryptSecret = util.Decrypt
+	marshalIndent = json.MarshalIndent
+	createTemp    = func(dir, pattern string) (tmpFile, error) { return os.CreateTemp(dir, pattern) }
+)
 
 // Path returns the config file path, creating the directory (0700) if needed.
 func Path() (string, error) {
@@ -119,7 +138,7 @@ func load() (*Config, error) {
 		acc := &cfg.Accounts[i]
 		switch {
 		case acc.APIKeyEncrypted != "":
-			plain, err := util.Decrypt(acc.APIKeyEncrypted)
+			plain, err := decryptSecret(acc.APIKeyEncrypted)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decrypt API key for account %q (secret store: %s): %w",
 					acc.Name, util.CurrentSecretStore(), err)
@@ -143,7 +162,7 @@ func forDisk(cfg *Config) (*Config, error) {
 	out.Accounts = make([]Account, len(cfg.Accounts))
 	for i, acc := range cfg.Accounts {
 		if acc.APIKey != "" {
-			enc, err := util.Encrypt(acc.APIKey)
+			enc, err := encryptSecret(acc.APIKey)
 			if err != nil {
 				return nil, fmt.Errorf("failed to encrypt API key for account %q: %w", acc.Name, err)
 			}
@@ -175,12 +194,12 @@ func save(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(disk, "", "  ")
+	data, err := marshalIndent(disk, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(path), fileName+".*.tmp")
+	tmp, err := createTemp(filepath.Dir(path), fileName+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp config: %w", err)
 	}
@@ -255,7 +274,10 @@ func (c *Config) AddAccount(name, apiKey, tailnet string, setActive bool) {
 			c.Accounts[i].Active = false
 		}
 	}
-	c.Accounts = append(c.Accounts, Account{Name: name, APIKey: apiKey, Tailnet: tailnet, Active: setActive})
+	// Invariant: when any account exists, exactly one is active. A new
+	// account therefore becomes active if none is.
+	active := setActive || c.GetActiveAccount() == nil
+	c.Accounts = append(c.Accounts, Account{Name: name, APIKey: apiKey, Tailnet: tailnet, Active: active})
 }
 
 // RemoveAccount removes the account matching nameOrTailnet. If the active
@@ -312,6 +334,37 @@ func (c *Config) SetActiveAccount(nameOrTailnet string) bool {
 		c.Accounts[i].Active = &c.Accounts[i] == target
 	}
 	return true
+}
+
+// SetAccountHidden shows or hides the machines of an account in the list.
+func (c *Config) SetAccountHidden(nameOrTailnet string, hidden bool) bool {
+	acc := c.FindAccount(nameOrTailnet)
+	if acc == nil {
+		return false
+	}
+	acc.Hidden = hidden
+	return true
+}
+
+// UpdateAccount renames an account and/or replaces its API key. Empty
+// arguments leave the field unchanged. It fails when newName is taken.
+func (c *Config) UpdateAccount(nameOrTailnet, newName, newAPIKey string) error {
+	acc := c.FindAccount(nameOrTailnet)
+	if acc == nil {
+		return fmt.Errorf("account '%s' not found", nameOrTailnet)
+	}
+	if newName != "" && newName != acc.Name {
+		for i := range c.Accounts {
+			if &c.Accounts[i] != acc && (c.Accounts[i].Name == newName || c.Accounts[i].Tailnet == newName) {
+				return fmt.Errorf("an account named '%s' already exists", newName)
+			}
+		}
+		acc.Name = newName
+	}
+	if newAPIKey != "" {
+		acc.APIKey = newAPIKey
+	}
+	return nil
 }
 
 // GetAllAccounts returns all configured accounts
@@ -381,11 +434,9 @@ func migrateOldConfig() (*Config, bool) {
 
 	var apiKey, tailnet, sshUsername string
 	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
+		// Blank lines and "# comments" need no special case: they have no
+		// "=" or a key that matches none of the names below.
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
 		if !ok {
 			continue
 		}

@@ -67,7 +67,24 @@ Prefer the environment variable over `--api-key`: command-line flags end up in y
 
 ### Multi-Account Setup
 
-Run `login` multiple times with different tailnet/API key pairs. Each account is stored separately and you can switch between them, or view all devices across all accounts using the **All Accounts** profile in the TUI.
+Each account is a tailnet plus an API key (stored encrypted, see [SSH Credential Management](#ssh-credential-management)). Manage accounts from the TUI (`m`, the **Accounts** window) or with `ts-cli account`:
+
+```bash
+# Add (validates the key first). Prefer stdin or the environment: --api-key shows up in shell history and `ps`.
+pass show tailscale/work | ts-cli account add --tailnet=work.example.com --name=work --api-key-stdin
+
+ts-cli account list [--check] [--format=json]   # --check verifies each key and shows its expiry
+ts-cli account edit work --name=job             # rename; add --api-key-stdin to replace the key
+ts-cli account use work                         # make active and `tailscale switch` this computer
+ts-cli account hide work | show work            # hide/show the account's machines in the list
+ts-cli account remove work
+```
+
+`ts-cli login --tailnet=... ` is the same as `account add` and also makes the account active.
+
+**Active vs. visible.** *Visible* accounts decide whose machines appear in the list; hide one and its machines disappear without anything being deleted. The *active* account is the one this computer's `tailscale` is logged in to (`◉` in the Accounts window): `Enter` switches to it.
+
+**Accounts window (`m`)**: `↑/↓` move, `Enter` use (switch this computer), `Space` show/hide, `a` add, `e` edit (name, replace key), `d` remove (asks to confirm), `c` re-check keys, `Esc` close. Each row shows online/total machines and the API key state: valid, expiry countdown, or rejected. The main screen shows a `⚠ API key` line when a key expires within 14 days or is rejected. Key expiry is read best-effort from the Tailscale API; a key that cannot read its own record is shown as plain "key ok".
 
 ### List Devices
 
@@ -120,7 +137,7 @@ ts-cli tui          # alternative alias
 | `c`         | Copy SSH command to clipboard                     |
 | `r`         | Reload devices                                    |
 | `P`         | Switch profile (account filter)                   |
-| `m`         | Manage accounts                                   |
+| `m`         | Accounts window (add, edit, remove, show/hide, switch) |
 | `u`         | Tailscale up                                      |
 | `o`         | Options menu (manage credentials)                 |
 | `a`         | About (version, author info)                      |
@@ -190,6 +207,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Hide offline machines**: offline machines collapse into one `▸ N offline hidden` row. `H` toggles it; searching always includes offline machines.
 - **Details panel**: with the Run panel closed and a terminal at least 100 columns wide, the highlighted machine's OS, address, last seen, key expiry, SSH setup and ping result are shown on the right.
 - **Group by account**: section headers per account (only with more than one account).
+- **Theme**: `light` (default, keeps your terminal background), `dark` or `hacker` (green on black). `dark` and `hacker` paint the whole screen, so they look the same on any terminal background.
 - **Icon style**: coloured symbols (default) or emoji.
 
 #### Machine status and ping
@@ -307,10 +325,14 @@ Switching copies the key, verifies it can be read back, and only then removes it
 ### `login`
 
 ```bash
-ts-cli login --tailnet=<tailnet-name> [--api-key=<key>]
+ts-cli login --tailnet=<tailnet-name> [--name=<name>] [--api-key-stdin | --api-key=<key>]
 ```
 
-Flags: `--api-key`, `--tailnet`
+Same as `account add`, and marks the account active. The key may also come from `TAILSCALE_API_KEY`.
+
+### `account`
+
+`add`, `list`, `edit`, `use`, `hide`, `show`, `remove`. See [Multi-Account Setup](#multi-account-setup).
 
 ### `list`
 
@@ -356,7 +378,7 @@ ts-cli/
 │   ├── list.go          # list subcommand
 │   ├── ssh.go           # ssh subcommand
 │   ├── interactive.go   # interactive subcommand
-│   ├── account.go       # account list/set-active/remove
+│   ├── account.go       # account add/list/edit/use/hide/show/remove
 │   ├── config.go        # Account config persistence
 │   ├── install.go       # install subcommand
 │   ├── uninstall.go     # uninstall subcommand
