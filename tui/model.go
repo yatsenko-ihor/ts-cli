@@ -34,7 +34,8 @@ type model struct {
 	aboutMode   bool
 	helpMode    bool
 	helpScroll  int
-	lastMachine string // key of the machine connected to most recently
+	lastMachine string               // key of the machine connected to most recently
+	ping        map[string]pingState // explicit reachability results by machineKey
 }
 
 // NewModel builds the initial TUI state. machineCreds is the per-machine
@@ -182,6 +183,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case probeMsg:
 		return m.handleProbe(msg)
 
+	case pingMsg:
+		return m.handlePing(msg)
+
 	case copiedMsg:
 		if msg.success {
 			m.notify.copiedText = msg.text
@@ -198,6 +202,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case clearReloadMsg:
 		m.notify.reloadSuccess = ""
+		m.notify.info = ""
 		return m, nil
 
 	case usernameStoredMsg:
@@ -281,6 +286,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.list.selected >= len(m.list.filteredDevices) {
 			m.list.selected = -1
 		}
+		// A reload refreshes last-seen times; forget stale ping results
+		m.ping = nil
 		// Drop marks for machines that disappeared
 		for k := range m.list.marked {
 			found := false
@@ -508,6 +515,12 @@ func (m model) View() string {
 	if m.notify.copiedText != "" {
 		b.WriteString("\n")
 		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.notify.copiedText)))
+	}
+
+	// Show neutral status (ping progress/result)
+	if m.notify.info != "" {
+		b.WriteString("\n")
+		b.WriteString(infoStyle.Render(m.notify.info))
 	}
 
 	// Show reload success message if any

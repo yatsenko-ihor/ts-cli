@@ -244,8 +244,8 @@ func TestMarksAndTargets(t *testing.T) {
 		t.Fatal("one mark is not multi")
 	}
 	m.toggleAllMarks()
-	if len(m.markedDevices()) != 5 {
-		t.Fatalf("expected all marked, got %d", len(m.markedDevices()))
+	if len(m.markedDevices()) != 4 {
+		t.Fatalf("expected all reachable machines marked (the offline one is skipped), got %d", len(m.markedDevices()))
 	}
 	m.toggleAllMarks()
 	if len(m.markedDevices()) != 0 {
@@ -280,6 +280,7 @@ func TestStartMultiRunSkipsAndStarts(t *testing.T) {
 	m := multiModel(t)
 	m.ssh.username = "" // only bravo has a username now
 	m.toggleAllMarks()
+	m.list.marked["d"] = true // went offline after being marked: must be skipped, not run
 	spec := sshJob{action: sshActionScript, script: ptr(scripts.Parse("nix.sh", []byte("#!/bin/sh\n# ts-cli: os=linux\necho hi\n")))}
 
 	// Replace ssh with a local stub so startRemoteJob can actually spawn.
@@ -297,7 +298,7 @@ func TestStartMultiRunSkipsAndStarts(t *testing.T) {
 	if byID["c"].status != runSkipped || byID["c"].note != "script is not for windows" {
 		t.Fatalf("windows machine: %+v", byID["c"])
 	}
-	if byID["d"].status != runSkipped || byID["d"].note != "offline" {
+	if byID["d"].status != runSkipped || byID["d"].note != "unreachable" {
 		t.Fatalf("offline machine: %+v", byID["d"])
 	}
 	if byID["a"].status != runSkipped || byID["a"].note == "" {
