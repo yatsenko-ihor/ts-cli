@@ -144,18 +144,6 @@ func (m model) isReachable(d client.Device) bool {
 	return isDeviceOnline(d)
 }
 
-// statusIcon is the circle shown for a machine: ⭕️ after a failed ping,
-// 🟢 when reachable, 🔴 otherwise.
-func (m model) statusIcon(d client.Device) string {
-	if m.ping[machineKey(d)] == pingFail {
-		return pingFailedIcon
-	}
-	if m.isReachable(d) {
-		return "🟢"
-	}
-	return "🔴"
-}
-
 // hasSavedPassword reports whether a password is stored for the machine.
 func (m model) hasSavedPassword(d client.Device) bool {
 	return m.ssh.machineCreds[machineKey(d)].passwordEncrypted != ""

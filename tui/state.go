@@ -50,6 +50,7 @@ type deviceList struct {
 	selectedProfile string          // Active profile filter (empty = all)
 	sort            sortMode        // Current sort mode
 	searchCursor    int             // Cursor position (runes) inside searchQuery
+	hiddenOffline   int             // offline machines currently collapsed into the note row
 	marked          map[string]bool // Machines selected for a multi-machine run, by machineKey
 }
 

@@ -25,27 +25,30 @@ type model struct {
 	input  textInput     // Active text input prompt
 
 	// ─── Global state ─────────────────────────────────────────────────────────
-	err         error
-	width       int
-	height      int
-	activeFocus panelFocus
-	version     string
-	reloading   bool
-	aboutMode   bool
-	helpMode    bool
-	helpScroll  int
-	lastMachine string               // key of the machine connected to most recently
-	ping        map[string]pingState // explicit reachability results by machineKey
-	pingAt      map[string]time.Time // when each machine was last pinged
-	pinging     map[string]bool      // pings in flight
-	pingSeq     int                  // debounce counter for auto-ping on cursor rest
-	preflight   *preflight           // launch waiting for its reachability check
+	err            error
+	width          int
+	height         int
+	activeFocus    panelFocus
+	version        string
+	reloading      bool
+	aboutMode      bool
+	helpMode       bool
+	helpScroll     int
+	set            uiSettings
+	settingsMode   bool
+	settingsCursor int
+	lastMachine    string               // key of the machine connected to most recently
+	ping           map[string]pingState // explicit reachability results by machineKey
+	pingAt         map[string]time.Time // when each machine was last pinged
+	pinging        map[string]bool      // pings in flight
+	pingSeq        int                  // debounce counter for auto-ping on cursor rest
+	preflight      *preflight           // launch waiting for its reachability check
 }
 
 // NewModel builds the initial TUI state. machineCreds is the per-machine
 // credential map from config.json (keyed by device ID; older files keyed by
 // device name are migrated on first run). savedCommands feeds the Run panel.
-func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth, savedCommands []config.SavedCommand, lastMachine string) model {
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth, savedCommands []config.SavedCommand, lastMachine string, ui map[string]string) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -83,23 +86,13 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	}
 	credsDirty := migrateCredentialKeys(mCreds, devices)
 
-	// Start on the machine connected to last time, if it is online.
-	startCursor := 0
-	if lastMachine != "" {
-		for i, d := range devices {
-			if machineKey(d) == lastMachine && isDeviceOnline(d) {
-				startCursor = i
-				break
-			}
-		}
-	}
-
-	return model{
+	m := model{
+		set:         loadUISettings(ui),
 		lastMachine: lastMachine,
 		list: deviceList{
 			devices:         devices,
 			filteredDevices: devices,
-			cursor:          startCursor,
+			cursor:          0,
 			selected:        -1,
 			viewportTop:     0,
 			searchQuery:     "",
@@ -140,6 +133,18 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		version:     version,
 		reloading:   false,
 	}
+	m.filterDevices()
+	// Start on the machine connected to last time, if it is online and listed.
+	if lastMachine != "" {
+		for i, d := range m.list.filteredDevices {
+			if machineKey(d) == lastMachine && isDeviceOnline(d) {
+				m.list.cursor = i
+				break
+			}
+		}
+	}
+	m.ensureListCursorVisible()
+	return m
 }
 
 func (m model) Init() tea.Cmd {
@@ -272,6 +277,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case uiSavedMsg:
+		if msg.err != nil {
+			m.notify.sshError = fmt.Errorf("failed to save setting: %w", msg.err)
+		}
+		return m, nil
+
 	case reloadMsg:
 		// Handle reload result
 		m.reloading = false
@@ -284,12 +295,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sortDevicesByStatus(msg.devices)
 		m.list.devices = msg.devices
 
-		// Re-apply filters if any are active
-		if m.list.searchQuery != "" || m.list.selectedProfile != "" {
-			m.filterDevices()
-		} else {
-			m.list.filteredDevices = msg.devices
-		}
+		m.ping, m.pingAt = nil, nil
+		m.refilterKeepCursor()
 
 		// Reset cursor if out of bounds
 		if m.list.cursor >= len(m.list.filteredDevices) {
@@ -380,6 +387,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.settingsMode {
+			return m.handleSettings(msg)
+		}
 		// Dispatch to appropriate mode handler
 		switch m.input.mode {
 		case inputPassword:
@@ -420,6 +430,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
+	}
+	if m.settingsMode {
+		return m.renderSettings()
 	}
 
 	// Show profile selection view if in profile selection mode
@@ -521,6 +534,10 @@ func (m model) View() string {
 	} else {
 		// Normal view
 		deviceList := m.renderDeviceList()
+		if m.detailsVisible() {
+			deviceList = lipgloss.JoinHorizontal(lipgloss.Top, deviceList, " ",
+				m.renderDetailsPanel(m.detailsWidth(), m.listFrameHeight()))
+		}
 		b.WriteString(deviceList)
 
 	}
