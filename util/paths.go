@@ -8,6 +8,9 @@ import (
 
 // ConfigDirEnv overrides the configuration directory (used by tests and
 // for running several isolated profiles).
+// userHomeDir is a test seam for os.UserHomeDir.
+var userHomeDir = os.UserHomeDir
+
 const ConfigDirEnv = "TS_CLI_CONFIG_DIR"
 
 // ConfigDir returns the directory that holds config.json, history.json and
@@ -17,7 +20,7 @@ func ConfigDir() (string, error) {
 	if dir := os.Getenv(ConfigDirEnv); dir != "" {
 		return dir, nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := userHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}

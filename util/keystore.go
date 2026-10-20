@@ -45,6 +45,37 @@ const (
 	keychainAccount = "master-key"
 )
 
+// Test seams: replaced only by tests to provoke failures that cannot be
+// produced portably (or as root) with real files and keychains.
+var (
+	keyringGet    = keyring.Get
+	keyringSet    = keyring.Set
+	keyringDelete = keyring.Delete
+	writeFile     = os.WriteFile
+	removeFile    = os.Remove
+	createTemp    = func(dir, pattern string) (keyTempFile, error) {
+		f, err := os.CreateTemp(dir, pattern)
+		if err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
+	openExclusive = func(path string) (io.WriteCloser, error) {
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
+)
+
+// keyTempFile is the subset of *os.File that writeFileKey needs.
+type keyTempFile interface {
+	io.WriteCloser
+	Chmod(os.FileMode) error
+	Name() string
+}
+
 var (
 	keyMu     sync.Mutex
 	keyCache  []byte
@@ -85,7 +116,7 @@ func setSecretStore(s SecretStore) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(string(s)+"\n"), 0600)
+	return writeFile(path, []byte(string(s)+"\n"), 0600)
 }
 
 // KeyStoreNotice returns a one-line warning recorded while loading the key
@@ -107,7 +138,7 @@ func resetKeyCache() {
 // KeychainAvailable reports whether the OS credential store can be used right
 // now. A "not found" answer from the probe means the store works.
 func KeychainAvailable() error {
-	_, err := keyring.Get(keychainService, "__probe__")
+	_, err := keyringGet(keychainService, "__probe__")
 	if err == nil || errors.Is(err, keyring.ErrNotFound) {
 		return nil
 	}
@@ -115,7 +146,7 @@ func KeychainAvailable() error {
 }
 
 func keychainGetKey() ([]byte, error) {
-	encoded, err := keyring.Get(keychainService, keychainAccount)
+	encoded, err := keyringGet(keychainService, keychainAccount)
 	if err != nil {
 		return nil, err
 	}
@@ -130,11 +161,11 @@ func keychainGetKey() ([]byte, error) {
 }
 
 func keychainSetKey(key []byte) error {
-	return keyring.Set(keychainService, keychainAccount, base64.StdEncoding.EncodeToString(key))
+	return keyringSet(keychainService, keychainAccount, base64.StdEncoding.EncodeToString(key))
 }
 
 func keychainDeleteKey() error {
-	err := keyring.Delete(keychainService, keychainAccount)
+	err := keyringDelete(keychainService, keychainAccount)
 	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
@@ -183,7 +214,7 @@ func writeFileKey(key []byte) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), keyFileName+".*.tmp")
+	tmp, err := createTemp(filepath.Dir(path), keyFileName+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create key file: %w", err)
 	}
@@ -202,7 +233,11 @@ func writeFileKey(key []byte) error {
 		os.Remove(tmpName)
 		return err
 	}
-	return os.Rename(tmpName, path)
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName) // never leave key material behind in a stray temp file
+		return err
+	}
+	return nil
 }
 
 // loadOrCreateFileKey returns the file key, creating it on first use.
@@ -225,7 +260,7 @@ func loadOrCreateFileKey() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	f, err := openExclusive(path)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return readFileKey()
@@ -249,7 +284,7 @@ func removeFileKey() error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := removeFile(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil
