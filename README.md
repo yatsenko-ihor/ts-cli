@@ -137,14 +137,34 @@ ts-cli tui          # alternative alias
 | `Esc`       | Exit current mode / return to list focus          |
 | `q`         | Quit                                              |
 
-#### Input Mode Shortcuts (search / command / username prompts)
+#### Text Editing (search, command line, username/password and other prompts)
 
-| Key                | Action                 |
-| ------------------ | ---------------------- |
-| `ctrl+v` / `cmd+v` | Paste from clipboard   |
-| `Backspace`        | Delete last character  |
-| `Enter`            | Confirm input          |
-| `Esc` / `ctrl+c`   | Cancel and clear input |
+All single-line inputs have a real cursor and the usual shell-style editing keys:
+
+| Key                                         | Action                              |
+| ------------------------------------------- | ----------------------------------- |
+| `←` / `→`                                   | Move one character                  |
+| `Option+←` / `Option+→` (macOS)             | Move one word back / forward        |
+| `Alt+←` / `Alt+→`, `Ctrl+←` / `Ctrl+→`     | Same, on Linux/Windows terminals    |
+| `Alt+b` / `Alt+f`                           | Same (what many terminals actually send) |
+| `Home` / `Ctrl+A`, `End` / `Ctrl+E`         | Start / end of line                 |
+| `Backspace`                                 | Delete the previous character       |
+| `Delete` / `Ctrl+D`                         | Delete the next character           |
+| `Option+Backspace` / `Ctrl+W`               | Delete the previous word            |
+| `Alt+D`                                     | Delete the next word                |
+| `Ctrl+U` / `Ctrl+K`                         | Delete to the start / end of line   |
+| `ctrl+v` / `cmd+v`                          | Paste from clipboard at the cursor  |
+| `Enter`                                     | Confirm input                       |
+| `Esc` / `ctrl+c`                            | Cancel and clear input              |
+
+Words are runs of letters, digits and `_`, as in bash, so `/var/log` is two words.
+
+**Option+arrows in your terminal.** ts-cli can only react to the keys the terminal sends. Terminals report `Option+←/→` in two ways and both work:
+
+- as `Esc b` / `Esc f` — iTerm2 with the *Natural Text Editing* preset or *Left Option key = Esc+* (Settings → Profiles → Keys), and Terminal.app with *Use Option as Meta key*;
+- as modified arrow sequences (`Esc[1;3D` / `Esc[1;3C`) — kitty, WezTerm, Alacritty, and most Linux terminals with `Alt`.
+
+If Option+arrows do nothing, the terminal is not sending either form: enable one of the settings above (iTerm2: Profiles → Keys → Key Mappings → Presets → *Natural Text Editing*). Typing of non-ASCII text (for example Ukrainian) works in all inputs.
 
 #### Three-Panel Layout
 
