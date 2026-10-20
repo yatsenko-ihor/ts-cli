@@ -79,3 +79,52 @@ func TestInstallBinaryDoesNotClobberForeignTsc(t *testing.T) {
 		t.Fatalf("ts-cli not installed: %v", err)
 	}
 }
+
+func TestCopyFileReplacesWithANewInodeAndLeavesNoTemp(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	dst := filepath.Join(dir, "ts-cli")
+	if err := os.WriteFile(src, []byte("new-binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.Stat(dst)
+
+	if err := copyFile(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(dst)
+	after, _ := os.Stat(dst)
+	if string(got) != "new-binary" || after.Mode().Perm() != 0o755 {
+		t.Fatalf("content %q mode %v", got, after.Mode())
+	}
+	if os.SameFile(before, after) {
+		t.Fatal("the destination must be a new file, not rewritten in place (macOS kills a binary whose cached signature is stale)")
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".ts-cli-install-*")); len(left) != 0 {
+		t.Fatalf("temp files left: %v", left)
+	}
+}
+
+func TestCopyFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	if err := copyFile(filepath.Join(dir, "missing"), filepath.Join(dir, "dst")); err == nil {
+		t.Fatal("missing source must fail")
+	}
+	src := filepath.Join(dir, "src")
+	_ = os.WriteFile(src, []byte("x"), 0o644)
+	if err := copyFile(src, filepath.Join(dir, "no-such-dir", "dst")); err == nil {
+		t.Fatal("missing destination directory must fail")
+	}
+	// rename onto a non-empty directory fails and must not leave the temp file
+	target := filepath.Join(dir, "target")
+	_ = os.MkdirAll(filepath.Join(target, "sub"), 0o755)
+	if err := copyFile(src, target); err == nil {
+		t.Fatal("renaming over a directory must fail")
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".ts-cli-install-*")); len(left) != 0 {
+		t.Fatalf("temp files left: %v", left)
+	}
+}

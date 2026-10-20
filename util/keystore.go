@@ -80,6 +80,7 @@ var (
 	keyMu     sync.Mutex
 	keyCache  []byte
 	keyNotice string
+	keyReset  bool // UseKeychain had to create a new key because the old one was lost
 )
 
 // ─── Store selection ──────────────────────────────────────────────────────────
@@ -125,6 +126,16 @@ func KeyStoreNotice() string {
 	keyMu.Lock()
 	defer keyMu.Unlock()
 	return keyNotice
+}
+
+// KeyWasReset reports whether the last UseKeychain call found the master key
+// lost (keychain item gone, no key file) and created a new one. Secrets
+// encrypted with the old key can no longer be read; the caller should remove
+// them (config.DropUnreadableSecrets) and tell the user.
+func KeyWasReset() bool {
+	keyMu.Lock()
+	defer keyMu.Unlock()
+	return keyReset
 }
 
 // resetKeyCache forgets the cached key (after moving it between stores).
@@ -336,6 +347,7 @@ func masterKey() ([]byte, error) {
 func UseKeychain() error {
 	keyMu.Lock()
 	defer keyMu.Unlock()
+	keyReset = false
 
 	if err := KeychainAvailable(); err != nil {
 		return fmt.Errorf("keychain is not available: %w", err)
@@ -344,6 +356,14 @@ func UseKeychain() error {
 		if _, err := keychainGetKey(); err == nil {
 			return nil
 		}
+	}
+
+	// The keychain is the configured store but its item is gone and there is
+	// no key file either: the old key is lost and a new one is created below.
+	lost := false
+	if CurrentSecretStore() == SecretStoreKeychain {
+		_, ferr := readFileKey()
+		lost = errors.Is(ferr, os.ErrNotExist)
 	}
 
 	// The file key is authoritative while the file store is active.
@@ -368,6 +388,7 @@ func UseKeychain() error {
 		return fmt.Errorf("key stored in keychain, but the key file could not be removed: %w", err)
 	}
 	resetKeyCache()
+	keyReset = lost
 	return nil
 }
 

@@ -318,6 +318,8 @@ Switching copies the key, verifies it can be read back, and only then removes it
 
 **Fallback.** If the store is `keychain` but the keychain cannot be reached (headless or SSH session, locked login keychain, no D-Bus), ts-cli uses the key file if one still exists and prints a warning. It never silently creates a new key in that situation, because that would make the existing credentials unreadable. Run `ts-cli secrets use file` from a session where the keychain works to go back permanently.
 
+**Lost key.** If the store is `keychain`, the keychain item is gone and no key file exists, the old key cannot be recovered. `ts-cli secrets use keychain` then creates a new key, removes the accounts and saved SSH passwords that were encrypted with the old one, and prints exactly what was removed (add the accounts again with `ts-cli account add`; passwords are asked again on the next connection).
+
 **Manage:** Press `o` → "Machines with saved passwords" to view or delete stored credentials.
 
 ## Commands
