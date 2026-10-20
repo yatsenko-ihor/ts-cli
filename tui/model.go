@@ -165,6 +165,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Outcome of an interactive session; see sshflow.go.
 		return m.finishSSHAttempt(msg.failure, msg.err)
 
+	case probeMsg:
+		return m.handleProbe(msg)
+
 	case copiedMsg:
 		if msg.success {
 			m.notify.copiedText = msg.text

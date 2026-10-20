@@ -87,7 +87,9 @@ SSH CREDENTIALS
     2. No saved password → try key-based auth first
        (username: per-machine → default → ask)
     3. Auth fails → ask for the password, retry with sshpass
-    4. Success → save username (+ password if entered)
+    4. Success → save username (+ password if entered). A typed
+       password is verified first with a quick login and saved right
+       away, so a session that later drops never loses it
     5. Saved password rejected → forget it, ask again
     6. Still failing → retry menu (change user/pass/both)
 

@@ -212,3 +212,64 @@ func TestCancelClearsPendingAndPassword(t *testing.T) {
 		t.Fatalf("cancel did not reset state: %+v", m.ssh.pending)
 	}
 }
+
+func TestProbeSuccessSavesPasswordBeforeSessionStarts(t *testing.T) {
+	m := flowModel(t, nil, "pi")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
+	m = asModel(t, updated)
+	m.ssh.pending.password = "typed-pw"
+	m.ssh.pending.passwordTried = true
+
+	updated, cmd := m.handleProbe(probeMsg{failure: sshFailureNone})
+	m = asModel(t, updated)
+
+	cred := m.ssh.machineCreds["dev-1"]
+	if cred.username != "pi" || cred.passwordEncrypted == "" {
+		t.Fatalf("password must be saved as soon as the probe succeeds: %+v", cred)
+	}
+	if plain, err := util.DecryptPassword(cred.passwordEncrypted); err != nil || plain != "typed-pw" {
+		t.Fatalf("stored password does not round-trip: %q %v", plain, err)
+	}
+	if !m.ssh.pending.verified || cmd == nil {
+		t.Fatal("session must start with the pending attempt marked verified")
+	}
+}
+
+func TestSessionEndingWith255AfterVerifiedProbeKeepsCredentials(t *testing.T) {
+	m := flowModel(t, nil, "pi")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
+	m = asModel(t, updated)
+	m.ssh.pending.password = "typed-pw"
+	updated, _ = m.handleProbe(probeMsg{failure: sshFailureNone})
+	m = asModel(t, updated)
+
+	// The established session is dropped: ssh exits 255.
+	updated, _ = m.finishSSHAttempt(sshFailureConnection, errors.New("exit status 255"))
+	m = asModel(t, updated)
+
+	if m.ssh.retryMode || m.input.mode != inputNone {
+		t.Fatal("a dropped session after a verified login must not open the retry menu or a prompt")
+	}
+	if m.ssh.machineCreds["dev-1"].passwordEncrypted == "" {
+		t.Fatal("saved password must survive a dropped session")
+	}
+	if m.ssh.pending.action != sshActionNone {
+		t.Fatal("pending should be cleared")
+	}
+}
+
+func TestProbeFailureReprompts(t *testing.T) {
+	m := flowModel(t, nil, "pi")
+	updated, _ := m.beginSSH(0, sshJob{action: sshActionSession})
+	m = asModel(t, updated)
+	m.ssh.pending.password = "wrong"
+
+	updated, _ = m.handleProbe(probeMsg{failure: sshFailureBadPassword, err: errors.New("exit status 5")})
+	m = asModel(t, updated)
+	if m.input.mode != inputPassword {
+		t.Fatalf("wrong password must re-open the password prompt, got %v", m.input.mode)
+	}
+	if _, ok := m.ssh.machineCreds["dev-1"]; ok {
+		t.Fatal("nothing may be saved when the probe fails")
+	}
+}
