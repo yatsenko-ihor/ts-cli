@@ -127,6 +127,12 @@ func displayTable(devices []client.Device) {
 		}
 
 		lastSeen := formatDuration(time.Since(device.LastSeen))
+		switch {
+		case device.ConnectedToControl:
+			lastSeen = "online now" // the API omits lastSeen while connected
+		case device.LastSeen.IsZero():
+			lastSeen = "never"
+		}
 		authorized := "Yes"
 		if !device.Authorized {
 			authorized = "No"
@@ -155,7 +161,8 @@ type deviceJSON struct {
 	OS         string   `json:"os"`
 	Addresses  []string `json:"addresses"`
 	Authorized bool     `json:"authorized"`
-	LastSeen   string   `json:"lastSeen"`
+	LastSeen   string   `json:"lastSeen,omitempty"`
+	Connected  bool     `json:"connectedToControl"`
 	Account    string   `json:"account,omitempty"`
 }
 
@@ -173,6 +180,10 @@ func writeDevicesJSON(w io.Writer, devices []client.Device) error {
 		if addrs == nil {
 			addrs = []string{}
 		}
+		lastSeen := ""
+		if !d.LastSeen.IsZero() {
+			lastSeen = d.LastSeen.Format(time.RFC3339)
+		}
 		out = append(out, deviceJSON{
 			ID:         d.ID,
 			Name:       d.Name,
@@ -180,7 +191,8 @@ func writeDevicesJSON(w io.Writer, devices []client.Device) error {
 			OS:         d.OS,
 			Addresses:  addrs,
 			Authorized: d.Authorized,
-			LastSeen:   d.LastSeen.Format(time.RFC3339),
+			LastSeen:   lastSeen,
+			Connected:  d.ConnectedToControl,
 			Account:    d.AccountName,
 		})
 	}

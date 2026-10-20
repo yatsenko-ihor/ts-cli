@@ -464,6 +464,18 @@ var normalModeHandlers = map[string]keyHandler{
 }
 
 func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	before := m.list.cursor
+	updated, cmd := m.handleNormalModeKeys(msg)
+	nm := updated.(model)
+	if nm.list.cursor != before {
+		if tick := nm.scheduleAutoPing(); tick != nil {
+			return nm, tea.Batch(cmd, tick)
+		}
+	}
+	return nm, cmd
+}
+
+func (m model) handleNormalModeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.handleFrameShortcut(msg.String()) {
 		return m, nil
 	}
@@ -556,7 +568,9 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 	// Everything else (account switch, username/password prompts, persistence)
 	// is handled by the credential flow in sshflow.go.
-	return m.beginSSH(target, sshJob{action: sshActionSession})
+	return m.withPreflight(device, func(m model) (tea.Model, tea.Cmd) {
+		return m.beginSSH(m.indexOf(device), sshJob{action: sshActionSession})
+	})
 }
 
 // ─── Options menu constants ───────────────────────────────────────────────────

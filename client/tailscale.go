@@ -26,13 +26,16 @@ type Client struct {
 
 // Device represents a Tailscale device
 type Device struct {
-	ID                        string    `json:"id"`
-	Name                      string    `json:"name"`
-	Hostname                  string    `json:"hostname"`
-	ClientVersion             string    `json:"clientVersion"`
-	OS                        string    `json:"os"`
-	Created                   time.Time `json:"created"`
-	LastSeen                  time.Time `json:"lastSeen"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Hostname      string    `json:"hostname"`
+	ClientVersion string    `json:"clientVersion"`
+	OS            string    `json:"os"`
+	Created       time.Time `json:"created"`
+	LastSeen      time.Time `json:"lastSeen"`
+	// ConnectedToControl: the device recently kept a TCP connection to the
+	// Tailscale control server. The API omits lastSeen while this is true.
+	ConnectedToControl        bool      `json:"connectedToControl"`
 	Expires                   time.Time `json:"expires"`
 	Authorized                bool      `json:"authorized"`
 	IsExternal                bool      `json:"isExternal"`

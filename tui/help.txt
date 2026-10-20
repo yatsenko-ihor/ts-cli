@@ -108,6 +108,16 @@ SSH CREDENTIALS
     5. Saved password rejected → forget it, ask again
     6. Still failing → retry menu (change user/pass/both)
 
+STATUS AND PING
+───────────────
+  Colour = Tailscale API baseline (connectedToControl, or last seen
+  < 5 min), refined by `tailscale ping`, which wins in both directions:
+  a reply = 🟢 usable, no reply = ⭕️ unreachable.
+  Pings run: with P; automatically for the machine under the cursor
+  (start, and after it rests 0.5 s); and as a ≤2 s pre-flight check
+  before s / running something on one machine (Esc cancels).
+  Machines of another Tailscale account are not auto-pinged.
+
 ICONS
 ─────
   🟢  Device is online (or answered a ping)

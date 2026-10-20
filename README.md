@@ -11,7 +11,7 @@ A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports m
 - **Run Panel**: Execute local scripts (`~/.ts-cli/scripts/`), saved commands with `{{placeholders}}`, or one-off commands on the selected machine
 - **Streaming Output**: Output appears line by line while the job runs, with exit status and elapsed time; stop a job with `x`
 - **Recent**: Re-run anything that ran on a machine before, or save it as a named command
-- **Ping and status icons**: `P` pings the selected (or marked) machines with `tailscale ping`. 🟢 online, 🔴 offline, ⭕️ no reply to the last ping, 🔐 a password is saved for the machine
+- **Ping and status icons**: 🟢 online, 🔴 offline, ⭕️ no reply to the last ping, 🔐 a password is saved for the machine. See [Machine status and ping](#machine-status-and-ping)
 - **Resume where you left off**: on start the cursor is placed on the machine you connected to last time (if it is online)
 - **Multi-machine runs**: mark machines with `Space` (or `*` for all), then run a script or command on all of them in parallel; the output is split into one section per machine
 - **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
@@ -181,6 +181,21 @@ When the terminal is wide enough, the TUI shows three panels:
 - **Bottom-Right — Output**: streams while the job runs; the title shows `● running`, then `✓ exit 0` or `✗ exit N`. `c` copies the selected line as an absolute remote path, `n` only the file name, `x` stops the job.
 
 Focus cycles with `Tab` / `Shift+Tab`, or jump directly with `1`, `2`, `3`.
+
+#### Machine status and ping
+
+The colour of a machine comes from two sources, combined:
+
+1. **Tailscale API baseline**, shown instantly: a machine is 🟢 when the API reports `connectedToControl` (it recently kept a TCP connection to Tailscale's control server; the API omits `lastSeen` while this is true) or was last seen less than 5 minutes ago. Otherwise 🔴.
+2. **`tailscale ping`** refines it for the machines you are about to use, and overrides the baseline in both directions: a reply makes a machine 🟢 (and usable) even if the API says offline, no reply makes it ⭕️ (unreachable) even if the API says online.
+
+A ping is started:
+
+- manually with `P` for the highlighted or all marked machines;
+- automatically in the background for the machine under the cursor, at start and whenever the cursor rests on a machine for half a second (results are reused for 60 seconds, and a reload with `r` forgets them);
+- as a **pre-flight check** (at most 2 seconds) before `s` or before running a command/script on a single machine, so an unreachable machine fails right away with a clear message instead of waiting for ssh to time out. Press `Esc` to cancel the check.
+
+Machines that belong to another Tailscale account than the active one are not pinged automatically, because this computer cannot reach them until the account is switched; their colour stays the API baseline. Nothing is pinged if the `tailscale` CLI is not installed, and a missing CLI never blocks a connection.
 
 #### Scripts
 

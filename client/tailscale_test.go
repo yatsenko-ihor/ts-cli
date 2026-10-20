@@ -95,3 +95,20 @@ func TestListDevicesFromAccountsWithErrors(t *testing.T) {
 		t.Fatalf("errs = %v", errs)
 	}
 }
+
+func TestDeviceParsesConnectedToControlAndOmittedLastSeen(t *testing.T) {
+	withTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		// While connectedToControl is true the API omits lastSeen.
+		_, _ = w.Write([]byte(`{"devices":[{"id":"1","hostname":"live","connectedToControl":true},{"id":"2","hostname":"gone","lastSeen":"2026-01-02T03:04:05Z","connectedToControl":false}]}`))
+	})
+	devices, err := NewClient("k").ListDevices("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !devices[0].ConnectedToControl || !devices[0].LastSeen.IsZero() {
+		t.Fatalf("live device: %+v", devices[0])
+	}
+	if devices[1].ConnectedToControl || devices[1].LastSeen.IsZero() {
+		t.Fatalf("gone device: %+v", devices[1])
+	}
+}

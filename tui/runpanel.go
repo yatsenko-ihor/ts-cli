@@ -394,7 +394,9 @@ func (m model) launch(spec sshJob) (tea.Model, tea.Cmd) {
 		m.notify.sshError = fmt.Errorf("machine %q is offline", displayName(dev))
 		return m, nil
 	}
-	return m.beginSSH(m.indexOf(dev), spec)
+	return m.withPreflight(dev, func(m model) (tea.Model, tea.Cmd) {
+		return m.beginSSH(m.indexOf(dev), spec)
+	})
 }
 
 // indexOf returns the position of d in the filtered list (or the cursor).

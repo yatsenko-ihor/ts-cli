@@ -32,9 +32,14 @@ func (s sortMode) String() string {
 	return "Unknown"
 }
 
-// isDeviceOnline checks if a device is considered online based on LastSeen time
+// isDeviceOnline reports whether the Tailscale API considers a device online.
+// connectedToControl is authoritative when true (and the API then omits
+// lastSeen, which would otherwise read as "never seen"); otherwise a device
+// seen within the last 5 minutes counts as online.
 func isDeviceOnline(device client.Device) bool {
-	// Consider a device online if it was seen within the last 5 minutes
+	if device.ConnectedToControl {
+		return true
+	}
 	return time.Since(device.LastSeen) < 5*time.Minute
 }
 
