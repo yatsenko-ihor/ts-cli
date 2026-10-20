@@ -122,14 +122,28 @@ STATUS AND PING
 
 ICONS
 ─────
-  🟢  Device is online (or answered a ping)
-  🔴  Device is offline (last seen > 5 min ago)
-  ⭕️  Last ping got no reply: treated as unreachable
-  🔐  A password is saved for this machine
+  Symbols (default; emoji style: F12 → Icon style)
+  ●  green   Device is reachable (API online or answered a ping)
+  ●  red     Device is offline (last seen > 5 min ago)
+  ○  yellow  Last ping got no reply: treated as unreachable
+  pw         A password is saved for this machine
+  exp        Device key has expired (red)
+
+  Emoji style
+  🟢  Reachable      🔴  Offline      ⭕️  Last ping got no reply
+  🔐  Password saved                  🔒  Device key has expired
+
+  Other
   🔑  Device key expires in the future (device list)
   🔑  Key-based auth, no password stored (credentials list)
-  🔒  Device key has expired
   ⚠️   Key expiry warning
+
+LIST VIEW
+─────────
+  F12  Settings: short names, hide offline, details panel,
+       group by account, icon style (saved in config.json)
+  H    Show/hide offline machines (search always finds them)
+  ▸ N offline hidden   Row that stands for the hidden machines
 
 OPTIONS MENU (o)
 ────────────────
