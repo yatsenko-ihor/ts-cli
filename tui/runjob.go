@@ -79,6 +79,7 @@ func startRunJob(cmd *exec.Cmd, stdin []byte, cleanup func()) (*runJob, error) {
 		cleanup()
 		return nil, err
 	}
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		cleanup()
 		return nil, err
@@ -133,7 +134,8 @@ func (j *runJob) readLines(r io.Reader, wg *sync.WaitGroup) {
 	_, _ = io.Copy(io.Discard, r)
 }
 
-// kill terminates the process. The job then completes through the normal
+// kill terminates the process and everything it started (its process
+// group). The job then completes through the normal
 // done path with killed=true.
 func (j *runJob) kill() {
 	if j == nil || j.cmd == nil || j.cmd.Process == nil {
@@ -142,7 +144,7 @@ func (j *runJob) kill() {
 	j.killMu.Lock()
 	j.killed = true
 	j.killMu.Unlock()
-	_ = j.cmd.Process.Kill()
+	_ = killProcessTree(j.cmd)
 }
 
 // waitRunEvent returns a Cmd that delivers the next batch of output lines or

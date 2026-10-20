@@ -100,3 +100,10 @@ Non-test changes made for verifiability (all behaviour-preserving unless stated)
 - Bug fix (REQ-CFG-023): `AddAccount` appended the first account as inactive when `setActive` was false, leaving a configuration with accounts but none active. A new account now becomes active when no account is active.
 
 Unreachable statements: none. All statements of `config.go` are executed by the tests (100.0 %). The error branch of `json.MarshalIndent` is reachable only through the `marshalIndent` seam, because the `Config` type cannot fail to marshal.
+
+## Lost master key (added with `DropUnreadableSecrets`)
+
+- **REQ-CFG-038** `DropUnreadableSecrets` shall remove every account whose encrypted API key cannot be decrypted, clear every saved SSH password that cannot be decrypted (keeping the machine's username), report both (passwords by machine name, falling back to the machine key, sorted), keep everything readable and all unrelated settings, keep the file mode 0600 and leave no temporary file; when the removed account was the active one the first remaining account shall become active.
+- **REQ-CFG-039** `DropUnreadableSecrets` shall not write the file when every secret is readable.
+- **REQ-CFG-040** `DropUnreadableSecrets` shall leave a surviving active account active, shall not activate anything when no account remains, and shall not touch accounts that have only a legacy cleartext key.
+- **REQ-CFG-041** `DropUnreadableSecrets` shall do nothing when the config file does not exist and shall return an error, leaving the file unchanged, when it is corrupt, unreadable, its directory cannot be created, or the rewrite fails.

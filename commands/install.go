@@ -243,13 +243,55 @@ func isOurTscAlias(path string) bool {
 	return target == "ts-cli" || filepath.Base(target) == "ts-cli"
 }
 
+// adHocSign gives the installed binary a fresh ad-hoc code signature. It is a
+// variable so tests do not need codesign.
+var adHocSign = func(path string) error {
+	return exec.Command("codesign", "--force", "--sign", "-", path).Run()
+}
+
+// copyFile installs src at dst as a new file. It writes a temporary file next
+// to dst and renames it over dst, so dst always gets a new inode.
+//
+// Why not just overwrite: on macOS the kernel caches a binary's code
+// signature per file. Rewriting an already-executed binary in place leaves a
+// stale cache entry and the next launch is killed by the kernel
+// ("zsh: killed ts-cli") although the bytes are fine. A new inode avoids that,
+// and the ad-hoc re-signature below covers copies that lost their signature.
 func copyFile(src, dst string) error {
-	// Read source file
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
 
-	// Write to destination
-	return os.WriteFile(dst, data, 0755)
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".ts-cli-install-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	fail := func(err error) error {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Chmod(0755); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if runtime.GOOS == "darwin" {
+		// Best effort: an unsigned arm64 binary would be killed on launch.
+		if err := adHocSign(tmpName); err != nil {
+			fmt.Printf("Warning: could not re-sign %s (%v); if it is killed on launch run: codesign --force --sign - %s\n", dst, err, dst)
+		}
+	}
+	if err := os.Rename(tmpName, dst); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
 }

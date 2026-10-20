@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/yatsenko-ihor/ts-cli/config"
@@ -74,6 +75,9 @@ func newSecretsUseCommand() *cobra.Command {
 				if err := util.UseKeychain(); err != nil {
 					return err
 				}
+				if util.KeyWasReset() {
+					reportLostKey()
+				}
 				fmt.Println("✓ Master key is now stored in the OS keychain; ~/.ts-cli/key removed")
 			case util.SecretStoreFile:
 				if err := util.UseFile(); err != nil {
@@ -91,5 +95,27 @@ func newSecretsUseCommand() *cobra.Command {
 			fmt.Println("✓ Stored credentials verified readable")
 			return nil
 		},
+	}
+}
+
+// reportLostKey explains that the old master key was gone, removes the
+// secrets that were encrypted with it and says what was lost.
+func reportLostKey() {
+	fmt.Println("⚠ The master key was missing from the keychain and there was no key file,")
+	fmt.Println("  so a NEW key was created. Secrets encrypted with the old key cannot be recovered.")
+	dropped, err := config.DropUnreadableSecrets()
+	if err != nil {
+		fmt.Printf("  Could not remove the unreadable secrets: %v\n", err)
+		return
+	}
+	if len(dropped.Accounts) == 0 && len(dropped.Passwords) == 0 {
+		fmt.Println("  No stored secret depended on the old key.")
+		return
+	}
+	if len(dropped.Accounts) > 0 {
+		fmt.Printf("  Removed accounts (add them again with `ts-cli account add`): %s\n", strings.Join(dropped.Accounts, ", "))
+	}
+	if len(dropped.Passwords) > 0 {
+		fmt.Printf("  Removed saved SSH passwords for: %s (you will be asked again on the next connection)\n", strings.Join(dropped.Passwords, ", "))
 	}
 }
