@@ -36,6 +36,10 @@ type model struct {
 	helpScroll  int
 	lastMachine string               // key of the machine connected to most recently
 	ping        map[string]pingState // explicit reachability results by machineKey
+	pingAt      map[string]time.Time // when each machine was last pinged
+	pinging     map[string]bool      // pings in flight
+	pingSeq     int                  // debounce counter for auto-ping on cursor rest
+	preflight   *preflight           // launch waiting for its reachability check
 }
 
 // NewModel builds the initial TUI state. machineCreds is the per-machine
@@ -139,11 +143,16 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 }
 
 func (m model) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if m.ssh.credsDirty {
 		// Persist credentials re-keyed from device name to device ID.
-		return replaceMachineCredentials(m.ssh.machineCreds)
+		cmds = append(cmds, replaceMachineCredentials(m.ssh.machineCreds))
 	}
-	return nil
+	// Check the pre-selected machine in the background right away.
+	if d, ok := m.targetDevice(); ok && m.wantsAutoPing(d) {
+		cmds = append(cmds, pingDevice(d, pingAuto, manualPingWait))
+	}
+	return tea.Batch(cmds...)
 }
 
 // reloadDevices fetches fresh device list from all accounts
@@ -185,6 +194,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pingMsg:
 		return m.handlePing(msg)
+
+	case autoPingTickMsg:
+		return m.handleAutoPingTick(msg)
 
 	case copiedMsg:
 		if msg.success {
@@ -287,7 +299,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.list.selected = -1
 		}
 		// A reload refreshes last-seen times; forget stale ping results
-		m.ping = nil
+		m.ping, m.pingAt = nil, nil
 		// Drop marks for machines that disappeared
 		for k := range m.list.marked {
 			found := false
@@ -360,6 +372,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// While a pre-flight check runs (at most ~2 s) only cancel is accepted.
+		if m.preflight != nil {
+			if k := msg.String(); k == "esc" || k == "ctrl+c" {
+				m.preflight = nil
+				m.notify.info = ""
+			}
+			return m, nil
+		}
 		// Dispatch to appropriate mode handler
 		switch m.input.mode {
 		case inputPassword:
