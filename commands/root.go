@@ -8,7 +8,7 @@ import (
 )
 
 // Version is the current version of ts-cli
-const Version = "0.1.0"
+const Version = "1.0.0"
 
 // NewRootCommand creates the root command for ts-cli
 func NewRootCommand() *cobra.Command {
