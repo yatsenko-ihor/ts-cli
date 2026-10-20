@@ -784,7 +784,7 @@ func (m model) renderMachineCredsView() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "↑/k ↓/j • space select • * all • P ping • / search • s ssh • : run • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
+	help := "↑/k ↓/j • space select • * all • p ping • / search • s ssh • : run • c copy • tab run panel • P profile • S sort • r reload • o options • a about"
 	if m.run.visible {
 		switch m.activeFocus {
 		case focusRun:

@@ -20,7 +20,7 @@ import (
 // machines that matter right now and override the baseline in both
 // directions. Pings are started
 //
-//   - manually with P (selected or marked machines),
+//   - manually with p (selected or marked machines),
 //   - automatically for the machine under the cursor (at start and after the
 //     cursor rests on a machine for a moment), and
 //   - as a short pre-flight check before s / running something on a single
@@ -284,7 +284,7 @@ func (m model) handlePing(msg pingMsg) (tea.Model, tea.Cmd) {
 		if msg.ok {
 			return pf.next(m)
 		}
-		m.notify.sshError = fmt.Errorf("%s did not answer a ping (%v); check that it is on and connected, then press P to retry", msg.name, msg.err)
+		m.notify.sshError = fmt.Errorf("%s did not answer a ping (%v); check that it is on and connected, then press p to retry", msg.name, msg.err)
 	case msg.mode == pingManual:
 		m.notify.info = ""
 		if msg.ok {
