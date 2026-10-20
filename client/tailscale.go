@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,10 @@ import (
 // baseURL is the Tailscale API root. It is a variable so tests can point the
 // client at an httptest server.
 var baseURL = "https://api.tailscale.com/api/v2"
+
+// errInvalidKey is returned when the API rejects the key (401/403). Callers
+// classify on it with errors.Is rather than on server-supplied text.
+var errInvalidKey = errors.New("invalid API key or insufficient permissions")
 
 // maxResponseBytes caps how much of an API response we are willing to
 // buffer; device lists are small, so this is purely a safety limit.
@@ -122,7 +127,7 @@ func (c *Client) ValidateAPIKey(tailnet string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("invalid API key or insufficient permissions")
+		return errInvalidKey
 	}
 
 	if resp.StatusCode >= 400 {
@@ -288,7 +293,7 @@ func CheckAccount(acc AccountInfo) Health {
 	h := Health{}
 	if err := c.ValidateAPIKey(acc.Tailnet); err != nil {
 		h.Err = err
-		h.Unauth = strings.Contains(err.Error(), "invalid API key")
+		h.Unauth = errors.Is(err, errInvalidKey)
 		return h
 	}
 	h.Valid = true
