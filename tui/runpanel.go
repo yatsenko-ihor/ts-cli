@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,30 +14,135 @@ import (
 	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
-// The Run panel: a launcher for things to execute on the selected machine.
+// The Run panel: a launcher for things to execute on the selected machine(s).
 //
 //	Scripts   local files from ~/.ts-cli/scripts, streamed over ssh and run
 //	Commands  saved named commands with {{placeholders}}
 //	Recent    what ran on this machine before
 //	:         ad-hoc command, runs immediately
 //
-// Output streams into the panel below while the job runs.
+// Targets: the highlighted machine, or every machine marked with Space.
+// A single target goes through the interactive credential flow (prompts);
+// several targets run in parallel without prompts using saved credentials,
+// and the Output panel shows one section per machine.
 
-// ─── Tab contents ─────────────────────────────────────────────────────────────
+// maxParallelRuns bounds how many ssh processes a multi-machine run keeps alive.
+const maxParallelRuns = 8
 
-// visibleScripts filters scripts by the selected device's OS.
-func (m model) visibleScripts() []scripts.Script {
-	dev, ok := m.targetDevice()
-	var out []scripts.Script
-	for _, s := range m.run.scripts {
-		if !ok || s.SupportsOS(dev.OS) {
-			out = append(out, s)
+// ─── Targets / marks ──────────────────────────────────────────────────────────
+
+// targetDevice returns the highlighted device.
+func (m model) targetDevice() (client.Device, bool) {
+	i := m.getTargetDevice()
+	if i < 0 || i >= len(m.list.filteredDevices) {
+		return client.Device{}, false
+	}
+	return m.list.filteredDevices[i], true
+}
+
+// markedDevices returns the marked devices in list order (only those visible).
+func (m model) markedDevices() []client.Device {
+	if len(m.list.marked) == 0 {
+		return nil
+	}
+	var out []client.Device
+	for _, d := range m.list.filteredDevices {
+		if m.list.marked[machineKey(d)] {
+			out = append(out, d)
 		}
 	}
 	return out
 }
 
-// recentEntries returns history for the selected machine, newest first.
+// targets returns the machines a run applies to: marked ones, else the highlighted one.
+func (m model) targets() []client.Device {
+	if marked := m.markedDevices(); len(marked) > 0 {
+		return marked
+	}
+	if d, ok := m.targetDevice(); ok {
+		return []client.Device{d}
+	}
+	return nil
+}
+
+// isMulti reports whether a run would address several machines.
+func (m model) isMulti() bool { return len(m.markedDevices()) > 1 }
+
+func (m *model) toggleMark(d client.Device) {
+	if m.list.marked == nil {
+		m.list.marked = map[string]bool{}
+	}
+	k := machineKey(d)
+	if m.list.marked[k] {
+		delete(m.list.marked, k)
+	} else {
+		m.list.marked[k] = true
+	}
+}
+
+// toggleAllMarks marks every visible machine, or clears all marks when every
+// visible machine is already marked.
+func (m *model) toggleAllMarks() {
+	all := len(m.list.filteredDevices) > 0
+	for _, d := range m.list.filteredDevices {
+		if !m.list.marked[machineKey(d)] {
+			all = false
+			break
+		}
+	}
+	if all {
+		m.list.marked = nil
+		return
+	}
+	if m.list.marked == nil {
+		m.list.marked = map[string]bool{}
+	}
+	for _, d := range m.list.filteredDevices {
+		m.list.marked[machineKey(d)] = true
+	}
+}
+
+func (m *model) clearMarks() { m.list.marked = nil }
+
+// targetsLabel describes the targets for headers.
+func (m model) targetsLabel() string {
+	t := m.targets()
+	switch len(t) {
+	case 0:
+		return "No machine selected"
+	case 1:
+		return fmt.Sprintf("%s %s", getStatusIcon(t[0]), displayName(t[0]))
+	}
+	names := make([]string, 0, len(t))
+	for _, d := range t {
+		names = append(names, displayName(d))
+	}
+	return fmt.Sprintf("%d machines: %s", len(t), strings.Join(names, ", "))
+}
+
+// ─── Tab contents ─────────────────────────────────────────────────────────────
+
+// visibleScripts filters scripts by the targets' OS: a script is listed when
+// at least one target can run it.
+func (m model) visibleScripts() []scripts.Script {
+	targets := m.targets()
+	var out []scripts.Script
+	for _, s := range m.run.scripts {
+		if len(targets) == 0 {
+			out = append(out, s)
+			continue
+		}
+		for _, d := range targets {
+			if s.SupportsOS(d.OS) {
+				out = append(out, s)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// recentEntries returns history for the highlighted machine, newest first.
 func (m model) recentEntries() []util.CommandHistory {
 	dev, ok := m.targetDevice()
 	if !ok || m.run.history == nil {
@@ -71,18 +177,9 @@ func (m *model) clampTabCursor() {
 	}
 }
 
-// targetDevice returns the highlighted device.
-func (m model) targetDevice() (client.Device, bool) {
-	i := m.getTargetDevice()
-	if i < 0 || i >= len(m.list.filteredDevices) {
-		return client.Device{}, false
-	}
-	return m.list.filteredDevices[i], true
-}
-
 // ─── Opening / focus ──────────────────────────────────────────────────────────
 
-// openRunPanel shows the right column and focuses the Run panel.
+// openRunPanel shows the right column and focuses the given panel.
 func (m model) openRunPanel(focus panelFocus) model {
 	m.run.visible = true
 	m.activeFocus = focus
@@ -195,19 +292,15 @@ func (m model) reloadScripts() model {
 	return m
 }
 
-// ─── Running things ───────────────────────────────────────────────────────────
+// ─── Launching ────────────────────────────────────────────────────────────────
 
-// runSelected executes the highlighted row of the active tab.
+// runSelected executes the highlighted row of the active tab on the targets.
 func (m model) runSelected() (tea.Model, tea.Cmd) {
-	if m.run.running {
-		m.notify.sshError = fmt.Errorf("a job is still running; press x in the Output panel to stop it")
+	if m.run.running() {
+		m.notify.sshError = fmt.Errorf("a run is still in progress; press x in the Output panel to stop it")
 		return m, nil
 	}
-	if _, ok := m.targetDevice(); !ok {
-		return m, nil
-	}
-	if err := m.checkTargetReady(); err != nil {
-		m.notify.sshError = err
+	if len(m.targets()) == 0 {
 		return m, nil
 	}
 
@@ -234,7 +327,7 @@ func (m model) runSelected() (tea.Model, tea.Cmd) {
 			for _, s := range m.run.scripts {
 				if s.File == e.Script {
 					if len(e.Args) > 0 {
-						return m.startScript(s, e.Args)
+						return m.launch(sshJob{action: sshActionScript, script: &s, args: e.Args})
 					}
 					return m.runScriptWithArgs(s)
 				}
@@ -242,30 +335,18 @@ func (m model) runSelected() (tea.Model, tea.Cmd) {
 			m.notify.sshError = fmt.Errorf("script %q no longer exists in ~/.ts-cli/%s", e.Script, scripts.DirName)
 			return m, nil
 		}
-		return m.startCommand(e.Command)
+		return m.launch(sshJob{action: sshActionCommand, command: e.Command})
 	}
 	return m, nil
 }
 
-// checkTargetReady mirrors the pre-flight checks of the interactive session.
-func (m model) checkTargetReady() error {
-	dev, ok := m.targetDevice()
-	if !ok {
-		return fmt.Errorf("no device selected")
-	}
-	if !isDeviceOnline(dev) {
-		return fmt.Errorf("machine %q is offline", displayName(dev))
-	}
-	if isRunning, message := checkLocalTailscaleStatus(); !isRunning {
-		return fmt.Errorf("tailscale is not running locally: %s", message)
-	}
-	return nil
-}
-
 // openAdHocPrompt opens the ":" command line.
 func (m model) openAdHocPrompt() (tea.Model, tea.Cmd) {
-	if err := m.checkTargetReady(); err != nil {
-		m.notify.sshError = err
+	if len(m.targets()) == 0 {
+		return m, nil
+	}
+	if isRunning, message := checkLocalTailscaleStatus(); !isRunning {
+		m.notify.sshError = fmt.Errorf("tailscale is not running locally: %s", message)
 		return m, nil
 	}
 	m = m.openRunPanel(focusRun)
@@ -274,19 +355,51 @@ func (m model) openAdHocPrompt() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// startCommand launches a shell command on the selected device.
+// startCommand launches a shell command on the targets.
 func (m model) startCommand(command string) (tea.Model, tea.Cmd) {
 	command = util.SanitizeInput(command)
 	if command == "" {
 		return m, nil
 	}
-	return m.beginSSH(m.getTargetDevice(), sshJob{action: sshActionCommand, command: command})
+	return m.launch(sshJob{action: sshActionCommand, command: command})
 }
 
-// startScript launches a script with resolved arguments.
-func (m model) startScript(s scripts.Script, args []string) (tea.Model, tea.Cmd) {
-	sc := s // copy; pending holds a pointer
-	return m.beginSSH(m.getTargetDevice(), sshJob{action: sshActionScript, script: &sc, args: args})
+// launch dispatches a job to one machine (interactive flow) or many (batch).
+func (m model) launch(spec sshJob) (tea.Model, tea.Cmd) {
+	if spec.action == sshActionScript && spec.script != nil {
+		sc := *spec.script // pending holds a pointer; keep our own copy
+		spec.script = &sc
+	}
+	if isRunning, message := checkLocalTailscaleStatus(); !isRunning {
+		m.notify.sshError = fmt.Errorf("tailscale is not running locally: %s", message)
+		return m, nil
+	}
+	if m.isMulti() {
+		return m.startMultiRun(spec)
+	}
+	dev, ok := m.targetDevice()
+	if marked := m.markedDevices(); len(marked) == 1 {
+		dev, ok = marked[0], true
+	}
+	if !ok {
+		return m, nil
+	}
+	if !isDeviceOnline(dev) {
+		m.notify.sshError = fmt.Errorf("machine %q is offline", displayName(dev))
+		return m, nil
+	}
+	return m.beginSSH(m.indexOf(dev), spec)
+}
+
+// indexOf returns the position of d in the filtered list (or the cursor).
+func (m model) indexOf(d client.Device) int {
+	k := machineKey(d)
+	for i, x := range m.list.filteredDevices {
+		if machineKey(x) == k {
+			return i
+		}
+	}
+	return m.getTargetDevice()
 }
 
 // placeholderRe matches {{name}} tokens in saved commands.
@@ -331,7 +444,7 @@ func (m model) runCommandWithPlaceholders(command string) (tea.Model, tea.Cmd) {
 // runScriptWithArgs asks for each declared argument then runs the script.
 func (m model) runScriptWithArgs(s scripts.Script) (tea.Model, tea.Cmd) {
 	if len(s.Args) == 0 {
-		return m.startScript(s, nil)
+		return m.launch(sshJob{action: sshActionScript, script: &s})
 	}
 	values := map[string]string{}
 	return m.askSequence(s.Args, "Script: "+s.Name, values, func(m model) (tea.Model, tea.Cmd) {
@@ -339,7 +452,7 @@ func (m model) runScriptWithArgs(s scripts.Script) (tea.Model, tea.Cmd) {
 		for i, a := range s.Args {
 			args[i] = values[a]
 		}
-		return m.startScript(s, args)
+		return m.launch(sshJob{action: sshActionScript, script: &s, args: args})
 	})
 }
 
@@ -360,6 +473,438 @@ func (m model) askSequence(names []string, hint string, values map[string]string
 		},
 	}
 	return m, nil
+}
+
+// ─── Single-machine run bookkeeping ───────────────────────────────────────────
+
+// beginSingleRun resets the Output panel for a job on one machine.
+func (m *model) beginSingleRun(device client.Device, username string, spec sshJob, job *runJob) {
+	now := time.Now()
+	m.run.spec = spec
+	m.run.label = spec.label()
+	m.run.multi = false
+	m.run.runs = []*machineRun{{device: device, username: username, job: job, status: runRunning, startedAt: now}}
+	m.run.startedAt = now
+	m.run.elapsed = 0
+	m.run.outputCursor = 0
+	m.run.outputScroll = 0
+	m.run.follow = true
+	m.run.visible = true
+}
+
+// ─── Multi-machine run ────────────────────────────────────────────────────────
+
+// startMultiRun prepares one machineRun per marked machine, skipping those
+// that cannot be attempted, and starts the first maxParallelRuns of them.
+func (m model) startMultiRun(spec sshJob) (tea.Model, tea.Cmd) {
+	targets := m.markedDevices()
+	now := time.Now()
+	m.run.spec = spec
+	m.run.label = spec.label()
+	m.run.multi = true
+	m.run.runs = nil
+	m.run.startedAt = now
+	m.run.elapsed = 0
+	m.run.outputCursor = 0
+	m.run.outputScroll = 0
+	m.run.follow = true
+	m.run.visible = true
+	m.notify.sshError = nil
+
+	for _, d := range targets {
+		mr := &machineRun{device: d, status: runPending}
+		switch {
+		case !isDeviceOnline(d):
+			mr.status, mr.note = runSkipped, "offline"
+		case m.needsAccountSwitch(d):
+			mr.status, mr.note = runSkipped, "belongs to another account (active: "+m.acct.tailscaleActiveAccount+")"
+		case spec.action == sshActionScript && spec.script != nil && !spec.script.SupportsOS(d.OS):
+			mr.status, mr.note = runSkipped, "script is not for "+d.OS
+		default:
+			mr.username = m.usernameForDevice(d)
+			if mr.username == "" {
+				mr.status, mr.note = runSkipped, "no username saved; connect once with s to set one"
+			} else {
+				mr.password = m.savedPassword(machineKey(d))
+			}
+		}
+		m.run.runs = append(m.run.runs, mr)
+	}
+
+	cmds := m.startPendingRuns()
+	if !m.run.running() {
+		m.run.elapsed = time.Since(m.run.startedAt)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// startPendingRuns launches waiting machines while slots are free.
+func (m *model) startPendingRuns() []tea.Cmd {
+	active := 0
+	for _, mr := range m.run.runs {
+		if mr.status == runRunning {
+			active++
+		}
+	}
+	var cmds []tea.Cmd
+	for _, mr := range m.run.runs {
+		if active >= maxParallelRuns {
+			break
+		}
+		if mr.status != runPending {
+			continue
+		}
+		job, err := startRemoteJob(mr.device, mr.username, mr.password, m.run.spec)
+		if err != nil {
+			mr.status, mr.note = runFailed, err.Error()
+			continue
+		}
+		mr.job = job
+		mr.status = runRunning
+		mr.startedAt = time.Now()
+		active++
+		cmds = append(cmds, waitRunEvent(job), tickRun(job))
+	}
+	return cmds
+}
+
+// continueMultiRun records one machine's outcome and starts the next one.
+func (m model) continueMultiRun(mr *machineRun, res runResult) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	switch {
+	case res.killed:
+		mr.note = "stopped"
+	case res.failure == sshFailureNone, res.failure == sshFailureRemoteExit:
+		m.recordRunHistory(mr, m.run.spec.action, m.run.spec.command, m.run.spec.script, m.run.spec.args)
+		if cmd := m.persistRunUsername(mr); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case res.failure == sshFailureBadPassword:
+		mr.status, mr.note = runFailed, "saved password rejected; connect once with s to fix it"
+	case res.failure == sshFailureConnection:
+		mr.status, mr.note = runFailed, "could not connect or authenticate; connect once with s to save credentials"
+	default:
+		mr.status, mr.note = runFailed, res.err.Error()
+	}
+	cmds = append(cmds, m.startPendingRuns()...)
+	if !m.run.running() {
+		m.run.elapsed = time.Since(m.run.startedAt)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// persistRunUsername saves the username used by a successful batch run for
+// machines that had none, so the next run does not fall back to the default.
+func (m *model) persistRunUsername(mr *machineRun) tea.Cmd {
+	key := machineKey(mr.device)
+	cred := m.ssh.machineCreds[key]
+	if cred.username == mr.username && cred.name != "" {
+		return nil
+	}
+	cred.username = mr.username
+	cred.name = displayName(mr.device)
+	if m.ssh.machineCreds == nil {
+		m.ssh.machineCreds = map[string]machineCredential{}
+	}
+	m.ssh.machineCreds[key] = cred
+	return storeMachineCredential(key, cred)
+}
+
+// stopRun kills every running machine and marks waiting ones as stopped.
+func (m *model) stopRun() {
+	for _, mr := range m.run.runs {
+		switch mr.status {
+		case runRunning:
+			mr.job.kill()
+		case runPending:
+			mr.status, mr.note = runSkipped, "stopped"
+		}
+	}
+}
+
+// ─── Shared bookkeeping ───────────────────────────────────────────────────────
+
+// settleMachineRun stores a finished process result on its machineRun.
+func (m *model) settleMachineRun(mr *machineRun, res runResult) {
+	mr.status = runDone
+	mr.exitCode = res.exitCode
+	mr.killed = res.killed
+	mr.elapsed = time.Since(mr.startedAt)
+	mr.job = nil
+	if !m.run.running() {
+		m.run.elapsed = time.Since(m.run.startedAt)
+	}
+}
+
+// appendRunLines adds streamed lines to the machine owning job.
+func (m *model) appendRunLines(job *runJob, lines []string) {
+	mr := m.run.runFor(job)
+	if mr == nil {
+		return
+	}
+	limit := maxOutputLines
+	if m.run.multi {
+		limit = maxOutputLines / 4
+	}
+	mr.lines = append(mr.lines, lines...)
+	if over := len(mr.lines) - limit; over > 0 {
+		mr.lines = mr.lines[over:]
+	}
+	if m.run.follow {
+		m.jumpToOutputEnd()
+	} else {
+		total := len(m.outputLines())
+		if m.run.outputCursor >= total {
+			m.run.outputCursor = total - 1
+		}
+	}
+}
+
+// recordRunHistory appends a finished machine to history.
+func (m model) recordRunHistory(mr *machineRun, action sshAction, command string, script *scripts.Script, args []string) {
+	if m.run.history == nil {
+		return
+	}
+	entry := util.CommandHistory{
+		MachineID:   machineKey(mr.device),
+		MachineName: displayName(mr.device),
+		ExitCode:    mr.exitCode,
+		Output:      strings.Join(mr.lines, "\n"),
+	}
+	switch action {
+	case sshActionScript:
+		if script == nil {
+			return
+		}
+		entry.Kind = util.HistoryKindScript
+		entry.Command = script.Name
+		entry.Script = script.File
+		entry.Args = args
+	case sshActionCommand:
+		entry.Kind = util.HistoryKindCommand
+		entry.Command = command
+	default:
+		return
+	}
+	m.run.history.Add(entry)
+	_ = m.run.history.Save()
+}
+
+// ─── Output flattening ────────────────────────────────────────────────────────
+
+// outputLine is one row of the Output panel.
+type outputLine struct {
+	text   string
+	run    *machineRun // owning machine (nil for separators)
+	header bool        // section header row in multi mode
+}
+
+// outputLines flattens the current run into rows. Single runs have no headers.
+func (m model) outputLines() []outputLine {
+	if s := m.run.single(); s != nil {
+		out := make([]outputLine, len(s.lines))
+		for i, l := range s.lines {
+			out[i] = outputLine{text: l, run: s}
+		}
+		return out
+	}
+	var out []outputLine
+	for i, mr := range m.run.runs {
+		if i > 0 {
+			out = append(out, outputLine{})
+		}
+		out = append(out, outputLine{text: m.runHeader(mr), run: mr, header: true})
+		if mr.note != "" && len(mr.lines) == 0 {
+			out = append(out, outputLine{text: "  " + mr.note, run: mr})
+		}
+		for _, l := range mr.lines {
+			out = append(out, outputLine{text: l, run: mr})
+		}
+	}
+	return out
+}
+
+// runHeader renders a machine's section header.
+func (m model) runHeader(mr *machineRun) string {
+	return fmt.Sprintf("── %s %s  %s ──", getStatusIcon(mr.device), displayName(mr.device), runStatusText(mr))
+}
+
+// runStatusText renders one machine's state.
+func runStatusText(mr *machineRun) string {
+	switch mr.status {
+	case runPending:
+		return "… waiting"
+	case runRunning:
+		return fmt.Sprintf("● running %s", time.Since(mr.startedAt).Truncate(time.Second))
+	case runSkipped:
+		return "⊘ skipped"
+	case runFailed:
+		return "✗ failed"
+	}
+	if mr.killed {
+		return "✗ stopped"
+	}
+	if mr.exitCode == 0 {
+		return fmt.Sprintf("✓ exit 0 · %s", mr.elapsed.Truncate(100*time.Millisecond))
+	}
+	return fmt.Sprintf("✗ exit %d · %s", mr.exitCode, mr.elapsed.Truncate(100*time.Millisecond))
+}
+
+// outputStatus returns the short status shown in the Output title.
+func (m model) outputStatus() string {
+	if len(m.run.runs) == 0 {
+		return ""
+	}
+	if s := m.run.single(); s != nil {
+		if s.status == runRunning {
+			return fmt.Sprintf("● running %s", m.run.elapsed.Truncate(time.Second))
+		}
+		return runStatusText(s)
+	}
+	done, failed, skipped := 0, 0, 0
+	for _, mr := range m.run.runs {
+		switch mr.status {
+		case runDone:
+			done++
+			if mr.exitCode != 0 || mr.killed {
+				failed++
+			}
+		case runFailed:
+			done++
+			failed++
+		case runSkipped:
+			skipped++
+		}
+	}
+	total := len(m.run.runs) - skipped
+	parts := []string{fmt.Sprintf("%d/%d done", done, total)}
+	if failed > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", failed))
+	}
+	if skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
+	}
+	if m.run.running() {
+		parts = append(parts, fmt.Sprintf("● %s", m.run.elapsed.Truncate(time.Second)))
+	} else {
+		parts = append(parts, m.run.elapsed.Truncate(100*time.Millisecond).String())
+	}
+	return strings.Join(parts, " · ")
+}
+
+// ─── Output panel keys ────────────────────────────────────────────────────────
+
+func (m model) handleOutputPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	total := len(m.outputLines())
+	switch msg.String() {
+	case "tab":
+		m.activeFocus = focusList
+		return m, nil
+	case "shift+tab", "backtab":
+		m.activeFocus = focusRun
+		return m, nil
+	case "esc":
+		return m.closeRunPanel(), nil
+	case "ctrl+c":
+		if m.run.running() {
+			m.stopRun()
+			return m, nil
+		}
+		return m, tea.Quit
+	case "q":
+		return m, tea.Quit
+	case "x":
+		if m.run.running() {
+			m.stopRun()
+		}
+		return m, nil
+	case "up", "k":
+		if m.run.outputCursor > 0 {
+			m.run.outputCursor--
+			m.run.follow = false
+			m.ensureOutputCursorVisible()
+		}
+		return m, nil
+	case "down", "j":
+		if m.run.outputCursor < total-1 {
+			m.run.outputCursor++
+			m.run.follow = m.run.outputCursor == total-1
+			m.ensureOutputCursorVisible()
+		}
+		return m, nil
+	case "G", "end":
+		m.jumpToOutputEnd()
+		return m, nil
+	case "g", "home":
+		m.run.outputCursor = 0
+		m.run.outputScroll = 0
+		m.run.follow = false
+		return m, nil
+	case "}", "n":
+		if m.run.multi {
+			m.jumpToSection(+1)
+			return m, nil
+		}
+		return m, m.copySelectedOutputItem(true)
+	case "{", "p":
+		if m.run.multi {
+			m.jumpToSection(-1)
+		}
+		return m, nil
+	case "c":
+		return m, m.copySelectedOutputItem(false)
+	case "N":
+		return m, m.copySelectedOutputItem(true)
+	case "C":
+		if !m.run.running() {
+			m.run.runs = nil
+			m.run.label = ""
+			m.run.outputCursor = 0
+			m.run.outputScroll = 0
+		}
+		return m, nil
+	case ":":
+		return m.openAdHocPrompt()
+	}
+	return m, nil
+}
+
+// jumpToSection moves the cursor to the next/previous machine header.
+func (m *model) jumpToSection(dir int) {
+	lines := m.outputLines()
+	headers := []int{}
+	for i, l := range lines {
+		if l.header {
+			headers = append(headers, i)
+		}
+	}
+	if len(headers) == 0 {
+		return
+	}
+	cur := m.run.outputCursor
+	if dir > 0 {
+		i := sort.SearchInts(headers, cur+1)
+		if i < len(headers) {
+			m.run.outputCursor = headers[i]
+		}
+	} else {
+		i := sort.SearchInts(headers, cur) - 1
+		if i >= 0 {
+			m.run.outputCursor = headers[i]
+		}
+	}
+	m.run.follow = false
+	m.ensureOutputCursorVisible()
+}
+
+func (m *model) jumpToOutputEnd() {
+	if n := len(m.outputLines()); n > 0 {
+		m.run.outputCursor = n - 1
+	} else {
+		m.run.outputCursor = 0
+	}
+	m.run.follow = true
+	m.ensureOutputCursorVisible()
 }
 
 // ─── Saved commands ───────────────────────────────────────────────────────────
@@ -422,175 +967,4 @@ func deleteSavedCommand(name string) tea.Cmd {
 		})
 		return commandsChangedMsg{commands: list, err: err}
 	}
-}
-
-// ─── Output panel ─────────────────────────────────────────────────────────────
-
-func (m model) handleOutputPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "tab":
-		m.activeFocus = focusList
-		return m, nil
-	case "shift+tab", "backtab":
-		m.activeFocus = focusRun
-		return m, nil
-	case "esc":
-		return m.closeRunPanel(), nil
-	case "ctrl+c":
-		if m.run.running {
-			m.run.job.kill()
-			return m, nil
-		}
-		return m, tea.Quit
-	case "q":
-		return m, tea.Quit
-	case "x":
-		if m.run.running {
-			m.run.job.kill()
-		}
-		return m, nil
-	case "up", "k":
-		if m.run.outputCursor > 0 {
-			m.run.outputCursor--
-			m.run.follow = false
-			m.ensureOutputCursorVisible()
-		}
-		return m, nil
-	case "down", "j":
-		if m.run.outputCursor < len(m.run.lines)-1 {
-			m.run.outputCursor++
-			m.run.follow = m.run.outputCursor == len(m.run.lines)-1
-			m.ensureOutputCursorVisible()
-		}
-		return m, nil
-	case "G", "end":
-		m.jumpToOutputEnd()
-		return m, nil
-	case "g", "home":
-		m.run.outputCursor = 0
-		m.run.outputScroll = 0
-		m.run.follow = false
-		return m, nil
-	case "c":
-		return m, m.copySelectedOutputItem(false)
-	case "n":
-		return m, m.copySelectedOutputItem(true)
-	case "C":
-		if !m.run.running {
-			m.run.lines = nil
-			m.run.partial = ""
-			m.run.finished = false
-			m.run.label = ""
-			m.run.outputCursor = 0
-			m.run.outputScroll = 0
-		}
-		return m, nil
-	case ":":
-		return m.openAdHocPrompt()
-	}
-	return m, nil
-}
-
-func (m *model) jumpToOutputEnd() {
-	if n := len(m.run.lines); n > 0 {
-		m.run.outputCursor = n - 1
-	} else {
-		m.run.outputCursor = 0
-	}
-	m.run.follow = true
-	m.ensureOutputCursorVisible()
-}
-
-// ─── Job lifecycle (called from Update) ───────────────────────────────────────
-
-// beginJobOutput resets the Output panel for a new job.
-func (m *model) beginJobOutput(job *runJob, label string) {
-	m.run.job = job
-	m.run.label = label
-	m.run.lines = nil
-	m.run.partial = ""
-	m.run.running = true
-	m.run.cancelled = false
-	m.run.finished = false
-	m.run.exitCode = 0
-	m.run.startedAt = time.Now()
-	m.run.elapsed = 0
-	m.run.outputCursor = 0
-	m.run.outputScroll = 0
-	m.run.follow = true
-	m.run.visible = true
-}
-
-// appendJobLines adds streamed lines, keeping the buffer bounded.
-func (m *model) appendJobLines(lines []string) {
-	m.run.lines = append(m.run.lines, lines...)
-	if over := len(m.run.lines) - maxOutputLines; over > 0 {
-		m.run.lines = m.run.lines[over:]
-		m.run.outputCursor -= over
-		m.run.outputScroll -= over
-		if m.run.outputCursor < 0 {
-			m.run.outputCursor = 0
-		}
-		if m.run.outputScroll < 0 {
-			m.run.outputScroll = 0
-		}
-	}
-	if m.run.follow {
-		m.jumpToOutputEnd()
-	}
-}
-
-// finishJobOutput records the result in the Output panel state.
-func (m *model) finishJobOutput(res runResult) {
-	m.run.running = false
-	m.run.finished = true
-	m.run.cancelled = res.killed
-	m.run.exitCode = res.exitCode
-	m.run.elapsed = time.Since(m.run.startedAt)
-	m.run.job = nil
-}
-
-// recordJobHistory appends the finished job to history.
-func (m model) recordJobHistory(p pendingSSH, res runResult) {
-	if m.run.history == nil || p.machineID == "" {
-		return
-	}
-	entry := util.CommandHistory{
-		MachineID:   p.machineID,
-		MachineName: p.machineName,
-		ExitCode:    res.exitCode,
-		Output:      strings.Join(m.run.lines, "\n"),
-	}
-	switch p.action {
-	case sshActionScript:
-		if p.script == nil {
-			return
-		}
-		entry.Kind = util.HistoryKindScript
-		entry.Command = p.script.Name
-		entry.Script = p.script.File
-		entry.Args = p.args
-	case sshActionCommand:
-		entry.Kind = util.HistoryKindCommand
-		entry.Command = p.command
-	default:
-		return
-	}
-	m.run.history.Add(entry)
-	_ = m.run.history.Save()
-}
-
-// outputStatus returns the short status shown in the Output title.
-func (m model) outputStatus() string {
-	switch {
-	case m.run.running:
-		return fmt.Sprintf("● running %s", m.run.elapsed.Truncate(time.Second))
-	case m.run.cancelled:
-		return "✗ stopped"
-	case m.run.finished && m.run.exitCode == 0:
-		return fmt.Sprintf("✓ exit 0 · %s", m.run.elapsed.Truncate(time.Millisecond*100))
-	case m.run.finished:
-		return fmt.Sprintf("✗ exit %d · %s", m.run.exitCode, m.run.elapsed.Truncate(time.Millisecond*100))
-	}
-	return ""
 }

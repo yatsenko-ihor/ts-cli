@@ -45,9 +45,10 @@ type deviceList struct {
 	cursor          int
 	selected        int
 	viewportTop     int
-	searchQuery     string   // Persisted search filter
-	selectedProfile string   // Active profile filter (empty = all)
-	sort            sortMode // Current sort mode
+	searchQuery     string          // Persisted search filter
+	selectedProfile string          // Active profile filter (empty = all)
+	sort            sortMode        // Current sort mode
+	marked          map[string]bool // Machines selected for a multi-machine run, by machineKey
 }
 
 // runTab selects what the Run panel lists.
@@ -72,6 +73,32 @@ func (t runTab) String() string {
 	return "?"
 }
 
+// runStatus is the lifecycle of one machine inside a run.
+type runStatus int
+
+const (
+	runPending runStatus = iota // waiting for a free slot
+	runRunning                  // ssh process alive
+	runDone                     // process exited (exitCode tells how)
+	runSkipped                  // not attempted (offline, no username, other account, os mismatch, stopped)
+	runFailed                   // could not connect or authenticate
+)
+
+// machineRun is one machine's part of a run.
+type machineRun struct {
+	device    client.Device
+	username  string
+	password  string // resolved for this attempt, memory only
+	job       *runJob
+	lines     []string
+	status    runStatus
+	exitCode  int
+	note      string // reason for runSkipped / runFailed
+	killed    bool
+	startedAt time.Time
+	elapsed   time.Duration
+}
+
 // runPanel groups state for the Run panel (right-top) and Output panel (right-bottom).
 type runPanel struct {
 	visible bool
@@ -83,21 +110,53 @@ type runPanel struct {
 	commands   []config.SavedCommand
 	history    *util.HistoryStore
 
-	// Output of the current/last job
-	lines     []string
-	partial   string // trailing line without newline yet
+	// The current/last run: one or many machines
 	label     string // what is running / ran, for the Output title
-	running   bool
-	cancelled bool
-	finished  bool
-	exitCode  int
+	spec      sshJob // what was launched
+	runs      []*machineRun
+	multi     bool // several machines: no prompts, sectioned output
 	startedAt time.Time
 	elapsed   time.Duration
-	job       *runJob // active job; nil when idle
 
 	outputScroll int
 	outputCursor int
 	follow       bool // keep the cursor on the last line while output streams in
+}
+
+// running reports whether any machine is still running or waiting.
+func (r runPanel) running() bool {
+	for _, mr := range r.runs {
+		if mr.status == runRunning || mr.status == runPending {
+			return true
+		}
+	}
+	return false
+}
+
+// finished reports whether a run happened and every machine is settled.
+func (r runPanel) finished() bool {
+	return len(r.runs) > 0 && !r.running()
+}
+
+// single returns the only machineRun of a single-machine run, or nil.
+func (r runPanel) single() *machineRun {
+	if r.multi || len(r.runs) != 1 {
+		return nil
+	}
+	return r.runs[0]
+}
+
+// runFor finds the machineRun owning job.
+func (r runPanel) runFor(job *runJob) *machineRun {
+	if job == nil {
+		return nil
+	}
+	for _, mr := range r.runs {
+		if mr.job == job {
+			return mr
+		}
+	}
+	return nil
 }
 
 // accounts groups account and profile selection state.
@@ -146,19 +205,7 @@ type pendingSSH struct {
 	usedSavedPass   bool     // The attempt used a password loaded from config
 	passwordTried   bool     // A TUI-entered password has already been tried
 	askPasswordNext bool     // After the username prompt, go straight to the password prompt
-}
-
-// label describes the pending job for the Output title and history.
-func (p pendingSSH) label() string {
-	switch p.action {
-	case sshActionScript:
-		if p.script != nil {
-			return p.script.Name
-		}
-	case sshActionCommand:
-		return p.command
-	}
-	return ""
+	verified        bool     // A probe proved the credentials; a later session ending with an ssh error is not an auth failure
 }
 
 // machineCredential holds per-machine SSH credentials in memory

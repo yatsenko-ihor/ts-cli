@@ -55,7 +55,7 @@ func copyTextToClipboard(text string) tea.Cmd {
 
 // selectedOutputItem returns the currently selected line from command output
 func (m model) selectedOutputItem() (string, bool) {
-	lines := m.run.lines
+	lines := m.outputLines()
 	if len(lines) == 0 {
 		return "", false
 	}
@@ -67,8 +67,11 @@ func (m model) selectedOutputItem() (string, bool) {
 	if cursor >= len(lines) {
 		cursor = len(lines) - 1
 	}
+	if lines[cursor].header {
+		return "", false
+	}
 
-	entry := strings.TrimSpace(lines[cursor])
+	entry := strings.TrimSpace(lines[cursor].text)
 	if entry == "" {
 		return "", false
 	}
@@ -94,9 +97,13 @@ func (m model) copySelectedOutputItem(filenameOnly bool) tea.Cmd {
 		}
 		textToCopy = base
 	} else if !strings.HasPrefix(entry, "/") && !strings.HasPrefix(entry, "~") {
-		// Resolve relative output items to absolute remote paths
-		if resolved, err := m.resolveRemoteOutputPath(entry); err == nil && resolved != "" {
-			textToCopy = resolved
+		// Resolve relative output items to absolute remote paths on the
+		// machine that produced the line.
+		lines := m.outputLines()
+		if mr := lines[m.run.outputCursor].run; mr != nil {
+			if resolved, err := m.resolveRemoteOutputPath(mr.device, entry); err == nil && resolved != "" {
+				textToCopy = resolved
+			}
 		}
 	}
 

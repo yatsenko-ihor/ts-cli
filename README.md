@@ -11,6 +11,7 @@ A CLI tool for managing Tailscale devices via the Tailscale REST API. Supports m
 - **Run Panel**: Execute local scripts (`~/.ts-cli/scripts/`), saved commands with `{{placeholders}}`, or one-off commands on the selected machine
 - **Streaming Output**: Output appears line by line while the job runs, with exit status and elapsed time; stop a job with `x`
 - **Recent**: Re-run anything that ran on a machine before, or save it as a named command
+- **Multi-machine runs**: mark machines with `Space` (or `*` for all), then run a script or command on all of them in parallel; the output is split into one section per machine
 - **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
 - **Profile Filtering**: Filter the device list by account or view all accounts at once
 - **Shell Completion**: Built-in support for bash, zsh, fish, and PowerShell
@@ -123,7 +124,10 @@ ts-cli tui          # alternative alias
 | `a`         | About (version, author info)                      |
 | `d`         | Clear default SSH username                        |
 | `x`         | Dismiss install tip                               |
-| `:`         | Run a one-off command on the selected machine     |
+| `:`         | Run a one-off command on the selected machine(s)  |
+| `Space`     | Mark/unmark the machine for a multi-machine run   |
+| `*`         | Mark all visible machines (again to clear)        |
+| `Esc`       | Clear marks / close the right panels              |
 | `Tab`       | Cycle panel focus: machines → run → output        |
 | `Shift+Tab` | Reverse cycle panel focus                         |
 | `1`         | Jump focus to device list panel                   |
@@ -170,6 +174,26 @@ du -xh --max-depth=1 "${1:-/}" | sort -h | tail -n 15
 
 `os=` hides the script on machines with another OS; `args=` lists positional arguments the TUI asks for before running.
 
+#### Running on several machines
+
+Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). While marks exist, the Run panel and `:` target the whole set:
+
+- Jobs run in parallel, up to 8 at a time, in list order.
+- No prompts: each machine uses its saved username and password, or the default username. Machines that are offline, have no username, belong to another Tailscale account, or do not match the script's `os=` are listed as **skipped** with the reason. A machine whose key or saved password is rejected is listed as **failed** with a hint to connect once via `s` so the credentials get saved.
+- The Output panel shows one section per machine, headed by its status (`● running`, `✓ exit 0 · 1.2s`, `✗ exit 1`, `⊘ skipped`, `✗ failed`). `{` / `}` jump between machines, `c` copies the selected line as an absolute path on that machine, `x` stops everything still running.
+- The panel title summarises the run: `3/4 done · 1 failed · 1 skipped · 4.8s`.
+
+Every machine's result is recorded in its own Recent history.
+
+Machines that belong to another Tailscale account than the one currently active on this computer are skipped in a multi-machine run. `tailscale switch` changes the account for the whole computer, so it cannot be done safely in the middle of a parallel run. To cover machines from several accounts, filter with `p` (profile) and do one run per account. A single-machine run still switches the account for you automatically.
+
+**Notes on multi-machine runs**
+
+- Run once per machine interactively (`s`) to save its login; after that it takes part in batch runs without any prompt.
+- A script that declares `os=` runs only on matching machines; the others are listed as skipped, not as failed.
+- Batch runs use the same non-interactive login as single runs: a saved password via `sshpass`, otherwise key-based auth.
+- Stopping a run (`x`) kills the running ssh processes and marks machines that were still waiting as skipped.
+
 ### Running In tmux
 
 ```bash
@@ -196,7 +220,7 @@ ts-cli stores SSH credentials **per-machine** — each device has its own userna
 1. **Saved password for this machine** → connect directly with it, no questions asked
 2. **No saved password** → try once without a password (key-based auth). The username is the one saved for the machine, else the default username, else you are asked for it
 3. **That attempt fails to authenticate** → you are asked for the password and the connection is retried with `sshpass`
-4. **Connection succeeds** → the username and, if you entered one, the encrypted password are saved for this machine. Nothing is written to disk before success
+4. **Connection succeeds** → the username and, if you entered one, the encrypted password are saved for this machine. Nothing is written to disk before success. For an interactive session a password you just typed is first verified with a quick non-interactive login (`ssh ... true`) and saved right away, then the session opens, so how the session later ends (dropped connection, `~.`, exit code 255) can never cost you the password
 5. **Saved password rejected** (sshpass exit 5) → it is forgotten and you are asked for the current one
 6. **Still failing** (ssh exit 255 after a password, or `sshpass` not installed) → retry menu: change user / password / both
 7. **Remote shell exits non-zero** → shown as information only; nothing is deleted

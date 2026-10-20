@@ -4,8 +4,11 @@ ts-cli — Help (F1)
 KEYBOARD SHORTCUTS
 ──────────────────
   ↑/k, ↓/j      Navigate device list
+  Space          Mark/unmark machine for a multi-machine run
+  *              Mark all visible machines (again to clear)
+  Esc            Clear marks / close right panels
   s              SSH to selected machine
-  :              Run a one-off command on the selected machine
+  :              Run a one-off command on the selected machine(s)
   c              Copy the ssh command for the selected machine
   Tab            Open the Run panel (Tab/Shift+Tab cycle panels)
   r              Reload device list
@@ -44,13 +47,25 @@ RUN PANEL [2]
   :         Ad-hoc command line, works from any tab and from the
             machine list. Enter runs it immediately.
 
+  Several machines:
+            Mark machines with Space (or * for all). The Run panel and
+            ":" then target the whole set, in parallel (8 at a time),
+            without prompts: saved username/password or the default
+            username. Offline machines, machines without a username,
+            from another account, or not matching the script's os= are
+            skipped with a reason; a rejected key/password is reported
+            as failed — connect once with s to save credentials.
+
 OUTPUT PANEL [3]
 ────────────────
   Output streams in while the job runs; the title shows "● running",
-  then "✓ exit 0" or "✗ exit N" with the elapsed time.
+  then "✓ exit 0" or "✗ exit N" with the elapsed time. For several
+  machines each one has its own section with its status in the header
+  and the title summarises "3/4 done · 1 failed · 1 skipped".
   ↑/k ↓/j move • g/G top/end (G re-enables auto-follow)
-  c copy line as absolute remote path • n copy file name only
-  x (or Ctrl+C) stop the running job • C clear
+  {/} previous/next machine (multi-machine runs)
+  c copy line as absolute remote path • n (N in multi) copy file name
+  x (or Ctrl+C) stop the running job(s) • C clear
 
 SSH CREDENTIALS
 ───────────────
@@ -72,7 +87,9 @@ SSH CREDENTIALS
     2. No saved password → try key-based auth first
        (username: per-machine → default → ask)
     3. Auth fails → ask for the password, retry with sshpass
-    4. Success → save username (+ password if entered)
+    4. Success → save username (+ password if entered). A typed
+       password is verified first with a quick login and saved right
+       away, so a session that later drops never loses it
     5. Saved password rejected → forget it, ask again
     6. Still failing → retry menu (change user/pass/both)
 

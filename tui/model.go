@@ -165,6 +165,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Outcome of an interactive session; see sshflow.go.
 		return m.finishSSHAttempt(msg.failure, msg.err)
 
+	case probeMsg:
+		return m.handleProbe(msg)
+
 	case copiedMsg:
 		if msg.success {
 			m.notify.copiedText = msg.text
@@ -264,6 +267,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.list.selected >= len(m.list.filteredDevices) {
 			m.list.selected = -1
 		}
+		// Drop marks for machines that disappeared
+		for k := range m.list.marked {
+			found := false
+			for _, d := range msg.devices {
+				if machineKey(d) == k {
+					found = true
+					break
+				}
+			}
+			if !found {
+				delete(m.list.marked, k)
+			}
+		}
 
 		// Clear any previous SSH error, surface per-account fetch failures
 		m.notify.sshError = nil
@@ -284,17 +300,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case runLinesMsg:
-		if msg.job != m.run.job {
+		if m.run.runFor(msg.job) == nil {
 			return m, nil // output of a job that was replaced
 		}
-		m.appendJobLines(msg.lines)
+		m.appendRunLines(msg.job, msg.lines)
 		return m, waitRunEvent(msg.job)
 
 	case runDoneMsg:
 		return m.handleRunDone(msg)
 
 	case runTickMsg:
-		if msg.job != m.run.job || !m.run.running {
+		if mr := m.run.runFor(msg.job); mr == nil || mr.status != runRunning {
 			return m, nil
 		}
 		m.run.elapsed = time.Since(m.run.startedAt)
@@ -474,7 +490,7 @@ func (m model) View() string {
 	}
 
 	// A job finishing while the Run panel is closed is still reported briefly.
-	if !m.run.visible && (m.run.running || m.run.finished) && m.run.label != "" {
+	if !m.run.visible && len(m.run.runs) > 0 && m.run.label != "" {
 		b.WriteString("\n")
 		b.WriteString(grayItalicStyle.Render(fmt.Sprintf("Last run: %s  %s  (Tab to open Output)", m.run.label, m.outputStatus())))
 	}

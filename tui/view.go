@@ -76,6 +76,7 @@ func (m model) renderDeviceList() string {
 	}
 
 	// Render visible devices
+	hasMarks := len(m.list.marked) > 0
 	for i := visibleStart; i < visibleEnd; i++ {
 		device := m.list.filteredDevices[i]
 		cursor := "  "
@@ -84,6 +85,14 @@ func (m model) renderDeviceList() string {
 		if m.list.cursor == i {
 			cursor = "▶ "
 			style = selectedStyle
+		}
+
+		mark := ""
+		if hasMarks {
+			mark = "  "
+			if m.list.marked[machineKey(device)] {
+				mark = "✔ "
+			}
 		}
 
 		name := device.Name
@@ -99,7 +108,7 @@ func (m model) renderDeviceList() string {
 		statusIcon := getStatusIcon(device)
 		expiryIcon := getKeyExpiryIcon(device)
 
-		line := fmt.Sprintf("%s%s %-28s %s", cursor, statusIcon, name, address)
+		line := fmt.Sprintf("%s%s%s %-28s %s", cursor, mark, statusIcon, name, address)
 		if expiryIcon != "" {
 			line += " " + expiryIcon
 		}
@@ -156,6 +165,9 @@ func (m model) renderDeviceList() string {
 	sortSeg := lipgloss.NewStyle().Foreground(lipgloss.Color("#232e3b")).Render(fmt.Sprintf(" ⇅ %s", m.list.sort.String()))
 
 	styledTitle := titleLabel + onlineSeg + offlineSeg + sortSeg
+	if n := len(m.markedDevices()); n > 0 {
+		styledTitle += lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#2D6A8C")).Render(fmt.Sprintf(" ✔ %d selected", n))
+	}
 	return applyFrameTitleRaw(listPanel, styledTitle, borderColor)
 }
 
@@ -167,14 +179,11 @@ func (m model) renderRunPanel() string {
 	inner := getPanelInnerWidth(width)
 	focused := m.activeFocus == focusRun
 
-	device, hasDevice := m.targetDevice()
+	device, _ := m.targetDevice()
+	targets := m.targets()
 
-	// Header: target machine
-	header := "No machine selected"
-	if hasDevice {
-		header = fmt.Sprintf("%s %s", getStatusIcon(device), displayName(device))
-	}
-	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#3F3F3F")).Render(truncateForWidth(header, inner)))
+	// Header: target machine(s)
+	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#3F3F3F")).Render(truncateForWidth(m.targetsLabel(), inner)))
 	b.WriteString("\n")
 
 	// Tabs
@@ -211,6 +220,8 @@ func (m model) renderRunPanel() string {
 			empty = "Cannot read scripts: " + m.run.scriptsErr.Error()
 		} else if len(m.run.scripts) == 0 {
 			empty = "No scripts yet. Put executable files in " + dir
+		} else if len(targets) > 1 {
+			empty = "No scripts for the selected machines' OSes"
 		} else {
 			empty = "No scripts for this machine's OS (" + device.OS + ")"
 		}
@@ -288,7 +299,11 @@ func (m model) renderRunPanel() string {
 
 	// Footer: ad-hoc prompt or key hints
 	if m.input.mode == inputCommand {
-		b.WriteString(grayItalicStyle.Render("Run on " + truncateForWidth(displayName(device), inner-7) + ":"))
+		where := displayName(device)
+		if len(targets) > 1 {
+			where = fmt.Sprintf("%d machines", len(targets))
+		}
+		b.WriteString(grayItalicStyle.Render("Run on " + truncateForWidth(where, inner-7) + ":"))
 		b.WriteString("\n")
 		b.WriteString(searchLabelStyle.Render(": ") + searchQueryStyle.Render(truncateForWidth(m.input.value+"_", inner-2)))
 	} else {
@@ -319,16 +334,15 @@ func (m model) renderOutputPanel() string {
 	selectedOutputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2D6A8C")).Bold(true)
 
 	var b strings.Builder
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#435871"))
+	noteStyle := grayItalicStyle
 
-	lines := m.run.lines
-	if m.run.partial != "" {
-		lines = append(append([]string(nil), lines...), m.run.partial)
-	}
+	lines := m.outputLines()
 
 	if len(lines) == 0 {
-		if m.run.running {
+		if m.run.running() {
 			b.WriteString(grayItalicStyle.Render(truncateForWidth("Waiting for output…", inner)))
-		} else if m.run.finished {
+		} else if m.run.finished() {
 			b.WriteString(grayItalicStyle.Render(truncateForWidth("(no output)", inner)))
 		} else {
 			b.WriteString(grayItalicStyle.Render(truncateForWidth("No output yet", inner)))
@@ -349,11 +363,19 @@ func (m model) renderOutputPanel() string {
 			b.WriteString("\n")
 		}
 		for i := startIdx; i < endIdx; i++ {
-			if i == cursor && focused {
-				b.WriteString(selectedOutputStyle.Render("▸ " + truncateForWidth(lines[i], inner-2)))
-			} else {
-				b.WriteString(truncateForWidth(lines[i], inner))
+			l := lines[i]
+			var text string
+			switch {
+			case i == cursor && focused:
+				text = selectedOutputStyle.Render("▸ " + truncateForWidth(l.text, inner-2))
+			case l.header:
+				text = headerStyle.Render(truncateForWidth(l.text, inner))
+			case l.run != nil && len(l.run.lines) == 0 && l.run.note != "":
+				text = noteStyle.Render(truncateForWidth(l.text, inner))
+			default:
+				text = truncateForWidth(l.text, inner)
 			}
+			b.WriteString(text)
 			if i < endIdx-1 || showBottom {
 				b.WriteString("\n")
 			}
@@ -782,15 +804,19 @@ func (m model) renderMachineCredsView() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "↑/k up • ↓/j down • / search • s ssh • : run command • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
+	help := "↑/k ↓/j • space select • * all • / search • s ssh • : run • c copy • tab run panel • p profile • S sort • r reload • o options • a about"
 	if m.run.visible {
 		switch m.activeFocus {
 		case focusRun:
 			help = "1/2/3 frame • [/] tabs • ↑/k ↓/j • enter run • : command • tab/shift+tab switch • esc close"
 		case focusOutput:
-			help = "1/2/3 frame • ↑/k ↓/j • g/G top/end • c copy path • n copy name • x stop • C clear • tab/shift+tab switch • esc close"
+			if m.run.multi {
+				help = "1/2/3 frame • ↑/k ↓/j • {/} machine • g/G top/end • c copy path • N copy name • x stop • C clear • esc close"
+			} else {
+				help = "1/2/3 frame • ↑/k ↓/j • g/G top/end • c copy path • n copy name • x stop • C clear • tab/shift+tab switch • esc close"
+			}
 		default:
-			help = "1/2/3 frame • ↑/k up • ↓/j down • s ssh • : run command • tab/shift+tab switch • esc close"
+			help = "1/2/3 frame • ↑/k ↓/j • space select • * all • s ssh • : run • tab/shift+tab switch • esc close"
 		}
 	}
 	if !m.run.visible {
