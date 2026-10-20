@@ -336,3 +336,19 @@ func TestDeviceRowsAlignIconsInColumns(t *testing.T) {
 		t.Fatalf("password icon only for saved passwords: %q / %q", r1, r2)
 	}
 }
+
+func TestPingAndProfileKeys(t *testing.T) {
+	withFakePing(t, true, func(string) error { return nil })
+	m := pingModel()
+
+	// p pings
+	updated, cmd := normalModeHandlers["p"](m)
+	if cmd == nil || updated.(model).acct.profileSelectMode {
+		t.Fatal("p must start a ping, not open the profile selector")
+	}
+	// P (Shift+P) opens the profile selector
+	updated, cmd = normalModeHandlers["P"](m)
+	if !updated.(model).acct.profileSelectMode || cmd != nil {
+		t.Fatal("P must open the profile selector")
+	}
+}

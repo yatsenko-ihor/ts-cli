@@ -7,7 +7,7 @@ KEYBOARD SHORTCUTS
   Space          Mark/unmark machine for a multi-machine run
   *              Mark all visible machines (again to clear)
   Esc            Clear marks / close right panels
-  P              Ping the selected machine(s) with `tailscale ping`
+  p              Ping the selected machine(s) with `tailscale ping`
   s              SSH to selected machine
   :              Run a one-off command on the selected machine(s)
   c              Copy the ssh command for the selected machine
@@ -17,7 +17,7 @@ KEYBOARD SHORTCUTS
   Shift+S        Cycle sort mode (Name/Last seen/Added)
   o              Options menu
   a              About screen
-  p              Switch profile/account
+  P              Switch profile/account (Shift+P)
   u              Run 'tailscale up'
   1, 2, 3        Focus panels (Machines, Run, Output)
   q / Ctrl+C     Quit
@@ -113,7 +113,7 @@ STATUS AND PING
   Colour = Tailscale API baseline (connectedToControl, or last seen
   < 5 min), refined by `tailscale ping`, which wins in both directions:
   a reply = 🟢 usable, no reply = ⭕️ unreachable.
-  Pings run: with P; and as a ≤2 s pre-flight check before s /
+  Pings run: with p; and as a ≤2 s pre-flight check before s /
   running something on one machine (Esc cancels). Background ping of
   the machine under the cursor exists but is currently switched off.
   Machines of another Tailscale account are never auto-pinged.
