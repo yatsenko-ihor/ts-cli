@@ -27,5 +27,5 @@
 - [ ] Embedded terminal: tmux split first (open the SSH session beside the list), PTY emulator later
 - [ ] Re-enable background auto-ping (`autoPingEnabled` in `tui/ping.go`) once it is cheap enough
 - [x] `UseKeychain` with a lost key: creates a new key, removes the unreadable secrets and says what was removed
-- [ ] `runJob.kill` signals only the direct child; use a process group so ssh children of sshpass die too (see `verification/requirements/runjob.md`)
+- [x] `runJob.kill` kills the whole process group (sshpass's ssh child too)
 - [ ] Extend the requirement/coverage gate to `commands/` and the TUI account/list logic
