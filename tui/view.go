@@ -306,47 +306,6 @@ func (m model) renderProfileSelection() string {
 	return b.String()
 }
 
-// renderAccountManagement renders the account management view
-func (m model) renderAccountManagement() string {
-	var b strings.Builder
-
-	title := fmt.Sprintf("Account Management (ts-cli v%s)", m.version)
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
-	listWidth := 60
-	if m.width > 0 && m.width < 80 {
-		listWidth = m.width - 10
-		if listWidth < 40 {
-			listWidth = 40
-		}
-	}
-
-	optionsList := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7A7A7A")).
-		Padding(1, 2).
-		Width(listWidth)
-
-	var listContent strings.Builder
-
-	// Add account option
-	addLabel := "Add Account"
-	if m.acct.manageCursor == 0 {
-		listContent.WriteString(selectedStyle.Render("▸ " + addLabel))
-	} else {
-		listContent.WriteString(normalStyle.Render("  " + addLabel))
-	}
-
-	b.WriteString(optionsList.Render(listContent.String()))
-	b.WriteString("\n\n")
-
-	help := "↑/k up • ↓/j down • enter select • esc/q cancel"
-	b.WriteString(helpStyle.Render(help))
-
-	return b.String()
-}
-
 // renderAbout renders the about/info screen
 func (m model) renderAbout() string {
 	var b strings.Builder

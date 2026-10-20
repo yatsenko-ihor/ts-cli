@@ -35,6 +35,7 @@ type Account struct {
 	APIKeyEncrypted string `json:"api_key_enc,omitempty"` // Tailscale API key, encrypted (on disk)
 	Tailnet         string `json:"tailnet"`               // Tailnet name
 	Active          bool   `json:"active"`                // Whether this is the active account
+	Hidden          bool   `json:"hidden,omitempty"`      // Machines of this account are not shown in the list
 }
 
 // MachineAuth stores per-machine SSH credentials. The map key is the stable
@@ -312,6 +313,37 @@ func (c *Config) SetActiveAccount(nameOrTailnet string) bool {
 		c.Accounts[i].Active = &c.Accounts[i] == target
 	}
 	return true
+}
+
+// SetAccountHidden shows or hides the machines of an account in the list.
+func (c *Config) SetAccountHidden(nameOrTailnet string, hidden bool) bool {
+	acc := c.FindAccount(nameOrTailnet)
+	if acc == nil {
+		return false
+	}
+	acc.Hidden = hidden
+	return true
+}
+
+// UpdateAccount renames an account and/or replaces its API key. Empty
+// arguments leave the field unchanged. It fails when newName is taken.
+func (c *Config) UpdateAccount(nameOrTailnet, newName, newAPIKey string) error {
+	acc := c.FindAccount(nameOrTailnet)
+	if acc == nil {
+		return fmt.Errorf("account '%s' not found", nameOrTailnet)
+	}
+	if newName != "" && newName != acc.Name {
+		for i := range c.Accounts {
+			if &c.Accounts[i] != acc && (c.Accounts[i].Name == newName || c.Accounts[i].Tailnet == newName) {
+				return fmt.Errorf("an account named '%s' already exists", newName)
+			}
+		}
+		acc.Name = newName
+	}
+	if newAPIKey != "" {
+		acc.APIKey = newAPIKey
+	}
+	return nil
 }
 
 // GetAllAccounts returns all configured accounts

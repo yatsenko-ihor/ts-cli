@@ -109,6 +109,15 @@ func getKeyExpiryIcon(device client.Device) string {
 func (m *model) filterDevices() {
 	filtered := m.list.devices
 
+	// Machines of hidden accounts never show up.
+	visible := make([]client.Device, 0, len(filtered))
+	for _, device := range filtered {
+		if !m.acct.accountHidden(device.AccountName) {
+			visible = append(visible, device)
+		}
+	}
+	filtered = visible
+
 	if m.list.selectedProfile != "" {
 		profileFiltered := []client.Device{}
 		for _, device := range filtered {
