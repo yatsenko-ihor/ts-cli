@@ -76,6 +76,7 @@ func (m model) renderDeviceList() string {
 
 	// Render visible devices
 	hasMarks := len(m.list.marked) > 0
+	cols := m.listColumns(hasMarks)
 	for i := visibleStart; i < visibleEnd; i++ {
 		device := m.list.filteredDevices[i]
 		cursor := "  "
@@ -94,26 +95,7 @@ func (m model) renderDeviceList() string {
 			}
 		}
 
-		name := device.Name
-		if name == "" {
-			name = device.Hostname
-		}
-
-		address := "N/A"
-		if len(device.Addresses) > 0 {
-			address = device.Addresses[0]
-		}
-
-		statusIcon := m.statusIcon(device)
-		expiryIcon := getKeyExpiryIcon(device)
-
-		line := fmt.Sprintf("%s%s%s %-28s %s", cursor, mark, statusIcon, name, address)
-		if expiryIcon != "" {
-			line += " " + expiryIcon
-		}
-		if m.hasSavedPassword(device) {
-			line += " 🔐" // a password is saved for this machine
-		}
+		line := cursor + mark + m.deviceRow(device, cols)
 		listContent.WriteString(style.Render(line) + "\n")
 	}
 

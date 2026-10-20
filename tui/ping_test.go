@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/yatsenko-ihor/ts-cli/client"
 )
 
@@ -299,5 +300,39 @@ func TestKeysAreIgnoredDuringPreflightExceptCancel(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if updated.(model).preflight != nil {
 		t.Fatal("esc cancels the pending launch")
+	}
+}
+
+func TestDeviceRowsAlignIconsInColumns(t *testing.T) {
+	now := time.Now()
+	devs := []client.Device{
+		{ID: "1", Name: "box-043.tail813b1c.ts.net", Addresses: []string{"100.76.50.39"}, LastSeen: now},
+		{ID: "2", Name: "ihors-macbook-air.tail41a337.ts.net", Addresses: []string{"100.67.115.3"}, LastSeen: now, Expires: now.Add(24 * time.Hour)},
+		{ID: "3", Name: "SkopasLinux", Addresses: []string{"100.107.26.80"}, LastSeen: now, Expires: now.Add(24 * time.Hour)},
+		{ID: "4", Name: "cm4", Addresses: nil, LastSeen: now},
+	}
+	m := model{width: 140, height: 40, list: deviceList{devices: devs, filteredDevices: devs},
+		ssh: ssh{machineCreds: map[string]machineCredential{"1": {passwordEncrypted: "x"}, "4": {passwordEncrypted: "x"}}}}
+	cols := m.listColumns(false)
+
+	var widths []int
+	for _, d := range devs {
+		row := m.deviceRow(d, cols)
+		widths = append(widths, lipgloss.Width(row))
+		// the address column starts at the same cell in every row
+		prefix := row[:strings.Index(row, deviceAddress(d))]
+		if w := lipgloss.Width(prefix); w != iconSlotWidth+1+cols.name+1 {
+			t.Fatalf("address column misaligned in %q: starts at %d", row, w)
+		}
+	}
+	for _, w := range widths[1:] {
+		if w != widths[0] {
+			t.Fatalf("rows must have equal width so the icon slots line up: %v", widths)
+		}
+	}
+	// the password icon sits in the same final slot whether or not an expiry icon is present
+	r1, r2 := m.deviceRow(devs[0], cols), m.deviceRow(devs[1], cols)
+	if !strings.HasSuffix(r1, "🔐") || strings.Contains(r2, "🔐") {
+		t.Fatalf("password icon only for saved passwords: %q / %q", r1, r2)
 	}
 }
