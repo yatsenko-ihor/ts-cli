@@ -76,25 +76,40 @@ var cur = themes[themeLight]
 
 // validTheme returns name when it is a known theme, else the default.
 func validTheme(name string) string {
-	if _, ok := themes[name]; ok {
+	if _, ok := lookupTheme(name); ok {
 		return name
 	}
 	return themeLight
 }
 
+// lookupTheme finds a built-in or a custom theme (themefile.go).
+func lookupTheme(name string) (theme, bool) {
+	if t, ok := themes[name]; ok {
+		return t, true
+	}
+	t, ok := customThemes[name]
+	return t, ok
+}
+
+// themeNames lists the built-in themes, then the custom ones.
+func themeNames() []string {
+	return append(append([]string(nil), themeOrder...), customThemeOrder...)
+}
+
 // nextTheme is the theme after name in the cycle.
 func nextTheme(name string) string {
-	for i, n := range themeOrder {
+	names := themeNames()
+	for i, n := range names {
 		if n == name {
-			return themeOrder[(i+1)%len(themeOrder)]
+			return names[(i+1)%len(names)]
 		}
 	}
-	return themeOrder[0]
+	return names[0]
 }
 
 // applyTheme makes name the active theme and rebuilds every shared style.
 func applyTheme(name string) {
-	cur = themes[validTheme(name)]
+	cur, _ = lookupTheme(validTheme(name))
 
 	colorOnline, colorOffline, colorWarn, colorDim, colorSel = cur.online, cur.offline, cur.warn, cur.dim, cur.accent
 

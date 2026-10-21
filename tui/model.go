@@ -89,6 +89,7 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	}
 	credsDirty := migrateCredentialKeys(mCreds, devices)
 
+	loadThemes() // custom themes must be known before the stored theme name is checked
 	m := model{
 		set:         loadUISettings(ui),
 		lastMachine: lastMachine,

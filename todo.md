@@ -18,6 +18,7 @@
 - [x] Themes: light, dark, hacker (F12 → Theme)
 - [x] DO-178C-style verification of the critical files: requirements, traceability check, 100% statement coverage gate in CI (`docs/do178c/`)
 - [x] `ts-cli install`: install as a new file (and ad-hoc re-sign on macOS) so `tsc`/`ts-cli` are not killed after reinstall
+- [x] Themes: dark-pastel, calmer hacker, custom themes from `~/.ts-cli/themes/*.json`
 - [x] Version 1.2.0
 
 ## Not done

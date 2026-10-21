@@ -66,7 +66,7 @@ var settingItems = []settingItem{
 	{uiShortNames, "Short names", "Strip the tailnet suffix (.tailXXXX.ts.net) from machine names"},
 	{uiTmuxSplit, "SSH in a tmux split", "Inside tmux, s opens the session in a pane next to the list (a real terminal: vim, htop, mouse, scrolling)"},
 	{uiTailscaleSSH, "Use Tailscale SSH when offered", "s runs `tailscale ssh` for machines that offer it (no password or key needed; the ACL decides); off = plain ssh"},
-	{uiTheme, "Theme", "light, dark, dark-pastel or hacker; all but light paint the whole screen"},
+	{uiTheme, "Theme", "light, dark, dark-pastel, hacker or your own from ~/.ts-cli/themes/*.json; all but light paint the whole screen"},
 	{uiIcons, "Icon style", "symbols: coloured ● ○ and text flags   emoji: 🟢 🔴 ⭕️ 🔐"},
 }
 
@@ -212,6 +212,17 @@ func (m model) renderSettings() string {
 		c.WriteString(grayItalicStyle.Render("      " + truncateForWidth(it.desc, width-12)))
 		if i < len(settingItems)-1 {
 			c.WriteString("\n\n")
+		}
+	}
+	if len(themeProblems) > 0 || len(customThemeOrder) > 0 {
+		c.WriteString("\n\n")
+		c.WriteString(grayItalicStyle.Render(fmt.Sprintf("      custom themes (~/.ts-cli/themes): %d loaded", len(customThemeOrder))))
+		for i, p := range themeProblems {
+			if i == 3 {
+				c.WriteString("\n" + lipgloss.NewStyle().Foreground(cur.warn).Render(fmt.Sprintf("      … and %d more problems", len(themeProblems)-3)))
+				break
+			}
+			c.WriteString("\n" + lipgloss.NewStyle().Foreground(cur.warn).Render("      ⚠ "+truncateForWidth(p, width-14)))
 		}
 	}
 	b.WriteString(box.Render(c.String()))
