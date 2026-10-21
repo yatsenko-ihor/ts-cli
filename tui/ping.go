@@ -52,7 +52,7 @@ const (
 	pingFreshFor     = 60 * time.Second       // a result younger than this is reused
 	autoPingDelay    = 500 * time.Millisecond // cursor must rest this long
 	manualPingWait   = 4 * time.Second
-	preflightPingMax = 2 * time.Second
+	preflightPingMax = 6 * time.Second // a cold path (DERP, hole punching) can take several seconds
 )
 
 // pingFailedIcon replaces the green/red circle after a failed ping.
@@ -142,6 +142,16 @@ func (m model) isReachable(d client.Device) bool {
 		return false
 	}
 	return isDeviceOnline(d)
+}
+
+// launchBlocked reports whether a launch must be refused as "offline". A
+// failed ping only blocks while it is fresh: a stale one is re-checked by the
+// pre-flight ping instead of making every later attempt fail.
+func (m model) launchBlocked(d client.Device) bool {
+	if m.ping[machineKey(d)] == pingFail && m.canPing(d) && !m.pingIsFresh(d) {
+		return false
+	}
+	return !m.isReachable(d)
 }
 
 // hasSavedPassword reports whether a password is stored for the machine.

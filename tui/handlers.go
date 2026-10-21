@@ -522,7 +522,7 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 	device := m.list.filteredDevices[target]
 
 	// Check if device is offline
-	if !m.isReachable(device) {
+	if m.launchBlocked(device) {
 		deviceName := device.Name
 		if deviceName == "" {
 			deviceName = device.Hostname

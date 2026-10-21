@@ -397,7 +397,7 @@ func (m model) launch(spec sshJob) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if !m.isReachable(dev) {
+	if m.launchBlocked(dev) {
 		m.notify.sshError = fmt.Errorf("machine %q is offline", displayName(dev))
 		return m, nil
 	}
