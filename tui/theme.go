@@ -11,13 +11,14 @@ import (
 // readable whatever the terminal background is.
 
 const (
-	themeLight  = "light"
-	themeDark   = "dark"
-	themeHacker = "hacker"
+	themeLight      = "light"
+	themeDark       = "dark"
+	themeHacker     = "hacker"
+	themeDarkPastel = "dark-pastel"
 )
 
 // themeOrder is the cycle order in the settings window.
-var themeOrder = []string{themeLight, themeDark, themeHacker}
+var themeOrder = []string{themeLight, themeDark, themeDarkPastel, themeHacker}
 
 type theme struct {
 	bg, text                        lipgloss.Color // "" bg = terminal default
@@ -47,14 +48,26 @@ var themes = map[string]theme{
 		online: "#9ece6a", offline: "#f7768e", warn: "#e0af68", dim: "#737aa2",
 		inputFg: "#c0caf5", inputBg: "#33374f",
 	},
+	// Near-black with a soft green-grey text; green is kept for the cursor and
+	// the online state, the rest is cyan, amber and red so not everything is green.
 	themeHacker: {
-		bg: "#000000", text: "#00ff41",
-		title: "#39ff14", accent: "#39ff14", muted: "#00a82d",
-		border: "#008f11", borderDim: "#004d0a", borderFocus: "#39ff14",
-		errc: "#ff3b3b", search: "#7cfc00", success: "#39ff14", info: "#c8ff00",
-		header: "#00ff41", headerStrong: "#b6ffb0", highlight: "#39ff14",
-		online: "#39ff14", offline: "#ff3b3b", warn: "#ffb000", dim: "#007a1f",
-		inputFg: "#39ff14", inputBg: "#0b2a0b",
+		bg: "#0a0d0a", text: "#b4c8b8",
+		title: "#d8f0dc", accent: "#3dff7a", muted: "#6b8570",
+		border: "#2f5d4a", borderDim: "#1c2f27", borderFocus: "#00d7c8",
+		errc: "#ff4d5e", search: "#00d7c8", success: "#3dff7a", info: "#e6c34a",
+		header: "#00d7c8", headerStrong: "#e0fff0", highlight: "#00d7c8",
+		online: "#3dff7a", offline: "#ff4d5e", warn: "#ffb000", dim: "#56705c",
+		inputFg: "#e0fff0", inputBg: "#16241c",
+	},
+	// Soft pastels on a deep slate background.
+	themeDarkPastel: {
+		bg: "#1e2230", text: "#d6dbea",
+		title: "#eef0f8", accent: "#a6c8ff", muted: "#8a90a8",
+		border: "#4a5068", borderDim: "#343950", borderFocus: "#c9b6ff",
+		errc: "#ffadad", search: "#b5ead7", success: "#b5ead7", info: "#ffe5b4",
+		header: "#c9b6ff", headerStrong: "#ffd6e8", highlight: "#ffc6e0",
+		online: "#b5ead7", offline: "#ffadad", warn: "#ffd6a5", dim: "#6f7590",
+		inputFg: "#eef0f8", inputBg: "#2c3146",
 	},
 }
 

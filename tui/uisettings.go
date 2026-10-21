@@ -22,7 +22,7 @@ const (
 	uiIcons          = "icons"         // "symbols" (default) or "emoji"
 	uiTailscaleSSH   = "tailscale_ssh" // use `tailscale ssh` for machines that offer it (default off)
 	uiTmuxSplit      = "tmux_split"    // ssh sessions in a tmux pane when running inside tmux
-	uiTheme          = "theme"         // "light" (default), "dark" or "hacker"
+	uiTheme          = "theme"         // light (default), dark, dark-pastel or hacker
 )
 
 // uiSettings are the display options of the machine list.
@@ -32,7 +32,7 @@ type uiSettings struct {
 	showDetails    bool   // details panel for the highlighted machine
 	shortNames     bool   // strip the tailnet suffix (.tailXXXX.ts.net) from names
 	emojiIcons     bool   // 🟢/🔴/⭕️ instead of coloured ●/○ symbols
-	theme          string // light, dark or hacker
+	theme          string // light, dark, dark-pastel or hacker
 	tmuxSplit      bool   // open ssh sessions in a tmux split when inside tmux
 	tailscaleSSH   bool   // use `tailscale ssh` for machines that offer it
 }
@@ -66,7 +66,7 @@ var settingItems = []settingItem{
 	{uiShortNames, "Short names", "Strip the tailnet suffix (.tailXXXX.ts.net) from machine names"},
 	{uiTmuxSplit, "SSH in a tmux split", "Inside tmux, s opens the session in a pane next to the list (a real terminal: vim, htop, mouse, scrolling)"},
 	{uiTailscaleSSH, "Use Tailscale SSH when offered", "s runs `tailscale ssh` for machines that offer it (no password or key needed; the ACL decides); off = plain ssh"},
-	{uiTheme, "Theme", "light, dark or hacker (green on black); dark and hacker paint the whole screen"},
+	{uiTheme, "Theme", "light, dark, dark-pastel or hacker; all but light paint the whole screen"},
 	{uiIcons, "Icon style", "symbols: coloured ● ○ and text flags   emoji: 🟢 🔴 ⭕️ 🔐"},
 }
 
