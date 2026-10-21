@@ -8,6 +8,17 @@ A terminal tool for managing the machines of your Tailscale tailnets: browse the
 
 The demo uses invented machines and a fake API ([how it is made](demo/README.md)); [MP4 version](docs/demo.mp4).
 
+<details>
+<summary>The same demo in the <b>hacker</b> and <b>light</b> themes</summary>
+
+![ts-cli demo, hacker theme](docs/demo-hacker.gif)
+
+![ts-cli demo, light theme](docs/demo-light.gif)
+
+[MP4: hacker](docs/demo-hacker.mp4) · [MP4: light](docs/demo-light.mp4)
+
+</details>
+
 ## Highlights
 
 - **Several accounts at once**: add, switch, hide and health-check tailnets; API keys are stored encrypted
