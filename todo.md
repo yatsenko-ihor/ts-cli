@@ -36,3 +36,15 @@
 - [x] `UseKeychain` with a lost key: creates a new key, removes the unreadable secrets and says what was removed
 - [x] `runJob.kill` kills the whole process group (sshpass's ssh child too)
 - [ ] Extend the requirement/coverage gate to `commands/` and the TUI account/list logic
+
+## Ideas (not planned yet)
+
+- Tailscale API: create auth keys (`ts-cli key create --tag … --ephemeral`) to onboard machines
+- Tailscale API: subnet routes (view, approve), device posture attributes
+- Tailscale API: ACL policy (`acl show`, `acl validate`), DNS settings, users and invites, webhooks, audit and flow logs
+- Export machines as `~/.ssh/config` blocks (`ts-cli ssh-config`); importing hosts from `~/.ssh/config` is a bigger job
+- Saved machine groups / tag-based selection for runs
+- Ready-made group actions (reboot, update, disk check) on the marked machines
+- Tailscale SSH: fall back to plain ssh when the ACL refuses
+- Ping/latency history per machine
+
