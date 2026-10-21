@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"time"
@@ -9,7 +10,24 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yatsenko-ihor/ts-cli/client"
 	"github.com/yatsenko-ihor/ts-cli/config"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
+
+// buildSSHTarget validates username and address and returns "user@addr" or
+// "addr". Both values come from the API or from disk, so they are checked
+// before they reach the ssh argument list (same rules as the TUI).
+func buildSSHTarget(username, address string) (string, error) {
+	if net.ParseIP(address) == nil {
+		return "", fmt.Errorf("device address %q is not a valid IP", address)
+	}
+	if username == "" {
+		return address, nil
+	}
+	if err := util.ValidateSSHUsername(username); err != nil {
+		return "", fmt.Errorf("invalid SSH username: %w", err)
+	}
+	return username + "@" + address, nil
+}
 
 // NewSSHCommand creates the SSH command
 func NewSSHCommand() *cobra.Command {
@@ -33,6 +51,9 @@ The command will look up the device in your tailnet and establish an SSH connect
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deviceName := args[0]
+			if deviceName == "" {
+				return fmt.Errorf("device name cannot be empty")
+			}
 
 			// Load configuration
 			cfg, err := config.Load()
@@ -108,7 +129,7 @@ The command will look up the device in your tailnet and establish an SSH connect
 				fmt.Println("SSH connection may fail if Tailscale is not running.")
 				fmt.Println("Press Ctrl+C to cancel or wait 3 seconds to continue anyway...")
 				// Give user time to read and cancel if needed
-				time.Sleep(3 * time.Second)
+				sleepFn(3 * time.Second)
 			}
 
 			// Use the per-machine username, then the default from config
@@ -126,18 +147,16 @@ The command will look up the device in your tailnet and establish an SSH connect
 			}
 
 			// Build SSH command
-			sshArgs := []string{"ssh"}
-			if user != "" {
-				sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", user, address))
-			} else {
-				sshArgs = append(sshArgs, address)
+			target, err := buildSSHTarget(user, address)
+			if err != nil {
+				return err
 			}
 
 			fmt.Printf("Connecting to %s (%s)...\n", targetDevice.Name, address)
 
 			// Execute SSH
-			sshCmd := exec.Command("ssh", sshArgs[1:]...)
-			sshCmd.Stdin = os.Stdin
+			sshCmd := exec.Command("ssh", target)
+			sshCmd.Stdin = cmd.InOrStdin()
 			sshCmd.Stdout = os.Stdout
 			sshCmd.Stderr = os.Stderr
 

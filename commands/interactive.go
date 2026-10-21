@@ -12,6 +12,17 @@ import (
 	"github.com/yatsenko-ihor/ts-cli/util"
 )
 
+// Test seams (production behaviour by default): the Bubble Tea program and
+// the key-store notice.
+var (
+	programOptions = []tea.ProgramOption{tea.WithAltScreen()}
+	runProgram     = func(m tea.Model) error {
+		_, err := tea.NewProgram(m, programOptions...).Run()
+		return err
+	}
+	keyStoreNotice = util.KeyStoreNotice
+)
+
 // NewInteractiveCommand creates the interactive TUI command
 func NewInteractiveCommand() *cobra.Command {
 	var apiKey string
@@ -40,7 +51,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 			if len(cfg.Accounts) == 0 {
 				return fmt.Errorf("no accounts configured.\nRun 'ts-cli login --tailnet=<name>' first to add an account")
 			}
-			if notice := util.KeyStoreNotice(); notice != "" {
+			if notice := keyStoreNotice(); notice != "" {
 				fmt.Fprintf(os.Stderr, "Warning: %s\n", notice)
 			}
 
@@ -88,8 +99,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 			}
 
 			m := tui.NewModel(devices, Version, cfg.SSHUsername, accounts, cfg.MachineCredentials, cfg.Commands, cfg.LastMachine, cfg.UI)
-			p := tea.NewProgram(m, tea.WithAltScreen())
-			if _, err := p.Run(); err != nil {
+			if err := runProgram(m); err != nil {
 				return fmt.Errorf("TUI error: %w", err)
 			}
 			return nil

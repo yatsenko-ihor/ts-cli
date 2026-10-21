@@ -4,11 +4,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yatsenko-ihor/ts-cli/util"
 )
+
+// removeAllFn is a test seam for os.RemoveAll.
+var removeAllFn = os.RemoveAll
+
+// configDirToRemove returns the configuration directory that
+// `uninstall --config` deletes: $TS_CLI_CONFIG_DIR or ~/.ts-cli, exactly the
+// directory the rest of ts-cli uses. It returns "" when that directory cannot
+// be determined (never a path relative to the current directory).
+func configDirToRemove() string {
+	dir, err := util.ConfigDir()
+	if err != nil {
+		return ""
+	}
+	return dir
+}
 
 // NewUninstallCommand creates the uninstall command
 func NewUninstallCommand() *cobra.Command {
@@ -33,18 +47,12 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	removeConfig, _ := cmd.Flags().GetBool("config")
 
 	// Determine installation directory based on OS
-	var installDir string
-	switch runtime.GOOS {
-	case "windows":
-		installDir = filepath.Join(os.Getenv("ProgramFiles"), "ts-cli")
-	default:
-		installDir = "/usr/local/bin"
-	}
+	installDir := installDirFn()
 
 	tsCliPath := filepath.Join(installDir, "ts-cli")
 	tscPath := filepath.Join(installDir, "tsc")
 
-	if runtime.GOOS == "windows" {
+	if goos == "windows" {
 		tsCliPath += ".exe"
 		tscPath += ".exe"
 	}
@@ -53,7 +61,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	tsCliExists := fileExists(tsCliPath)
 	tscExists := false
 
-	if runtime.GOOS != "windows" {
+	if goos != "windows" {
 		// Check if tsc is our symlink
 		if target, err := os.Readlink(tscPath); err == nil && target == "ts-cli" {
 			tscExists = true
@@ -74,28 +82,24 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	if tscExists {
 		fmt.Printf("  • %s (alias)\n", tscPath)
 	}
+	configDir := ""
 	if removeConfig {
-		homeDir, _ := os.UserHomeDir()
-		configDir := filepath.Join(homeDir, ".ts-cli")
-		if fileExists(configDir) {
+		configDir = configDirToRemove()
+		if configDir != "" && fileExists(configDir) {
 			fmt.Printf("  • %s (configuration)\n", configDir)
 		}
 	}
 
 	fmt.Print("\nDo you want to proceed with uninstallation? (y/n): ")
 
-	var response string
-	_, _ = fmt.Scanln(&response) // EOF/empty input falls through to "cancelled"
-	response = strings.ToLower(strings.TrimSpace(response))
-
-	if response != "y" && response != "yes" {
+	if !confirmed(cmd.InOrStdin()) {
 		fmt.Println("Uninstallation cancelled.")
 		return nil
 	}
 
 	// Remove ts-cli binary
 	if tsCliExists {
-		if err := os.Remove(tsCliPath); err != nil {
+		if err := removeFn(tsCliPath); err != nil {
 			return fmt.Errorf("failed to remove %s: %w (try with sudo)", tsCliPath, err)
 		}
 		fmt.Printf("✓ Removed %s\n", tsCliPath)
@@ -103,7 +107,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 
 	// Remove tsc alias
 	if tscExists {
-		if err := os.Remove(tscPath); err != nil {
+		if err := removeFn(tscPath); err != nil {
 			fmt.Printf("⚠ Failed to remove %s: %v\n", tscPath, err)
 		} else {
 			fmt.Printf("✓ Removed %s\n", tscPath)
@@ -112,10 +116,8 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 
 	// Remove config directory if requested
 	if removeConfig {
-		homeDir, _ := os.UserHomeDir()
-		configDir := filepath.Join(homeDir, ".ts-cli")
-		if fileExists(configDir) {
-			if err := os.RemoveAll(configDir); err != nil {
+		if configDir != "" && fileExists(configDir) {
+			if err := removeAllFn(configDir); err != nil {
 				fmt.Printf("⚠ Failed to remove %s: %v\n", configDir, err)
 			} else {
 				fmt.Printf("✓ Removed %s\n", configDir)

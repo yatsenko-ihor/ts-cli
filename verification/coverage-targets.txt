@@ -2,19 +2,33 @@
 # Raise a number when coverage improves; never lower one to pass a build.
 # Current thresholds are the starting point; the target for every file is 100
 # with any unreachable statement justified in verification/requirements/.
-util/validation.go 100
-util/crypto.go 100
-util/paths.go 100
-util/keystore.go 100
+client/device_actions.go 100
+client/tailscale.go 100
+commands/account.go 100
+commands/install.go 100
+commands/interactive.go 100
+commands/list.go 100
+commands/login.go 100
+commands/root.go 100
+commands/secrets.go 100
+commands/ssh.go 100
+commands/tailscale_check.go 100
+commands/uninstall.go 100
+commands/up.go 100
+config/config.go 100
+scripts/scripts.go 100
+tui/accounts.go 100
+tui/copy.go 100
+tui/device_utils.go 100
+tui/listrow.go 100
+tui/pinginfo.go 100
+tui/procgroup_unix.go 100
+tui/runjob.go 100
 tui/ssh.go 100
 tui/sshflow.go 100
-config/config.go 100
-client/tailscale.go 100
-tui/runjob.go 100
-tui/procgroup_unix.go 100
-scripts/scripts.go 100
-tui/tmux.go 100
-client/device_actions.go 100
-tui/pinginfo.go 100
-tui/copy.go 100
 tui/tailscalessh.go 100
+tui/tmux.go 100
+util/crypto.go 100
+util/keystore.go 100
+util/paths.go 100
+util/validation.go 100
