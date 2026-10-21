@@ -166,6 +166,10 @@ func (m model) tabLength() int {
 		return len(m.run.commands)
 	case tabRecent:
 		return len(m.recentEntries())
+	case tabMachine:
+		if d, ok := m.targetDevice(); ok {
+			return len(machineActions(d))
+		}
 	}
 	return 0
 }
@@ -235,6 +239,9 @@ func (m model) handleRunPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ":":
 		return m.openAdHocPrompt()
 	case "enter":
+		if m.run.tab == tabMachine {
+			return m.runMachineAction()
+		}
 		return m.runSelected()
 	}
 

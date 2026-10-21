@@ -57,8 +57,8 @@ func TestRunPanelTabsAndCursors(t *testing.T) {
 	}
 	updated, _ = m.handleRunPanel(key("["))
 	m = updated.(model)
-	if m.run.tab != tabRecent {
-		t.Fatalf("tabs should wrap around, got %v", m.run.tab)
+	if m.run.tab != tabMachine {
+		t.Fatalf("tabs should wrap around to the last tab, got %v", m.run.tab)
 	}
 }
 

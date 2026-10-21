@@ -100,3 +100,11 @@ func NormalizeTags(input string) []string {
 	}
 	return out
 }
+
+// SetBaseURL points the client at another API root (a test server or a
+// proxy) and returns a function that restores the previous one.
+func SetBaseURL(u string) (restore func()) {
+	old := baseURL
+	baseURL = strings.TrimRight(u, "/")
+	return func() { baseURL = old }
+}

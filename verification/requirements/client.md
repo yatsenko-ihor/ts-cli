@@ -69,3 +69,4 @@ Unreachable statements: none. All statements of `tailscale.go` are executed by t
 - **REQ-API-021** A non-2xx answer shall be returned as an error carrying the API's own message (or the status), a 2xx answer without body shall be success, network errors shall be wrapped, and an unencodable payload shall be an error.
 - **REQ-API-022** Invalid input (empty device ID, empty name, no tags, a tag not of the form `tag:name`) shall be rejected before anything is sent.
 - **REQ-API-023** `NormalizeTags` shall turn comma/space separated input into `tag:`-prefixed tags without empties or duplicates, preserving order.
+- **REQ-API-024** `SetBaseURL` shall redirect all requests to another root (trailing slash trimmed) and return a function that restores the previous root.
