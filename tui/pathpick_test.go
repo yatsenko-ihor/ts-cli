@@ -606,7 +606,18 @@ func TestBrowserStretchesWithTheTerminal(t *testing.T) {
 	// paging uses the visible row count
 	big.browse.cursor = 0
 	updated, _ := big.handleBrowser(browserKey("pgdown"))
+	want := min(big.browserRows(), len(big.browse.entries)-1) // clamped to the last row
+	if got := updated.(model).browse.cursor; got != want {
+		t.Errorf("pgdown moved to %d, want %d", got, want)
+	}
+	// with more entries than one page, pgdown moves exactly one page
+	for i := 0; i < 60; i++ {
+		_ = os.WriteFile(filepath.Join(root, "more"+string(rune('a'+i%26))+string(rune('a'+i/26))+".txt"), nil, 0o644)
+	}
+	big.browse = newBrowser(root, false)
+	big.browse.cursor = 0
+	updated, _ = big.handleBrowser(browserKey("pgdown"))
 	if got := updated.(model).browse.cursor; got != big.browserRows() {
-		t.Errorf("pgdown moved to %d, want %d", got, big.browserRows())
+		t.Errorf("pgdown moved to %d, want a page of %d", got, big.browserRows())
 	}
 }
