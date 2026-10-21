@@ -39,6 +39,8 @@ type textInput struct {
 	note   string    // transient line under the hint (completion candidates)
 	// focusBrowse puts the focus on the Browse button below a path field.
 	focusBrowse bool
+	// device is the machine a remote path prompt browses.
+	device client.Device
 	// onCancel, when set, runs on Esc instead of just closing the prompt.
 	onCancel func(m model) model
 	// onSubmit receives the entered value for inputText prompts and returns

@@ -439,7 +439,10 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 		content.WriteString("\n\n")
 	}
 	keys := "enter confirm • esc cancel • ctrl+v paste"
-	if m.input.mode == inputText && m.input.path != pathNone {
+	switch {
+	case m.input.mode == inputText && m.input.path.remote():
+		keys = "↓ then enter, or ctrl+o: browse the machine • " + keys
+	case m.input.mode == inputText && m.input.path != pathNone:
 		keys = "tab complete • ↓ then enter, or ctrl+o: browse • " + keys
 	}
 	content.WriteString(grayItalicStyle.Render(truncateForWidth(keys, popupWidth-8)))

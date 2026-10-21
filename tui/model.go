@@ -204,6 +204,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Outcome of an interactive session; see sshflow.go.
 		return m.finishSSHAttempt(msg.failure, msg.err)
 
+	case remoteListMsg:
+		return m.handleRemoteList(msg)
+
 	case tailscaleSSHDoneMsg:
 		return m.handleTailscaleSSHDone(msg)
 
