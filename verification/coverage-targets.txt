@@ -34,3 +34,4 @@ util/paths.go 100
 util/validation.go 100
 tui/themefile.go 100
 tui/pathpick.go 100
+tui/remotebrowse.go 100

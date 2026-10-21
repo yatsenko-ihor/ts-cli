@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,10 +19,18 @@ import (
 type pathKind int
 
 const (
-	pathNone pathKind = iota // an ordinary prompt
-	pathAny                  // a file or a directory
-	pathDirs                 // a directory
+	pathNone       pathKind = iota // an ordinary prompt
+	pathAny                        // a local file or directory
+	pathDirs                       // a local directory
+	pathRemoteAny                  // a file or directory on the machine (browse only, no Tab)
+	pathRemoteDirs                 // a directory on the machine
 )
+
+// remote reports whether the path is on the machine rather than on this computer.
+func (k pathKind) remote() bool { return k == pathRemoteAny || k == pathRemoteDirs }
+
+// dirsOnly reports whether only directories can be chosen.
+func (k pathKind) dirsOnly() bool { return k == pathDirs || k == pathRemoteDirs }
 
 const pathSeparators = "/" + string(os.PathSeparator)
 
@@ -125,6 +134,42 @@ type fileBrowser struct {
 	dirsOnly bool
 	hidden   bool
 	err      string
+
+	// Browsing a directory on a machine (remotebrowse.go): listings arrive
+	// asynchronously, so keys are ignored while one is loading.
+	remote   *remoteSource
+	loading  bool
+	reqID    int      // the request whose answer is wanted; older answers are dropped
+	first    bool     // the first listing is pending (a failing start falls back to home)
+	startDir string   // where the first listing was asked for
+	raw      []string // the last remote listing, to re-filter without asking again
+}
+
+// goTo shows dir: at once for the local disk, through a request for a machine.
+func (b *fileBrowser) goTo(dir string) tea.Cmd {
+	if b.remote == nil {
+		b.load(dir)
+		return nil
+	}
+	b.loading = true
+	b.reqID++
+	return remoteListCmd(b.reqID, *b.remote, dir)
+}
+
+// parent is the directory above the one shown (the root is its own parent).
+func (b *fileBrowser) parent() string {
+	if b.remote != nil {
+		return path.Dir(b.dir)
+	}
+	return filepath.Dir(b.dir)
+}
+
+// join is the path of the entry name in the directory shown.
+func (b *fileBrowser) join(name string) string {
+	if b.remote != nil {
+		return path.Join(b.dir, name)
+	}
+	return filepath.Join(b.dir, name)
 }
 
 // load lists dir (directories first, then files, each case-insensitively).
@@ -186,21 +231,36 @@ func newBrowser(typed string, dirsOnly bool) *fileBrowser {
 	return b
 }
 
+// openBrowser opens the browser for the current path prompt: the local disk
+// at once, a machine through a listing request.
+func (m model) openBrowser() (tea.Model, tea.Cmd) {
+	if m.input.path.remote() {
+		return m.openRemoteBrowser()
+	}
+	m.browse = newBrowser(m.input.value, m.input.path.dirsOnly())
+	return m, nil
+}
+
 // handleBrowser processes keys while the browser is open.
 func (m model) handleBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	b := *m.browse
 	b.entries = append([]browserEntry(nil), b.entries...)
-	choose := func(path string) (tea.Model, tea.Cmd) {
+	choose := func(chosen string) (tea.Model, tea.Cmd) {
 		m.browse = nil
-		m.input.value, m.input.cursor, m.input.note = path, len([]rune(path)), ""
+		m.input.value, m.input.cursor, m.input.note = chosen, len([]rune(chosen)), ""
 		return m, nil
 	}
 	var selected *browserEntry
 	if b.cursor >= 0 && b.cursor < len(b.entries) {
 		selected = &b.entries[b.cursor]
 	}
+	var cmd tea.Cmd
 
-	switch msg.String() {
+	key := msg.String()
+	if b.loading && key != "esc" && key != "ctrl+c" && key != "q" {
+		return m, nil // a listing is on its way
+	}
+	switch key {
 	case "esc", "ctrl+c", "q":
 		m.browse = nil
 		return m, nil
@@ -221,33 +281,39 @@ func (m model) handleBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "end", "G":
 		b.cursor = max(0, len(b.entries)-1)
 	case "left", "h", "backspace":
-		b.load(filepath.Dir(b.dir))
+		cmd = b.goTo(b.parent())
 	case "~":
-		if home, err := os.UserHomeDir(); err == nil {
+		if b.remote != nil {
+			cmd = b.goTo("")
+		} else if home, err := os.UserHomeDir(); err == nil {
 			b.load(home)
 		}
 	case ".":
 		b.hidden = !b.hidden
-		b.load(b.dir)
+		if b.remote != nil {
+			b.applyRemote(b.dir, b.raw)
+		} else {
+			b.load(b.dir)
+		}
 	case "right", "l", "enter":
 		switch {
 		case selected == nil:
 		case selected.special && selected.name == ".":
-			if msg.String() == "enter" {
+			if key == "enter" {
 				return choose(b.dir)
 			}
 		case selected.special:
-			b.load(filepath.Dir(b.dir))
+			cmd = b.goTo(b.parent())
 		case selected.dir:
-			b.load(filepath.Join(b.dir, selected.name))
-		case msg.String() == "enter":
-			return choose(filepath.Join(b.dir, selected.name))
+			cmd = b.goTo(b.join(selected.name))
+		case key == "enter":
+			return choose(b.join(selected.name))
 		}
 	case " ", "s":
 		return choose(b.dir)
 	}
 	m.browse = &b
-	return m, nil
+	return m, cmd
 }
 
 // browserRows is how many entries are visible at once: the browser grows with
@@ -283,12 +349,23 @@ func (m model) renderBrowser() string {
 	if b.dirsOnly {
 		what = "directory"
 	}
-	c.WriteString(lipgloss.NewStyle().Bold(true).Render("Choose a " + what))
+	title := "Choose a " + what
+	if b.remote != nil {
+		title += " on " + shortHost(displayName(b.remote.device))
+	}
+	c.WriteString(lipgloss.NewStyle().Bold(true).Render(truncateForWidth(title, inner)))
 	c.WriteString("\n")
-	c.WriteString(grayItalicStyle.Render(truncateLeft(b.dir, inner)))
+	shown := b.dir
+	if b.loading {
+		shown = "loading…"
+		if b.dir != "" {
+			shown = b.dir + "  (loading…)"
+		}
+	}
+	c.WriteString(grayItalicStyle.Render(truncateLeft(shown, inner)))
 	c.WriteString("\n\n")
 
-	if len(b.entries) == 2 {
+	if len(b.entries) == 2 && !b.loading {
 		c.WriteString(grayItalicStyle.Render("  (empty)"))
 		c.WriteString("\n")
 	}
@@ -301,7 +378,7 @@ func (m model) renderBrowser() string {
 		e := b.entries[i]
 		name := e.label()
 		size := ""
-		if !e.dir {
+		if !e.dir && e.size >= 0 { // a machine's listing has no sizes
 			size = humanBytes(e.size)
 		}
 		line := padRight(truncateForWidth(name, inner-14), inner-14) + fmt.Sprintf("%10s", size)

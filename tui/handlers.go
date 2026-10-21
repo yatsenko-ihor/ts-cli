@@ -112,8 +112,7 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.input.focusBrowse {
 			m.input.focusBrowse = false
-			m.browse = newBrowser(m.input.value, m.input.path == pathDirs)
-			return m, nil
+			return m.openBrowser()
 		}
 		submit := m.input.onSubmit
 		value := m.input.value
@@ -127,13 +126,15 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		if m.input.path != pathNone {
 			m.input.focusBrowse = false
-			v, names := completePath(m.input.value, m.input.path == pathDirs)
+		}
+		if m.input.path == pathAny || m.input.path == pathDirs { // only the local disk can be completed
+			v, names := completePath(m.input.value, m.input.path.dirsOnly())
 			m.input.value, m.input.cursor, m.input.note = v, len([]rune(v)), completionNote(names)
 		}
 		return m, nil
 	case "ctrl+o":
 		if m.input.path != pathNone {
-			m.browse = newBrowser(m.input.value, m.input.path == pathDirs)
+			return m.openBrowser()
 		}
 		return m, nil
 	}

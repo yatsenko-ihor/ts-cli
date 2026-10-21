@@ -100,6 +100,7 @@ func (m model) promptUpload() (tea.Model, tea.Cmd) {
 			}
 			m.input = textInput{
 				mode: inputText, label: "Upload to " + where + ": remote path", value: ".", cursor: 1,
+				path: pathRemoteDirs, device: targets[0],
 				hint: "a directory or file name; relative paths start in the home directory",
 				onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
 					m.input = textInput{}
@@ -130,6 +131,7 @@ func (m model) promptDownload() (tea.Model, tea.Cmd) {
 	name := shortHost(displayName(targets[0]))
 	m.input = textInput{
 		mode: inputText, label: "Download from " + name + ": remote path",
+		path: pathRemoteAny, device: targets[0],
 		hint: "a file or directory; relative paths start in the home directory",
 		onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
 			m.input = textInput{}

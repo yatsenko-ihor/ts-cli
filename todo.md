@@ -28,7 +28,7 @@
 - [x] SSH in a tmux split (inside tmux, `s` opens a pane beside the list)
 - [x] Machine tab: ping with details, key expiry, expire, rename, tags, delete
 - [x] `ts-cli list` filters (--online, --os, --tag, --account, --name, --sort, names format)
-- [x] File copy with scp (`f` upload, `F` download); local path completion (Tab) and browser (Ctrl+O)
+- [x] File copy with scp (`f` upload, `F` download); local path completion (Tab), local browser (Ctrl+O) and remote browser
 - [x] Device key reminders (line on the main screen, list flag)
 - [x] Contextual key hints, `?` for help
 - [x] Tailscale SSH when the machine offers it (option, off by default)
@@ -41,7 +41,6 @@
 
 ## Ideas (not planned yet)
 
-- Browse remote paths in the upload/download prompts (an `ssh host ls -1Ap <path>` listing through the same credential flow: needs async loading, quoting of paths, parsing names with spaces; browse the highlighted machine only)
 - Tailscale API: create auth keys (`ts-cli key create --tag … --ephemeral`) to onboard machines
 - Tailscale API: subnet routes (view, approve), device posture attributes
 - Tailscale API: ACL policy (`acl show`, `acl validate`), DNS settings, users and invites, webhooks, audit and flow logs
