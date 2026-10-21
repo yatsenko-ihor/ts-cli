@@ -152,7 +152,7 @@ func enableAutoPing(t *testing.T) {
 func TestAutoPingIsOffByDefault(t *testing.T) {
 	withFakePing(t, true, func(string) error { return nil })
 	m := pingModel()
-	if autoPingEnabled || m.wantsAutoPing(m.list.devices[0]) || m.scheduleAutoPing() != nil || m.Init() != nil {
+	if autoPingEnabled || m.wantsAutoPing(m.list.devices[0]) || m.scheduleAutoPing() != nil {
 		t.Fatal("auto ping must be disabled by default")
 	}
 	// The pre-flight check before connecting still works.

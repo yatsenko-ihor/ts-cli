@@ -139,3 +139,20 @@ func TestDeviceActionRejectsUnencodablePayload(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// Verifies: REQ-API-024
+func TestSetBaseURLRedirectsAndRestores(t *testing.T) {
+	got := recordServer(t, 200, `{}`)
+	srvURL := baseURL
+	restore := SetBaseURL(srvURL + "/")
+	if baseURL != srvURL {
+		t.Fatalf("trailing slash must be trimmed: %q", baseURL)
+	}
+	if err := NewClient("k").ExpireKey("n9"); err != nil || got.path != "/device/n9/expire" {
+		t.Fatalf("err %v, request %+v", err, got)
+	}
+	restore()
+	if baseURL != srvURL {
+		t.Fatalf("restore must bring back %q, got %q", srvURL, baseURL)
+	}
+}

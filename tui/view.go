@@ -87,12 +87,26 @@ func (m model) renderRunPanel() string {
 			rows = append(rows, row{main: main, sub: status + " " + e.Timestamp.Local().Format("Jan 2 15:04")})
 		}
 		empty = "Nothing has run on this machine yet"
+	case tabMachine:
+		if device.ID != "" || len(device.Addresses) > 0 {
+			for _, a := range machineActions(device) {
+				title := a.title
+				if a.danger {
+					title += "  ⚠"
+				}
+				rows = append(rows, row{main: title, sub: a.desc})
+			}
+		}
+		empty = "No machine selected"
 	}
 
 	contentHeight := height - panelVerticalPadding
 	footerLines := 1
 	if m.input.mode == inputCommand {
 		footerLines = 2
+	}
+	if m.run.tab == tabMachine && (m.act.result != "" || m.act.err != nil) {
+		footerLines++
 	}
 	// header + tabs + footer; each row takes 1 line (main) — sub shown only for the cursor row
 	maxVisible := contentHeight - 2 - footerLines - 1
@@ -138,6 +152,16 @@ func (m model) renderRunPanel() string {
 		}
 	}
 
+	if m.run.tab == tabMachine && (m.act.result != "" || m.act.err != nil) {
+		switch {
+		case m.act.err != nil:
+			b.WriteString(lipgloss.NewStyle().Foreground(cur.errc).Render(truncateForWidth(m.act.err.Error(), inner)))
+		default:
+			b.WriteString(successStyle.Render(truncateForWidth(m.act.result, inner)))
+		}
+		b.WriteString("\n")
+	}
+
 	// Footer: ad-hoc prompt or key hints
 	if m.input.mode == inputCommand {
 		where := displayName(device)
@@ -156,6 +180,8 @@ func (m model) renderRunPanel() string {
 			hint = "enter run • n new • e edit • d delete • : command"
 		case tabRecent:
 			hint = "enter run again • s save as command • d forget • : command"
+		case tabMachine:
+			hint = "enter do it (acts on the highlighted machine only) • [/] tabs"
 		}
 		b.WriteString(grayItalicStyle.Render(truncateForWidth(hint, inner)))
 	}

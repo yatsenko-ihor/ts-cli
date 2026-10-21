@@ -64,6 +64,7 @@ const (
 	tabScripts  runTab = iota // Local scripts from ~/.ts-cli/scripts
 	tabCommands               // Saved named commands (config.json)
 	tabRecent                 // Recently run things for this machine
+	tabMachine                // Actions on the highlighted machine (API) and ping details
 	tabCount
 )
 
@@ -75,6 +76,8 @@ func (t runTab) String() string {
 		return "Commands"
 	case tabRecent:
 		return "Recent"
+	case tabMachine:
+		return "Machine"
 	}
 	return "?"
 }

@@ -1,0 +1,8 @@
+# Requirements: connection details (REQ-PNG) - tui/pinginfo.go
+
+- **REQ-PNG-001** `parsePingOutput` shall read every `pong from … via … in …` line of `tailscale ping`, counting pongs, taking the path (DERP region or direct endpoint, IPv4 or IPv6) and latency of the last pong, recording the index of the first direct pong, and ignoring other lines, unparsable latencies and CRLF endings.
+- **REQ-PNG-002** The one-line description shall say: no reply (with the error if any), direct with endpoint and latency (noting how many pings went through a relay first), or relay with region and latency (noting that no direct path exists yet); latencies under 1 ms shall read `<1ms`.
+- **REQ-PNG-003** The detailed ping shall run `tailscale ping` for the device's first address with a bounded count, never for a missing or invalid address, and shall report a missing CLI, the first line of a failure's output, the error text when there is no output, and plain "no reply" for a clean exit without a pong.
+- **REQ-PNG-004** `parsePeers` shall index the peers of `tailscale status --json` by every Tailscale address, carrying online/active/exit-node flags, the direct address or relay, traffic counters, last handshake and whether the peer offers Tailscale SSH; the path text shall read direct/relay/offline/idle accordingly; invalid JSON shall be an error.
+- **REQ-PNG-005** The traffic text shall be empty without traffic and otherwise show received and sent bytes in decimal units (B, kB, MB, GB, TB).
+- **REQ-PNG-006** `loadPeersCmd` shall return the parsed peers or the error of the CLI or of the JSON, and `peerFor` shall find a device by its first address and only then.
