@@ -211,6 +211,21 @@ When the terminal is wide enough, the TUI shows three panels:
 
 Focus cycles with `Tab` / `Shift+Tab`, or jump directly with `1`, `2`, `3`.
 
+#### Your own themes
+
+Put a JSON file in `~/.ts-cli/themes/` (next to `config.json`; `TS_CLI_CONFIG_DIR` moves it): the file name, without `.json`, is the theme name and appears in `F12` → **Theme** after the built-in ones (restart ts-cli after adding or editing a file). A theme names a built-in one as its `base` (default `light`) and overrides only what it wants:
+
+```json
+{
+  "base": "dark",
+  "bg": "#0b1e2d",
+  "accent": "#4fc3f7",
+  "online": "#7be0a1"
+}
+```
+
+Colours are `#rrggbb`, `#rgb` or an ANSI number 0-255. Keys: `bg` (empty = keep the terminal's background), `text`, `title`, `accent` (cursor, tabs), `muted`, `border`, `border_dim`, `border_focus`, `error`, `search`, `success`, `info`, `header`, `header_strong`, `highlight`, `online`, `offline`, `warn`, `dim`, `input_fg`, `input_bg`. File names are 1-32 characters of `a-z`, `0-9`, `-`, `_` and must not be a built-in theme name. A file with a mistake (bad JSON, unknown key, bad colour, unknown base, over 64 KiB) is skipped and named in the settings window; it never stops ts-cli. If the stored theme's file is gone, the `light` theme is used.
+
 #### List appearance and settings (F12)
 
 Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to close). Choices are saved in `~/.ts-cli/config.json` under `ui`:
@@ -221,7 +236,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Group by account**: section headers per account (only with more than one account).
 - **SSH in a tmux split**: inside tmux, `s` opens the session in a new pane to the right of the list instead of taking over ts-cli's terminal (see [Running In tmux](#running-in-tmux)). On by default; has no effect outside tmux.
 - **Use Tailscale SSH when offered** (off by default): for machines that run the Tailscale SSH server, `s` runs `tailscale ssh [user@]machine` instead of plain ssh. No password, key or username prompt and nothing is saved; the tailnet's ACL decides who may connect. Machines that offer it show `Tailscale SSH` in the details panel.
-- **Theme**: `light` (default, keeps your terminal background), `dark`, `dark-pastel` (soft pastels on slate) or `hacker` (near-black with a muted green text; bright green only for the cursor and online machines, cyan, amber and red for the rest). Every theme except `light` paints the whole screen, so it looks the same on any terminal background. The choice is stored in `~/.ts-cli/config.json` under `ui.theme` (`light`, `dark`, `dark-pastel`, `hacker`) and can be edited there too.
+- **Theme**: `light` (default, keeps your terminal background), `dark`, `dark-pastel` (soft pastels on slate) or `hacker` (near-black with a muted green text; bright green only for the cursor and online machines, cyan, amber and red for the rest). Every theme except `light` paints the whole screen, so it looks the same on any terminal background. The choice is stored in `~/.ts-cli/config.json` under `ui.theme` (`light`, `dark`, `dark-pastel`, `hacker`) and can be edited there too. You can also add your own themes, see below.
 - **Icon style**: coloured symbols (default) or emoji.
 
 #### Machine status and ping

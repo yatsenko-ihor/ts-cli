@@ -32,3 +32,4 @@ util/crypto.go 100
 util/keystore.go 100
 util/paths.go 100
 util/validation.go 100
+tui/themefile.go 100
