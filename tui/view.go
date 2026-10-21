@@ -382,7 +382,10 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 	b.WriteString("\n\n")
 
 	popupWidth := 50
-	if m.width > 0 && m.width < 70 {
+	if m.input.mode == inputText && m.input.path != pathNone {
+		popupWidth = 72 // paths are long
+	}
+	if m.width > 0 && m.width < popupWidth+20 {
 		popupWidth = m.width - 10
 		if popupWidth < 35 {
 			popupWidth = 35
@@ -421,7 +424,15 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 		Width(popupWidth - 8)
 	content.WriteString(inputStyle.Render(renderEditable(value, m.input.cursor, masked, "▌", popupWidth-12)))
 	content.WriteString("\n\n")
-	content.WriteString(grayItalicStyle.Render("enter confirm • esc cancel • ctrl+v paste"))
+	if m.input.mode == inputText && m.input.note != "" {
+		content.WriteString(lipgloss.NewStyle().Foreground(cur.info).Render(truncateForWidth(m.input.note, popupWidth-8)))
+		content.WriteString("\n\n")
+	}
+	keys := "enter confirm • esc cancel • ctrl+v paste"
+	if m.input.mode == inputText && m.input.path != pathNone {
+		keys = "tab complete • ctrl+o browse • " + keys
+	}
+	content.WriteString(grayItalicStyle.Render(truncateForWidth(keys, popupWidth-8)))
 
 	b.WriteString(popupStyle.Render(content.String()))
 

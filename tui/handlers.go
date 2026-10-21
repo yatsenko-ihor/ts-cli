@@ -109,7 +109,19 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return submit(m, value)
 	case "ctrl+v", keyPasteAlt:
 		return m, readClipboard(pasteTargetText)
+	case "tab":
+		if m.input.path != pathNone {
+			v, names := completePath(m.input.value, m.input.path == pathDirs)
+			m.input.value, m.input.cursor, m.input.note = v, len([]rune(v)), completionNote(names)
+		}
+		return m, nil
+	case "ctrl+o":
+		if m.input.path != pathNone {
+			m.browse = newBrowser(m.input.value, m.input.path == pathDirs)
+		}
+		return m, nil
 	}
+	m.input.note = ""
 	m.editInput(msg)
 	return m, nil
 }

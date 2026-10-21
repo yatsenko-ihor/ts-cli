@@ -1,0 +1,16 @@
+# Requirements: choosing a local path (REQ-PPK) - tui/pathpick.go
+
+In a prompt that asks for a local path (upload source, download destination) Tab completes the typed text and Ctrl+O opens a file browser. Both only read the local disk.
+
+- **REQ-PPK-001** Completion shall extend the typed text to the longest common start of the matching entries of its directory (a unique match completes fully, directories get a trailing `/`), shall list matches (only names starting with the typed part; hidden entries only when it starts with a dot), keep a typed `~`, treat a symlink to a directory as a directory, offer only directories in directory mode, resolve a missing directory part against the working directory, and leave the text unchanged when nothing matches or the directory cannot be read.
+- **REQ-PPK-002** The candidate line shall show up to eight names and the count of the rest.
+- **REQ-PPK-003** Tab shall complete only in path prompts and set the cursor to the end; any edit shall clear the candidate line; Tab and Ctrl+O shall do nothing in other prompts.
+- **REQ-PPK-004** The browser shall list directories first, then files, each case-insensitively, hiding dot entries, showing file sizes, treating symlinks to directories as directories, and in directory mode only directories; it shall start in the directory the typed text names, else the text's parent, else the working directory (also for empty or relative text and when nothing is readable).
+- **REQ-PPK-005** Keys: up/down/k/j, PgUp/PgDn, Home/g, End/G move the cursor within the list; right/l/Enter descend into a directory; Enter chooses a file (never in directory mode); left/h/Backspace go up; Space or `s` choose the directory being shown; choosing puts the path in the prompt (cursor at the end) and keeps the prompt open; Esc, `q` and Ctrl+C close the browser leaving the text unchanged; other keys do nothing.
+- **REQ-PPK-006** `.` shall toggle hidden entries, `~` shall go to the home directory (and do nothing without one); an unreadable directory shall keep the previous listing and show the error; going up from the root shall stay at the root; an empty directory shall be shown as empty and stay put.
+- **REQ-PPK-007** The browser shall render as a popup with a title naming what is chosen, the (left-truncated) directory, a scrolling list with a "more" line, the error line and the key help; the screen shall show the browser instead of the prompt while it is open; the prompt shall show "tab complete • ctrl+o browse" and the candidate line only for path prompts; keys shall reach the browser through Update.
+
+## Derived requirements / unreachable code
+
+- Remote paths are not browsed (they need an ssh listing with credentials); see todo.md.
+- The browser does not follow a directory that cannot be read: the user stays where they are and sees the reason.
