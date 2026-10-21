@@ -127,24 +127,24 @@ type d178Faulty struct {
 	failWrite, failChmod, failClose bool
 }
 
-var d178ErrInjected = errors.New("injected failure")
+var errD178Injected = errors.New("injected failure")
 
 func (f *d178Faulty) Write(b []byte) (int, error) {
 	if f.failWrite {
-		return 0, d178ErrInjected
+		return 0, errD178Injected
 	}
 	return f.tempFile.Write(b)
 }
 func (f *d178Faulty) Chmod(m os.FileMode) error {
 	if f.failChmod {
-		return d178ErrInjected
+		return errD178Injected
 	}
 	return f.tempFile.Chmod(m)
 }
 func (f *d178Faulty) Close() error {
 	err := f.tempFile.Close()
 	if f.failClose {
-		return d178ErrInjected
+		return errD178Injected
 	}
 	return err
 }
@@ -309,7 +309,7 @@ func TestDO178CInstallBinaryAliasFailuresAreOnlyWarnings(t *testing.T) {
 		dest := t.TempDir()
 		_ = os.Symlink("ts-cli", filepath.Join(dest, "tsc"))
 		old := removeFn
-		removeFn = func(string) error { return d178ErrInjected }
+		removeFn = func(string) error { return errD178Injected }
 		t.Cleanup(func() { removeFn = old })
 		var err error
 		out, _ := d178Capture(t, func() { err = installBinary(d178Source(t, "new"), dest) })
@@ -323,7 +323,7 @@ func TestDO178CInstallBinaryAliasFailuresAreOnlyWarnings(t *testing.T) {
 	t.Run("symlink cannot be created", func(t *testing.T) {
 		dest := t.TempDir()
 		old := symlinkFn
-		symlinkFn = func(string, string) error { return d178ErrInjected }
+		symlinkFn = func(string, string) error { return errD178Injected }
 		t.Cleanup(func() { symlinkFn = old })
 		var err error
 		out, _ := d178Capture(t, func() { err = installBinary(d178Source(t, "new"), dest) })
@@ -447,7 +447,7 @@ func TestDO178CCopyFileFailuresKeepDestinationAndLeaveNoTemp(t *testing.T) {
 			_ = os.WriteFile(src, []byte("new"), 0o644)
 			_ = os.WriteFile(dst, []byte("old"), 0o755)
 			d178FaultyTemp(t, func(int) *d178Faulty { f := *c.fault; return &f })
-			if err := copyFile(src, dst); !errors.Is(err, d178ErrInjected) {
+			if err := copyFile(src, dst); !errors.Is(err, errD178Injected) {
 				t.Fatalf("err = %v", err)
 			}
 			if d178Read(t, dst) != "old" {
@@ -500,7 +500,7 @@ func TestDO178CCopyFileResignsOnDarwinOnly(t *testing.T) {
 	if err != nil || len(calls) != 1 || !strings.HasPrefix(calls[0], ".ts-cli-install-") || d178Read(t, dst) != "bin" {
 		t.Fatalf("darwin: calls=%v err=%v", calls, err)
 	}
-	calls, out, dst, err := run("darwin", d178ErrInjected)
+	calls, out, dst, err := run("darwin", errD178Injected)
 	if err != nil || len(calls) != 1 || d178Read(t, dst) != "bin" ||
 		!strings.Contains(out, "could not re-sign") || !strings.Contains(out, "codesign --force --sign - "+dst) {
 		t.Fatalf("darwin sign failure must only warn: err=%v out=%q", err, out)
@@ -836,7 +836,7 @@ func TestDO178CRunInstallVerifiesAndAdvisesAboutPATH(t *testing.T) {
 func TestDO178CRunInstallFailures(t *testing.T) {
 	t.Run("executable path unknown", func(t *testing.T) {
 		e := d178InstallEnv(t, false)
-		executablePath = func() (string, error) { return "", d178ErrInjected }
+		executablePath = func() (string, error) { return "", errD178Injected }
 		out, _, err := d178Run(t, NewInstallCommand(), "y\n")
 		if err == nil || !strings.Contains(err.Error(), "failed to get executable path") || strings.Contains(out, "proceed") || d178Exists(e.installDir) {
 			t.Fatalf("err=%v out=%q", err, out)
@@ -844,7 +844,7 @@ func TestDO178CRunInstallFailures(t *testing.T) {
 	})
 	t.Run("symlinks cannot be resolved", func(t *testing.T) {
 		e := d178InstallEnv(t, false)
-		evalSymlinks = func(string) (string, error) { return "", d178ErrInjected }
+		evalSymlinks = func(string) (string, error) { return "", errD178Injected }
 		_, _, err := d178Run(t, NewInstallCommand(), "y\n")
 		if err == nil || !strings.Contains(err.Error(), "failed to resolve symlinks") || d178Exists(e.installDir) {
 			t.Fatalf("err=%v", err)
