@@ -10,6 +10,7 @@
 - **REQ-CPY-006** Upload shall ask for the local path (which must exist) and the remote path (empty means the home directory) and then run the copy on every target machine, one job per machine.
 - **REQ-CPY-007** Download shall ask for the remote path and a local directory (empty means the current one; it must exist and be a directory) and then run the copy for the highlighted machine.
 - **REQ-CPY-008** Neither key shall do anything without a target machine; download shall refuse when several machines are marked.
+- **REQ-CPY-009** Every finished copy shall end its machine's output with a visible line (`✓ Copy finished in …`, `✗ Copy failed (exit N) …` or `■ Copy stopped …`, naming the copy), and when all machines are done the main screen shall show a summary (`✓ Copy finished on N machines`, or how many failed, or that everything was skipped); a login failure of a single machine, which leads to a retry, shall not produce the summary; other jobs shall be unchanged.
 
 ## Derived requirements / unreachable code
 

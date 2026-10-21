@@ -646,8 +646,18 @@ func (m *model) settleMachineRun(mr *machineRun, res runResult) {
 	mr.killed = res.killed
 	mr.elapsed = time.Since(mr.startedAt)
 	mr.job = nil
+	if m.run.spec.action == sshActionCopy {
+		mr.lines = append(mr.lines, copyResultLine(m.run.spec.copy, res, mr.elapsed))
+		m.jumpToOutputEnd()
+	}
 	if !m.run.running() {
 		m.run.elapsed = time.Since(m.run.startedAt)
+		// A login failure of a single machine leads to a password prompt and a
+		// retry, so a summary would be premature.
+		retry := !m.run.multi && (res.failure == sshFailureConnection || res.failure == sshFailureBadPassword)
+		if m.run.spec.action == sshActionCopy && !retry {
+			m.notify.info = copySummary(m.run.runs)
+		}
 	}
 }
 

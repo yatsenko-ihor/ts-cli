@@ -135,6 +135,10 @@ type fileBrowser struct {
 	hidden   bool
 	err      string
 
+	// filter narrows the listing to names containing it (typed after "/").
+	filter    string
+	filtering bool // keys are typed into the filter
+
 	// Browsing a directory on a machine (remotebrowse.go): listings arrive
 	// asynchronously, so keys are ignored while one is loading.
 	remote   *remoteSource
@@ -143,6 +147,22 @@ type fileBrowser struct {
 	first    bool     // the first listing is pending (a failing start falls back to home)
 	startDir string   // where the first listing was asked for
 	raw      []string // the last remote listing, to re-filter without asking again
+}
+
+// shown is the listing after the filter: "." and ".." always stay, other
+// entries must contain the filter (case-insensitively).
+func (b *fileBrowser) shown() []browserEntry {
+	if b.filter == "" {
+		return b.entries
+	}
+	needle := strings.ToLower(b.filter)
+	out := make([]browserEntry, 0, len(b.entries))
+	for _, e := range b.entries {
+		if e.special || strings.Contains(strings.ToLower(e.name), needle) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // goTo shows dir: at once for the local disk, through a request for a machine.
@@ -182,6 +202,7 @@ func (b *fileBrowser) load(dir string) {
 	}
 	b.err = ""
 	b.dir = dir
+	b.filter, b.filtering = "", false
 	b.entries = append(b.entries[:0], browserEntry{name: ".", dir: true, special: true}, browserEntry{name: "..", dir: true, special: true})
 	for _, e := range entries {
 		name := e.Name()
@@ -231,6 +252,30 @@ func newBrowser(typed string, dirsOnly bool) *fileBrowser {
 	return b
 }
 
+// editFilter types into the filter: runes and space add, Backspace deletes,
+// Enter keeps the filter and returns to the keys, Esc clears it.
+func (b *fileBrowser) editFilter(msg tea.KeyMsg) {
+	switch msg.String() {
+	case "esc":
+		b.filter, b.filtering = "", false
+	case "enter":
+		b.filtering = false
+		return
+	case "backspace":
+		if r := []rune(b.filter); len(r) > 0 {
+			b.filter = string(r[:len(r)-1])
+		}
+	default:
+		switch msg.Type {
+		case tea.KeyRunes:
+			b.filter += string(msg.Runes)
+		case tea.KeySpace:
+			b.filter += " "
+		}
+	}
+	b.cursor = min(2, len(b.shown())-1) // the first match
+}
+
 // openBrowser opens the browser for the current path prompt: the local disk
 // at once, a machine through a listing request.
 func (m model) openBrowser() (tea.Model, tea.Cmd) {
@@ -250,9 +295,10 @@ func (m model) handleBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.value, m.input.cursor, m.input.note = chosen, len([]rune(chosen)), ""
 		return m, nil
 	}
+	list := b.shown()
 	var selected *browserEntry
-	if b.cursor >= 0 && b.cursor < len(b.entries) {
-		selected = &b.entries[b.cursor]
+	if b.cursor >= 0 && b.cursor < len(list) {
+		selected = &list[b.cursor]
 	}
 	var cmd tea.Cmd
 
@@ -260,26 +306,45 @@ func (m model) handleBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if b.loading && key != "esc" && key != "ctrl+c" && key != "q" {
 		return m, nil // a listing is on its way
 	}
+	if b.filtering && key != "ctrl+c" {
+		switch key {
+		case "up", "down", "pgup", "pgdown", "home", "end":
+			// moving through the matches while typing
+		default:
+			b.editFilter(msg)
+			m.browse = &b
+			return m, nil
+		}
+	}
 	switch key {
-	case "esc", "ctrl+c", "q":
+	case "ctrl+c", "q":
 		m.browse = nil
 		return m, nil
+	case "esc":
+		if b.filter == "" {
+			m.browse = nil
+			return m, nil
+		}
+		b.filter = "" // the first Esc clears the filter
+		b.cursor = min(2, len(b.entries)-1)
+	case "/":
+		b.filtering = true
 	case "up", "k":
 		if b.cursor > 0 {
 			b.cursor--
 		}
 	case "down", "j":
-		if b.cursor < len(b.entries)-1 {
+		if b.cursor < len(list)-1 {
 			b.cursor++
 		}
 	case "pgup":
 		b.cursor = max(0, b.cursor-m.browserRows())
 	case "pgdown":
-		b.cursor = max(0, min(len(b.entries)-1, b.cursor+m.browserRows()))
+		b.cursor = max(0, min(len(list)-1, b.cursor+m.browserRows()))
 	case "home", "g":
 		b.cursor = 0
 	case "end", "G":
-		b.cursor = max(0, len(b.entries)-1)
+		b.cursor = max(0, len(list)-1)
 	case "left", "h", "backspace":
 		cmd = b.goTo(b.parent())
 	case "~":
@@ -365,17 +430,31 @@ func (m model) renderBrowser() string {
 	c.WriteString(grayItalicStyle.Render(truncateLeft(shown, inner)))
 	c.WriteString("\n\n")
 
-	if len(b.entries) == 2 && !b.loading {
-		c.WriteString(grayItalicStyle.Render("  (empty)"))
+	list := b.shown()
+	if b.filtering || b.filter != "" {
+		prompt := "/" + b.filter
+		if b.filtering {
+			prompt += "▌"
+		}
+		c.WriteString(lipgloss.NewStyle().Foreground(cur.info).Render(truncateForWidth(prompt, inner-12)))
+		c.WriteString(grayItalicStyle.Render(fmt.Sprintf("  %d match(es)", len(list)-2)))
+		c.WriteString("\n\n")
+	}
+	if len(list) == 2 && !b.loading {
+		empty := "  (empty)"
+		if b.filter != "" {
+			empty = "  (no match)"
+		}
+		c.WriteString(grayItalicStyle.Render(empty))
 		c.WriteString("\n")
 	}
 	start := 0
 	if b.cursor >= rows {
 		start = b.cursor - rows + 1
 	}
-	end := min(len(b.entries), start+rows)
+	end := min(len(list), start+rows)
 	for i := start; i < end; i++ {
-		e := b.entries[i]
+		e := list[i]
 		name := e.label()
 		size := ""
 		if !e.dir && e.size >= 0 { // a machine's listing has no sizes
@@ -389,8 +468,8 @@ func (m model) renderBrowser() string {
 		}
 		c.WriteString("\n")
 	}
-	if end < len(b.entries) {
-		c.WriteString(grayItalicStyle.Render(fmt.Sprintf("  … %d more", len(b.entries)-end)))
+	if end < len(list) {
+		c.WriteString(grayItalicStyle.Render(fmt.Sprintf("  … %d more", len(list)-end)))
 		c.WriteString("\n")
 	}
 	if b.err != "" {
@@ -398,9 +477,9 @@ func (m model) renderBrowser() string {
 		c.WriteString("\n")
 	}
 	c.WriteString("\n")
-	help := "↑/↓ move • →/enter open • ←/⌫ up • enter on . or space chooses this directory • . hidden • ~ home • esc back"
+	help := "↑/↓ move • →/enter open • ←/⌫ up • enter on . or space chooses this directory • / filter • . hidden • ~ home • esc back"
 	if !b.dirsOnly {
-		help = "↑/↓ move • →/enter open or choose a file • ←/⌫ up • enter on . or space chooses this directory • . hidden • ~ home • esc back"
+		help = "↑/↓ move • →/enter open or choose a file • ←/⌫ up • enter on . or space chooses this directory • / filter • . hidden • ~ home • esc back"
 	}
 	c.WriteString(grayItalicStyle.Width(inner).Render(help)) // wraps; nothing is cut off
 

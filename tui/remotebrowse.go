@@ -151,6 +151,7 @@ func remoteStart(typed string) string {
 // applyRemote shows lines as the content of dir.
 func (b *fileBrowser) applyRemote(dir string, lines []string) {
 	b.dir, b.raw, b.err = dir, lines, ""
+	b.filter, b.filtering = "", false
 	b.entries = append(b.entries[:0], browserEntry{name: ".", dir: true, special: true}, browserEntry{name: "..", dir: true, special: true})
 	for _, l := range lines {
 		isDir := strings.HasSuffix(l, "/")

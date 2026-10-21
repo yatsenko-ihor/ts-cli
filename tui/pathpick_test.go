@@ -621,3 +621,168 @@ func TestBrowserStretchesWithTheTerminal(t *testing.T) {
 		t.Errorf("pgdown moved to %d, want a page of %d", got, big.browserRows())
 	}
 }
+
+// Verifies: REQ-PPK-011
+func TestBrowserFilterWithSlash(t *testing.T) {
+	root := tree(t)
+	open := func() model {
+		m := pathPrompt(t, pathAny, root)
+		updated, _ := m.handleTextPrompt(tea.KeyMsg{Type: tea.KeyCtrlO})
+		return updated.(model)
+	}
+	typed := func(m model, text string) model {
+		for _, r := range text {
+			k := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+			if r == ' ' {
+				k = tea.KeyMsg{Type: tea.KeySpace}
+			}
+			updated, _ := m.handleBrowser(k)
+			m = updated.(model)
+		}
+		return m
+	}
+	labels := func(m model) string {
+		var out []string
+		for _, e := range m.browse.shown() {
+			out = append(out, e.label())
+		}
+		return strings.Join(out, ",")
+	}
+
+	// "/" starts filtering; letters (even ones that are commands) go to the filter
+	m := typed(open(), "/")
+	if !m.browse.filtering {
+		t.Fatal("/ must start filtering")
+	}
+	m = typed(m, "ALP")
+	if labels(m) != ". (choose this directory),.. (up),alpha/,alphabet.txt" || m.browse.filter != "ALP" {
+		t.Fatalf("case-insensitive filter: %s", labels(m))
+	}
+	if m.browse.cursor != 2 {
+		t.Fatalf("the cursor goes to the first match, got %d", m.browse.cursor)
+	}
+	out := m.renderBrowser()
+	if !strings.Contains(out, "/ALP▌") || !strings.Contains(out, "2 match(es)") {
+		t.Fatalf("the filter line:\n%s", out)
+	}
+	m = typed(m, "jqgs.~ ") // all plain characters while filtering
+	if m.browse == nil || m.browse.filter != "ALPjqgs.~ " {
+		t.Fatalf("keys are typed while filtering: %q", m.browse.filter)
+	}
+	if !strings.Contains(m.renderBrowser(), "(no match)") {
+		t.Fatal("a filter without matches says so")
+	}
+	m = press(t, m, "backspace", "backspace", "backspace", "backspace", "backspace", "backspace", "backspace")
+	if m.browse.filter != "ALP" {
+		t.Fatalf("backspace edits: %q", m.browse.filter)
+	}
+	m = press(t, m, "backspace", "backspace", "backspace", "backspace")
+	if m.browse.filter != "" {
+		t.Fatal("backspace on an empty filter does nothing")
+	}
+
+	// up and down move through the matches while typing; "." stays on top
+	m = typed(m, "beta")
+	m = press(t, m, "down", "up")
+	if !m.browse.filtering || labels(m) != ". (choose this directory),.. (up),Beta/,link-to-beta/,beta.log" {
+		t.Fatalf("matches: %s", labels(m))
+	}
+	// enter keeps the filter and returns to the normal keys; then enter opens the match
+	m = press(t, m, "enter")
+	if m.browse.filtering || m.browse.filter != "beta" {
+		t.Fatal("enter keeps the filter")
+	}
+	if got := m.renderBrowser(); !strings.Contains(got, "/beta ") || strings.Contains(got, "▌") {
+		t.Fatalf("no cursor mark when not typing:\n%s", got)
+	}
+	m = press(t, m, "enter") // Beta/ is the first match
+	if m.browse.dir != filepath.Join(root, "Beta") || m.browse.filter != "" {
+		t.Fatalf("opening a directory clears the filter: %s %q", m.browse.dir, m.browse.filter)
+	}
+
+	// choosing from a filtered list uses the shown entry
+	m = typed(open(), "/zeta")
+	m = press(t, m, "enter", "enter")
+	if m.browse != nil || m.input.value != filepath.Join(root, "zeta.bin") {
+		t.Fatalf("chose %q", m.input.value)
+	}
+
+	// esc while typing clears the filter; esc on a kept filter clears it; then esc closes
+	m = typed(open(), "/al")
+	m = press(t, m, "esc")
+	if m.browse == nil || m.browse.filtering || m.browse.filter != "" {
+		t.Fatal("esc while typing clears and leaves the filter")
+	}
+	m = typed(open(), "/al")
+	m = press(t, m, "enter", "esc")
+	if m.browse == nil || m.browse.filter != "" {
+		t.Fatal("the first esc clears a kept filter")
+	}
+	m = press(t, m, "esc")
+	if m.browse != nil {
+		t.Fatal("the next esc closes the browser")
+	}
+	// ctrl+c closes even while typing
+	m = typed(open(), "/al")
+	updated, _ := m.handleBrowser(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if updated.(model).browse != nil {
+		t.Fatal("ctrl+c closes the browser")
+	}
+	// '/' with a kept filter edits it further; unknown non-text keys do nothing
+	m = typed(open(), "/al")
+	m = press(t, m, "enter", "/")
+	m = typed(m, "p")
+	if m.browse.filter != "alp" {
+		t.Fatalf("filter = %q", m.browse.filter)
+	}
+	updated, _ = m.handleBrowser(tea.KeyMsg{Type: tea.KeyTab})
+	if updated.(model).browse.filter != "alp" {
+		t.Fatal("a non-text key is not typed")
+	}
+	// the help mentions the filter
+	if !strings.Contains(open().renderBrowser(), "/ filter") {
+		t.Fatal("help lacks the filter key")
+	}
+	// hidden toggle and parent change reset the filter
+	m = typed(open(), "/al")
+	m = press(t, m, "enter", ".")
+	if m.browse.filter != "" {
+		t.Fatal("reloading the directory clears the filter")
+	}
+}
+
+// Verifies: REQ-RBR-010
+func TestRemoteBrowserFilter(t *testing.T) {
+	stubRemoteList(t, homeListing)
+	m := browsingModel(t)
+	updated, cmd := m.openRemoteBrowser()
+	m = answer(t, updated.(model), cmd)
+	for _, k := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune("/")}, {Type: tea.KeyRunes, Runes: []rune("n")}} {
+		updated, _ := m.handleBrowser(k)
+		m = updated.(model)
+	}
+	var names []string
+	for _, e := range m.browse.shown() {
+		names = append(names, e.name)
+	}
+	if strings.Join(names, ",") != ".,..,notes.txt" {
+		t.Fatalf("shown = %v", names)
+	}
+
+	// narrow to the directory, descend: the new listing clears the filter
+	m = browsingModel(t)
+	updated, cmd = m.openRemoteBrowser()
+	m = answer(t, updated.(model), cmd)
+	for _, k := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune("/")}, {Type: tea.KeyRunes, Runes: []rune("p")}, {Type: tea.KeyEnter}} {
+		updated, _ := m.handleBrowser(k)
+		m = updated.(model)
+	}
+	if m.browse.filter != "p" || m.browse.filtering {
+		t.Fatalf("filter %q filtering %v", m.browse.filter, m.browse.filtering)
+	}
+	updated, cmd = m.handleBrowser(tea.KeyMsg{Type: tea.KeyEnter}) // proj/
+	m = answer(t, updated.(model), cmd)
+	if m.browse.dir != "/home/pi/proj" || m.browse.filter != "" || m.browse.filtering {
+		t.Fatalf("a new remote listing clears the filter: %+v", m.browse)
+	}
+}

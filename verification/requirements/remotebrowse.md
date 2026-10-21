@@ -11,6 +11,7 @@ In the remote path prompts of upload (destination directory) and download (sourc
 - **REQ-RBR-007** Descending, going up (the root is its own parent), `~` (home) and the `..` row shall request a listing; keys other than Esc/q/Ctrl+C shall be ignored while one is loading; `.` shall re-filter the received listing without a request; `.` row, Space and Enter on a file shall choose the directory or file path (absolute) and return it to the prompt; Esc shall close the browser, also while loading.
 - **REQ-RBR-008** When the first listing fails and the typed directory was not home, the browser shall retry once at home; any other failure shall keep the listing (if any) and show the message; answers to older requests, answers after the browser was closed and answers while a local browser is open shall be ignored.
 - **REQ-RBR-009** The upload destination prompt shall browse directories of the first target machine, the download source prompt shall browse the highlighted machine, and the download destination shall stay a local directory.
+- **REQ-RBR-010** The filter of the browser shall work on a machine's listing too and be cleared by every new listing.
 
 ## Derived requirements / unreachable code
 

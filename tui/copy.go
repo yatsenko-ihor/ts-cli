@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -159,4 +160,43 @@ func (m model) promptDownload() (tea.Model, tea.Cmd) {
 		},
 	}
 	return m, nil
+}
+
+// copyResultLine is the last line of a machine's output after a copy: scp
+// prints nothing on success, so without it the Output panel would stay empty
+// and look unfinished.
+func copyResultLine(c copySpec, res runResult, elapsed time.Duration) string {
+	took := elapsed.Round(100 * time.Millisecond)
+	switch {
+	case res.killed:
+		return fmt.Sprintf("■ Copy stopped after %s: %s", took, c.label())
+	case res.exitCode == 0:
+		return fmt.Sprintf("✓ Copy finished in %s: %s", took, c.label())
+	}
+	return fmt.Sprintf("✗ Copy failed (exit %d) after %s: %s", res.exitCode, took, c.label())
+}
+
+// copySummary is the line shown on the main screen when every machine of a
+// copy is done.
+func copySummary(runs []*machineRun) string {
+	ok, failed := 0, 0
+	for _, r := range runs {
+		switch {
+		case r.status == runFailed || (r.status == runDone && (r.exitCode != 0 || r.killed)):
+			failed++
+		case r.status == runDone:
+			ok++
+		}
+	}
+	machines := fmt.Sprintf("%d machines", ok+failed)
+	if ok+failed == 1 {
+		machines = "1 machine"
+	}
+	switch {
+	case failed == 0 && ok == 0:
+		return "Copy: nothing was copied (all machines skipped)"
+	case failed == 0:
+		return "✓ Copy finished on " + machines
+	}
+	return fmt.Sprintf("⚠ Copy finished on %s: %d ok, %d failed", machines, ok, failed)
 }

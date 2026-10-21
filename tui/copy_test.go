@@ -304,3 +304,92 @@ func TestCopyKeysDoNothingWithoutTargetAndDownloadRefusesSeveral(t *testing.T) {
 		}
 	}
 }
+
+// Verifies: REQ-CPY-009
+func TestCopyEndsWithAVisibleResultLine(t *testing.T) {
+	spec := copySpec{local: "/tmp/report.txt", remote: "docs/"}
+	for _, c := range []struct {
+		name string
+		res  runResult
+		want string
+	}{
+		{"success", runResult{}, "✓ Copy finished in 2.1s: upload report.txt → docs/"},
+		{"killed", runResult{killed: true, exitCode: -1}, "■ Copy stopped after 2.1s: upload report.txt → docs/"},
+		{"failure", runResult{exitCode: 1}, "✗ Copy failed (exit 1) after 2.1s: upload report.txt → docs/"},
+	} {
+		if got := copyResultLine(spec, c.res, 2140*time.Millisecond); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	dl := copySpec{local: "/tmp", remote: "/var/log/x", download: true}
+	if got := copyResultLine(dl, runResult{}, time.Second); !strings.Contains(got, "download /var/log/x → /tmp") {
+		t.Errorf("download line: %q", got)
+	}
+
+	// settling a copy appends the line and, when every machine is done, a summary
+	now := time.Now()
+	one := &machineRun{device: client.Device{ID: "a"}, status: runRunning, startedAt: now.Add(-time.Second)}
+	two := &machineRun{device: client.Device{ID: "b"}, status: runRunning, startedAt: now.Add(-time.Second)}
+	m := model{}
+	m.run.spec = sshJob{action: sshActionCopy, copy: spec}
+	m.run.multi = true
+	m.run.runs = []*machineRun{one, two}
+	m.run.startedAt = now.Add(-time.Second)
+	m.settleMachineRun(one, runResult{})
+	if len(one.lines) != 1 || !strings.HasPrefix(one.lines[0], "✓ Copy finished") || m.notify.info != "" {
+		t.Fatalf("first machine: lines %v info %q", one.lines, m.notify.info)
+	}
+	m.settleMachineRun(two, runResult{exitCode: 1})
+	if !strings.HasPrefix(two.lines[0], "✗ Copy failed") || m.notify.info != "⚠ Copy finished on 2 machines: 1 ok, 1 failed" {
+		t.Fatalf("second machine: lines %v info %q", two.lines, m.notify.info)
+	}
+
+	// a single machine: success, and the login failures that lead to a retry
+	solo := &machineRun{device: client.Device{ID: "a"}, status: runRunning, startedAt: now}
+	m = model{}
+	m.run.spec = sshJob{action: sshActionCopy, copy: spec}
+	m.run.runs = []*machineRun{solo}
+	m.settleMachineRun(solo, runResult{})
+	if m.notify.info != "✓ Copy finished on 1 machine" {
+		t.Fatalf("info = %q", m.notify.info)
+	}
+	for _, f := range []sshFailure{sshFailureConnection, sshFailureBadPassword} {
+		m.notify.info = ""
+		solo.status = runRunning
+		m.settleMachineRun(solo, runResult{exitCode: 255, failure: f})
+		if m.notify.info != "" {
+			t.Fatalf("no summary before a retry (%v): %q", f, m.notify.info)
+		}
+	}
+
+	// other jobs are untouched
+	m = model{}
+	m.run.spec = sshJob{action: sshActionCommand, command: "uptime"}
+	cmdRun := &machineRun{status: runRunning, startedAt: now}
+	m.run.runs = []*machineRun{cmdRun}
+	m.settleMachineRun(cmdRun, runResult{})
+	if len(cmdRun.lines) != 0 || m.notify.info != "" {
+		t.Fatal("only copies get a result line")
+	}
+}
+
+// Verifies: REQ-CPY-009
+func TestCopySummaryCounts(t *testing.T) {
+	run := func(status runStatus, exit int, killed bool) *machineRun {
+		return &machineRun{status: status, exitCode: exit, killed: killed}
+	}
+	for name, tc := range map[string]struct {
+		runs []*machineRun
+		want string
+	}{
+		"all skipped": {[]*machineRun{run(runSkipped, 0, false)}, "Copy: nothing was copied (all machines skipped)"},
+		"none":        {nil, "Copy: nothing was copied (all machines skipped)"},
+		"all ok":      {[]*machineRun{run(runDone, 0, false), run(runDone, 0, false), run(runSkipped, 0, false)}, "✓ Copy finished on 2 machines"},
+		"failed run":  {[]*machineRun{run(runFailed, 0, false), run(runDone, 0, false)}, "⚠ Copy finished on 2 machines: 1 ok, 1 failed"},
+		"killed":      {[]*machineRun{run(runDone, -1, true)}, "⚠ Copy finished on 1 machine: 0 ok, 1 failed"},
+	} {
+		if got := copySummary(tc.runs); got != tc.want {
+			t.Errorf("%s: %q, want %q", name, got, tc.want)
+		}
+	}
+}
