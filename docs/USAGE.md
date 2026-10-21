@@ -46,6 +46,14 @@ go install github.com/yatsenko-ihor/ts-cli@latest
 
 This installs `ts-cli` to your `$GOPATH/bin` directory.
 
+### Releases
+
+Every version tag (`vX.Y.Z`) is built by the `release` workflow (`.github/workflows/release.yml`) into archives named `ts-cli_<version>_<os>_<arch>.tar.gz` (`.zip` for Windows) containing the binary, `README.md`, `LICENSE` and `SECURITY.md`, plus `checksums.txt`, and attached to a GitHub Release. Verify a download with `sha256sum -c --ignore-missing checksums.txt`. The binary reports the tag as its version (`ts-cli --version`).
+
+To publish a version: push a tag (`git tag -a v1.2.3 -m "ts-cli v1.2.3" && git push origin v1.2.3`), or run the workflow by hand from the Actions tab and give the tag; it is then created on the selected branch. The workflow runs `go vet` and `go test -race` first and refuses tags that are not of the form `v1.2.3` or `v1.2.3-rc1` (the latter becomes a pre-release).
+
+macOS: binaries are not notarised, so Gatekeeper may block a downloaded one (`xattr -d com.apple.quarantine ts-cli`); `ts-cli install` re-signs the installed copy ad hoc.
+
 ## Usage
 
 ### Authentication

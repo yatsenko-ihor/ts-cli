@@ -19,6 +19,7 @@
 - [x] DO-178C-style verification of the critical files: requirements, traceability check, 100% statement coverage gate in CI (`docs/do178c/`)
 - [x] `ts-cli install`: install as a new file (and ad-hoc re-sign on macOS) so `tsc`/`ts-cli` are not killed after reinstall
 - [x] Themes: dark-pastel, calmer hacker, custom themes from `~/.ts-cli/themes/*.json`
+- [x] Release workflow: tagged builds for Linux/macOS/Windows attached to a GitHub Release
 - [x] Version 1.2.0
 
 ## Not done
