@@ -56,6 +56,7 @@ type sshJob struct {
 	command string          // sshActionCommand
 	script  *scripts.Script // sshActionScript
 	args    []string        // sshActionScript
+	copy    copySpec        // sshActionCopy
 }
 
 // label is the short description used in the Output title.
@@ -67,6 +68,8 @@ func (j sshJob) label() string {
 		}
 	case sshActionCommand:
 		return j.command
+	case sshActionCopy:
+		return j.copy.label()
 	}
 	return ""
 }
@@ -88,6 +91,7 @@ func (m model) beginSSH(index int, job sshJob) (tea.Model, tea.Cmd) {
 		command:     job.command,
 		script:      job.script,
 		args:        job.args,
+		copy:        job.copy,
 	}
 
 	if m.needsAccountSwitch(device) {
@@ -158,8 +162,8 @@ func (m model) runPendingAttempt() (tea.Model, tea.Cmd) {
 			return m, probeSSH(device, p.username, password)
 		}
 		return m, m.sshToDevice(device, p.username, password)
-	case sshActionCommand, sshActionScript:
-		spec := sshJob{action: p.action, command: p.command, script: p.script, args: p.args}
+	case sshActionCommand, sshActionScript, sshActionCopy:
+		spec := sshJob{action: p.action, command: p.command, script: p.script, args: p.args, copy: p.copy}
 		job, err := startRemoteJob(device, p.username, password, spec)
 		if err != nil {
 			return m.finishSSHAttempt(sshFailureExec, err)

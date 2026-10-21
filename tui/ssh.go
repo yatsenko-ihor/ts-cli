@@ -86,8 +86,16 @@ func buildSSHTarget(username, address string) (string, error) {
 // batch requests `-o BatchMode=yes` for non-interactive runs without a
 // password, so ssh fails fast instead of trying to prompt on the TUI's tty.
 func newSSHCommand(target, password string, batch bool, remoteArgs ...string) (*exec.Cmd, func(), error) {
+	return newSecureCommand("ssh", nil, append([]string{target}, remoteArgs...), password, batch)
+}
+
+// newSecureCommand builds `tool [common options] [opts] tail...` where tool is
+// ssh or scp, with the same connection options and the same password handling
+// for both: the password goes through a private pipe to `sshpass -d 3`, never
+// into the argument list.
+func newSecureCommand(tool string, opts, tail []string, password string, batch bool) (*exec.Cmd, func(), error) {
 	// ConnectTimeout keeps a dead host from hanging the TUI for minutes.
-	sshArgs := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15"}
+	sshArgs := append([]string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15"}, opts...)
 
 	if password != "" {
 		if sshpassPath, err := exec.LookPath("sshpass"); err == nil {
@@ -103,9 +111,8 @@ func newSSHCommand(target, password string, batch bool, remoteArgs ...string) (*
 			w.Close()
 
 			// ExtraFiles[0] becomes fd 3 in the child.
-			args := append([]string{"-d", "3", "ssh"}, sshArgs...)
-			args = append(args, target)
-			args = append(args, remoteArgs...)
+			args := append([]string{"-d", "3", tool}, sshArgs...)
+			args = append(args, tail...)
 			cmd := exec.Command(sshpassPath, args...)
 			cmd.ExtraFiles = []*os.File{r}
 			return cmd, func() { r.Close() }, nil
@@ -115,9 +122,8 @@ func newSSHCommand(target, password string, batch bool, remoteArgs ...string) (*
 	if batch {
 		sshArgs = append(sshArgs, "-o", "BatchMode=yes")
 	}
-	args := append(sshArgs, target)
-	args = append(args, remoteArgs...)
-	return exec.Command("ssh", args...), func() {}, nil
+	args := append(sshArgs, tail...)
+	return exec.Command(tool, args...), func() {}, nil
 }
 
 // bannerExec implements tea.ExecCommand: it prints a connection banner on the
@@ -202,22 +208,23 @@ func startRemoteJob(device client.Device, username, password string, spec sshJob
 		return nil, err
 	}
 
-	var remote string
+	var cmd *exec.Cmd
+	var cleanup func()
 	var stdin []byte
 	switch spec.action {
 	case sshActionCommand:
-		remote = spec.command
+		cmd, cleanup, err = newSSHCommand(sshTarget, password, true, spec.command)
 	case sshActionScript:
 		if spec.script == nil {
 			return nil, fmt.Errorf("no script selected")
 		}
-		remote = spec.script.RemoteCommand(spec.args)
+		cmd, cleanup, err = newSSHCommand(sshTarget, password, true, spec.script.RemoteCommand(spec.args))
 		stdin = spec.script.Content
+	case sshActionCopy:
+		cmd, cleanup, err = newSCPCommand(sshTarget, password, spec.copy)
 	default:
 		return nil, fmt.Errorf("nothing to run")
 	}
-
-	cmd, cleanup, err := newSSHCommand(sshTarget, password, true, remote)
 	if err != nil {
 		return nil, err
 	}
