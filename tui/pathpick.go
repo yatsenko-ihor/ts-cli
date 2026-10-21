@@ -213,9 +213,9 @@ func (m model) handleBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			b.cursor++
 		}
 	case "pgup":
-		b.cursor = max(0, b.cursor-browserRows)
+		b.cursor = max(0, b.cursor-m.browserRows())
 	case "pgdown":
-		b.cursor = max(0, min(len(b.entries)-1, b.cursor+browserRows))
+		b.cursor = max(0, min(len(b.entries)-1, b.cursor+m.browserRows()))
 	case "home", "g":
 		b.cursor = 0
 	case "end", "G":
@@ -250,8 +250,22 @@ func (m model) handleBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// browserRows is how many entries are visible at once.
-const browserRows = 12
+// browserRows is how many entries are visible at once: the browser grows with
+// the terminal's height (12 when the height is unknown).
+func (m model) browserRows() int {
+	if m.height <= 0 {
+		return 12
+	}
+	return max(5, min(40, m.height-16))
+}
+
+// browserWidth is the popup's width: it stretches with the terminal's width.
+func (m model) browserWidth() int {
+	if m.width <= 0 {
+		return 72
+	}
+	return max(40, min(160, m.width-8))
+}
 
 // renderBrowser renders the browser as a popup.
 func (m model) renderBrowser() string {
@@ -260,11 +274,9 @@ func (m model) renderBrowser() string {
 	s.WriteString(titleStyle.Render(fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)))
 	s.WriteString("\n\n")
 
-	width := 72
-	if m.width > 0 && m.width < 90 {
-		width = max(40, m.width-10)
-	}
+	width := m.browserWidth()
 	inner := width - 6
+	rows := m.browserRows()
 
 	var c strings.Builder
 	what := "file or directory"
@@ -281,10 +293,10 @@ func (m model) renderBrowser() string {
 		c.WriteString("\n")
 	}
 	start := 0
-	if b.cursor >= browserRows {
-		start = b.cursor - browserRows + 1
+	if b.cursor >= rows {
+		start = b.cursor - rows + 1
 	}
-	end := min(len(b.entries), start+browserRows)
+	end := min(len(b.entries), start+rows)
 	for i := start; i < end; i++ {
 		e := b.entries[i]
 		name := e.label()
@@ -313,7 +325,7 @@ func (m model) renderBrowser() string {
 	if !b.dirsOnly {
 		help = "↑/↓ move • →/enter open or choose a file • ←/⌫ up • enter on . or space chooses this directory • . hidden • ~ home • esc back"
 	}
-	c.WriteString(grayItalicStyle.Render(truncateForWidth(help, inner)))
+	c.WriteString(grayItalicStyle.Width(inner).Render(help)) // wraps; nothing is cut off
 
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cur.borderFocus).Padding(1, 2).Width(width)
 	s.WriteString(box.Render(c.String()))

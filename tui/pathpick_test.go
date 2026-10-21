@@ -567,3 +567,46 @@ func TestBrowseButtonInPathPrompts(t *testing.T) {
 		}
 	}
 }
+
+// Verifies: REQ-PPK-010
+func TestBrowserStretchesWithTheTerminal(t *testing.T) {
+	cases := []struct{ w, h, wantW, wantRows int }{
+		{0, 0, 72, 12},      // unknown size: the old defaults
+		{50, 20, 42, 5},     // small terminal: at least 40 wide, at least 5 rows
+		{100, 30, 92, 14},   // follows the terminal
+		{300, 100, 160, 40}, // capped
+	}
+	for _, c := range cases {
+		m := model{width: c.w, height: c.h}
+		if m.browserWidth() != c.wantW || m.browserRows() != c.wantRows {
+			t.Errorf("%dx%d: width %d rows %d, want %d and %d", c.w, c.h, m.browserWidth(), m.browserRows(), c.wantW, c.wantRows)
+		}
+	}
+	if (model{width: 10, height: 3}).browserWidth() != 40 {
+		t.Error("never narrower than 40")
+	}
+
+	root := tree(t)
+	for i := 0; i < 30; i++ {
+		_ = os.WriteFile(filepath.Join(root, "file"+string(rune('a'+i%26))+string(rune('a'+i/26))+".txt"), nil, 0o644)
+	}
+	count := func(m model) int { return strings.Count(m.renderBrowser(), "file") }
+	small := model{width: 100, height: 20, version: "t", browse: newBrowser(root, false)}
+	big := model{width: 200, height: 60, version: "t", browse: newBrowser(root, false)}
+	if count(big) <= count(small) {
+		t.Errorf("a taller terminal shows more rows: %d vs %d", count(big), count(small))
+	}
+	// the help is wrapped, not cut off
+	for _, m := range []model{small, big} {
+		out := m.renderBrowser()
+		if strings.Contains(out, "...") || !strings.Contains(out, "esc back") {
+			t.Errorf("the key help must be complete:\n%s", out)
+		}
+	}
+	// paging uses the visible row count
+	big.browse.cursor = 0
+	updated, _ := big.handleBrowser(browserKey("pgdown"))
+	if got := updated.(model).browse.cursor; got != big.browserRows() {
+		t.Errorf("pgdown moved to %d, want %d", got, big.browserRows())
+	}
+}
