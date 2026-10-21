@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yatsenko-ihor/ts-cli/client"
@@ -152,15 +153,21 @@ func (m model) styledFlags(d client.Device) string {
 		if m.hasSavedPassword(d) {
 			pwd = "🔐"
 		}
-		return " " + padRight(getKeyExpiryIcon(d), 2) + " " + padRight(pwd, 2)
+		icon := getKeyExpiryIcon(d)
+		if _, soon := deviceKeyState(d, time.Now()); soon {
+			icon = "⏳"
+		}
+		return " " + padRight(icon, 2) + " " + padRight(pwd, 2)
 	}
 	pw := "  "
 	if m.hasSavedPassword(d) {
 		pw = lipgloss.NewStyle().Foreground(colorOnline).Render("pw")
 	}
 	exp := "   "
-	if getKeyExpiryIcon(d) == "🔒" { // key already expired
+	if expired, soon := deviceKeyState(d, time.Now()); expired {
 		exp = lipgloss.NewStyle().Foreground(colorOffline).Render("exp")
+	} else if soon {
+		exp = lipgloss.NewStyle().Foreground(colorWarn).Render("exp")
 	}
 	return " " + pw + " " + exp
 }

@@ -541,6 +541,10 @@ func (m model) viewBody() string {
 		b.WriteString(lipgloss.NewStyle().Foreground(colorWarn).Render(w))
 		b.WriteString("\n")
 	}
+	if w := m.deviceKeyWarning(time.Now()); w != "" {
+		b.WriteString(lipgloss.NewStyle().Foreground(colorWarn).Render(truncateForWidth(w, max(20, m.width-2))))
+		b.WriteString("\n")
+	}
 
 	// Show default SSH username
 	if m.ssh.username != "" {

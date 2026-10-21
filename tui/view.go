@@ -626,11 +626,11 @@ func (m model) renderMachineCredsView() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := "↑/k ↓/j • space select • * all • p ping • / search • s ssh • : run • c copy • tab run panel • P profile • S sort • r reload • o options • a about"
+	help := fitHints(m.listHints(), hintTail, m.hintWidth())
 	if m.run.visible {
 		switch m.activeFocus {
 		case focusRun:
-			help = "1/2/3 frame • [/] tabs • ↑/k ↓/j • enter run • : command • tab/shift+tab switch • esc close"
+			help = m.runFocusHints()
 		case focusOutput:
 			if m.run.multi {
 				help = "1/2/3 frame • ↑/k ↓/j • {/} machine • g/G top/end • c copy path • N copy name • x stop • C clear • esc close"
@@ -640,12 +640,6 @@ func (m model) getHelpText() string {
 		default:
 			help = "1/2/3 frame • ↑/k ↓/j • space select • * all • s ssh • : run • tab/shift+tab switch • esc close"
 		}
-	}
-	if !m.run.visible {
-		if m.ssh.username != "" {
-			help += " • d clear-user"
-		}
-		help += " • F1 help • q quit"
 	}
 
 	switch m.input.mode {
