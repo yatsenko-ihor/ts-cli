@@ -1,5 +1,7 @@
 package tui
 
+import "time"
+
 // Layout calculation functions for determining panel sizes and dimensions
 
 // getMachineListWidth returns the width to use for the machine list panel
@@ -84,6 +86,39 @@ func (m model) getSplitPanelWidths() (int, int) {
 	return listWidth, rightWidth
 }
 
+// extraRows counts the lines the screen shows besides the title block, the
+// panels and the help bar: warnings above the panels and messages below. The
+// panels shrink by that many rows so the whole screen still fits the terminal
+// and the title does not scroll away.
+func (m model) extraRows() int {
+	n := 0
+	if m.keyWarning() != "" {
+		n++
+	}
+	if m.deviceKeyWarning(time.Now()) != "" {
+		n++
+	}
+	if m.notify.info != "" {
+		n++
+	}
+	if m.notify.reloadSuccess != "" {
+		n++
+	}
+	if m.notify.copiedText != "" {
+		n++
+	}
+	if m.notify.sshError != nil {
+		n += 2 // the message has a margin above it
+	}
+	if m.inst.showSuggestion {
+		n += 2
+	}
+	if !m.run.visible && len(m.run.runs) > 0 && m.run.label != "" {
+		n++ // "Last run: ..."
+	}
+	return n
+}
+
 // getHistoryPanelSize returns the width and height for the history/output panels
 func (m model) getHistoryPanelSize() (int, int) {
 	panelWidth := 45
@@ -95,7 +130,7 @@ func (m model) getHistoryPanelSize() (int, int) {
 	}
 
 	if m.height > 0 {
-		availHeight := (m.height - 12) / 2
+		availHeight := (m.height - 12 - m.extraRows()) / 2
 		if availHeight < 15 {
 			panelHeight = 15
 		} else if availHeight < panelHeight {
@@ -113,8 +148,8 @@ func (m model) getMaxVisibleItems() int {
 	}
 
 	// Subtract headers, help text, borders, and extra rows
-	headerRows := 7 // approximate header area rows
-	footerRows := 6 // help panel rows
+	headerRows := 7 + m.extraRows() // approximate header area rows
+	footerRows := 6                 // help panel rows
 	if m.run.visible {
 		footerRows = 2
 	}

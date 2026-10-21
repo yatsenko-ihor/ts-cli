@@ -65,3 +65,7 @@ admin console first; cleaning git history is not a substitute.
 
 CI runs `gofmt`, `go vet`, `go test -race`, `staticcheck`, `gosec` and
 `govulncheck` on every push. Dependencies are pinned in `go.sum`.
+
+## API endpoint override
+
+`TS_CLI_API_URL` redirects all Tailscale API requests, including the Authorization header with your API key, to the given `http(s)` URL. It exists for proxies and test servers. Treat it like any other credential-bearing setting: do not set it from untrusted sources.
