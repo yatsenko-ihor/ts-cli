@@ -16,8 +16,11 @@ import (
 
 const fakeSCPScript = `#!/bin/sh
 d="$FAKE_DIR"
-: > "$d/scp.argv"
-for a in "$@"; do printf '%s\0' "$a" >> "$d/scp.argv"; done
+# Several machines run in parallel: write a private file, then rename it into
+# place so the recorded argv is always one invocation's, never a mixture.
+: > "$d/scp.$$"
+for a in "$@"; do printf '%s\0' "$a" >> "$d/scp.$$"; done
+mv "$d/scp.$$" "$d/scp.argv"
 exit ${FAKE_SCP_EXIT:-0}
 `
 
@@ -33,6 +36,9 @@ func copyEnv(t *testing.T) string {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := os.Symlink("/bin/mv", filepath.Join(dir, "mv")); err != nil { // the fake scp renames its record
+		t.Fatal(err)
 	}
 	old := tailscaleAvailable
 	tailscaleAvailable = func() bool { return false } // no pre-flight ping

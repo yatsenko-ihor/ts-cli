@@ -7,6 +7,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// osExit is os.Exit; a variable only so tests can observe the exit status.
+var osExit = os.Exit
+
 // Version is the current version of ts-cli
 const Version = "1.2.0"
 
@@ -23,7 +26,7 @@ func NewRootCommand() *cobra.Command {
 			interactiveCmd := NewInteractiveCommand()
 			if err := interactiveCmd.RunE(cmd, args); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				osExit(1)
 			}
 		},
 	}

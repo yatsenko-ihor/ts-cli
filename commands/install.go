@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +12,57 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// Test seams: package-level variables whose defaults give the production
+// behaviour. They let the tests redirect the installation directory, fake the
+// operating system and inject failures without touching /usr/local/bin.
+var (
+	goos           = runtime.GOOS
+	installDirFn   = defaultInstallDir
+	executablePath = os.Executable
+	evalSymlinks   = filepath.EvalSymlinks
+	removeFn       = os.Remove
+	symlinkFn      = os.Symlink
+	createTemp     = func(dir, pattern string) (tempFile, error) {
+		f, err := os.CreateTemp(dir, pattern)
+		if err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
+)
+
+// tempFile is the part of *os.File that copyFile uses.
+type tempFile interface {
+	Write([]byte) (int, error)
+	Chmod(os.FileMode) error
+	Close() error
+	Name() string
+}
+
+// defaultInstallDir is where `install` puts the binary and `uninstall`
+// looks for it.
+func defaultInstallDir() string {
+	if goos == "windows" {
+		return filepath.Join(os.Getenv("ProgramFiles"), "ts-cli")
+	}
+	return "/usr/local/bin"
+}
+
+// confirmed reads one line from in and reports whether it is exactly "y" or
+// "yes" (any case, surrounding blanks ignored). Anything else, including EOF,
+// an empty line or "y and more", means no.
+func confirmed(in io.Reader) bool {
+	line, _ := bufio.NewReader(in).ReadString('\n') // EOF returns the partial line
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes"
+}
+
+// tscIsTypeScript reports whether the `tsc` found on PATH is the TypeScript compiler.
+func tscIsTypeScript() bool {
+	output, _ := exec.Command("tsc", "--version").CombinedOutput()
+	return strings.Contains(string(output), "Version")
+}
 
 // NewInstallCommand creates the install command
 func NewInstallCommand() *cobra.Command {
@@ -30,13 +83,13 @@ This command will:
 
 func runInstall(cmd *cobra.Command, args []string) error {
 	// Get the path of the currently running executable
-	execPath, err := os.Executable()
+	execPath, err := executablePath()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
 	// Resolve symlinks to get the actual binary path
-	execPath, err = filepath.EvalSymlinks(execPath)
+	execPath, err = evalSymlinks(execPath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve symlinks: %w", err)
 	}
@@ -56,16 +109,11 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	if isInPath("tsc") {
 		// Check if it's our tsc or TypeScript compiler
-		tscPath, _ := exec.LookPath("tsc")
-		if tscPath != "" {
-			// Try to determine if it's TypeScript's tsc
-			output, _ := exec.Command("tsc", "--version").CombinedOutput()
-			if strings.Contains(string(output), "Version") {
-				fmt.Println("  ✗ tsc alias not available (TypeScript compiler found)")
-			} else {
-				fmt.Println("  ✓ tsc alias is already in PATH")
-				tscAlreadyInstalled = true
-			}
+		if tscIsTypeScript() {
+			fmt.Println("  ✗ tsc alias not available (TypeScript compiler found)")
+		} else {
+			fmt.Println("  ✓ tsc alias is already in PATH")
+			tscAlreadyInstalled = true
 		}
 	} else {
 		fmt.Println("  ✗ tsc alias is not in PATH")
@@ -81,13 +129,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine installation directory based on OS
-	var installDir string
-	switch runtime.GOOS {
-	case "windows":
-		installDir = filepath.Join(os.Getenv("ProgramFiles"), "ts-cli")
-	default: // Unix-like systems (macOS, Linux)
-		installDir = "/usr/local/bin"
-	}
+	installDir := installDirFn()
 
 	fmt.Printf("Installation directory: %s\n", installDir)
 
@@ -98,11 +140,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Print("Do you want to proceed with installation? (y/n): ")
 	}
 
-	var response string
-	_, _ = fmt.Scanln(&response) // EOF/empty input falls through to "cancelled"
-	response = strings.ToLower(strings.TrimSpace(response))
-
-	if response != "y" && response != "yes" {
+	if !confirmed(cmd.InOrStdin()) {
 		fmt.Println("Installation cancelled.")
 		return nil
 	}
@@ -127,14 +165,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	if tscInPath {
 		// Check if it's our tsc or TypeScript compiler
-		tscPath, _ := exec.LookPath("tsc")
-		if tscPath != "" {
-			output, _ := exec.Command("tsc", "--version").CombinedOutput()
-			if strings.Contains(string(output), "Version") {
-				fmt.Println("⚠ tsc alias conflicts with TypeScript compiler")
-			} else {
-				fmt.Println("✓ tsc alias is now available in PATH")
-			}
+		if tscIsTypeScript() {
+			fmt.Println("⚠ tsc alias conflicts with TypeScript compiler")
+		} else {
+			fmt.Println("✓ tsc alias is now available in PATH")
 		}
 	} else {
 		fmt.Println("⚠ tsc alias not yet in PATH (may require new terminal session)")
@@ -147,7 +181,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("   2. Add %s to your PATH\n", installDir)
 
 		// Provide shell-specific instructions
-		if runtime.GOOS != "windows" {
+		if goos != "windows" {
 			shell := os.Getenv("SHELL")
 			if strings.Contains(shell, "zsh") {
 				fmt.Println("   3. Run: echo 'export PATH=\"$PATH:" + installDir + "\"' >> ~/.zshrc && source ~/.zshrc")
@@ -179,7 +213,7 @@ func installBinary(srcPath, destDir string) error {
 	tscPath := filepath.Join(destDir, "tsc")
 
 	// On Windows, add .exe extension
-	if runtime.GOOS == "windows" {
+	if goos == "windows" {
 		destPath += ".exe"
 		tscPath += ".exe"
 	}
@@ -190,12 +224,7 @@ func installBinary(srcPath, destDir string) error {
 		return fmt.Errorf("failed to copy binary: %w", err)
 	}
 
-	// Make executable (Unix-like systems)
-	if runtime.GOOS != "windows" {
-		if err := os.Chmod(destPath, 0755); err != nil {
-			return fmt.Errorf("failed to set permissions: %w", err)
-		}
-	}
+	// copyFile already created the file with mode 0755.
 
 	// Create symlink/copy for tsc alias
 	fmt.Printf("Creating tsc alias at %s...\n", tscPath)
@@ -207,20 +236,20 @@ func installBinary(srcPath, destDir string) error {
 			fmt.Printf("Warning: %s already exists and is not a ts-cli alias; skipping tsc alias.\n", tscPath)
 			return nil
 		}
-		if err := os.Remove(tscPath); err != nil {
+		if err := removeFn(tscPath); err != nil {
 			fmt.Printf("Warning: failed to replace existing tsc alias: %v\n", err)
 			return nil
 		}
 	}
 
-	if runtime.GOOS == "windows" {
+	if goos == "windows" {
 		// On Windows, create a copy instead of symlink
 		if err := copyFile(destPath, tscPath); err != nil {
 			fmt.Printf("Warning: failed to create tsc alias: %v\n", err)
 		}
 	} else {
 		// On Unix-like systems, create a symlink
-		if err := os.Symlink("ts-cli", tscPath); err != nil {
+		if err := symlinkFn("ts-cli", tscPath); err != nil {
 			fmt.Printf("Warning: failed to create tsc symlink: %v\n", err)
 		}
 	}
@@ -233,14 +262,14 @@ func installBinary(srcPath, destDir string) error {
 // copy of the binary, which cannot be told apart from anything else, so an
 // existing file is never considered ours.
 func isOurTscAlias(path string) bool {
-	if runtime.GOOS == "windows" {
+	if goos == "windows" {
 		return false
 	}
 	target, err := os.Readlink(path)
 	if err != nil {
 		return false
 	}
-	return target == "ts-cli" || filepath.Base(target) == "ts-cli"
+	return filepath.Base(target) == "ts-cli"
 }
 
 // adHocSign gives the installed binary a fresh ad-hoc code signature. It is a
@@ -263,7 +292,7 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(dst), ".ts-cli-install-*")
+	tmp, err := createTemp(filepath.Dir(dst), ".ts-cli-install-*")
 	if err != nil {
 		return err
 	}
@@ -283,7 +312,7 @@ func copyFile(src, dst string) error {
 		os.Remove(tmpName)
 		return err
 	}
-	if runtime.GOOS == "darwin" {
+	if goos == "darwin" {
 		// Best effort: an unsigned arm64 binary would be killed on launch.
 		if err := adHocSign(tmpName); err != nil {
 			fmt.Printf("Warning: could not re-sign %s (%v); if it is killed on launch run: codesign --force --sign - %s\n", dst, err, dst)

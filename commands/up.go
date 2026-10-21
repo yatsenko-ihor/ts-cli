@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 
 	"github.com/spf13/cobra"
 )
@@ -47,6 +46,8 @@ This command runs 'tailscale up' with optional flags for configuration.`,
 
 			if acceptDNS {
 				tailscaleArgs = append(tailscaleArgs, "--accept-dns")
+			} else {
+				tailscaleArgs = append(tailscaleArgs, "--accept-dns=false")
 			}
 
 			if exitNode != "" {
@@ -62,7 +63,7 @@ This command runs 'tailscale up' with optional flags for configuration.`,
 
 			// Execute tailscale up command - interactive mode
 			tailscaleCmd := exec.Command("tailscale", tailscaleArgs...)
-			tailscaleCmd.Stdin = os.Stdin
+			tailscaleCmd.Stdin = cmd.InOrStdin()
 			tailscaleCmd.Stdout = os.Stdout
 			tailscaleCmd.Stderr = os.Stderr
 
@@ -96,7 +97,7 @@ func isTailscaleInstalled() bool {
 
 // getInstallInstructions returns OS-specific installation instructions
 func getInstallInstructions() string {
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
 		return `To install Tailscale on macOS:
   brew install --cask tailscale

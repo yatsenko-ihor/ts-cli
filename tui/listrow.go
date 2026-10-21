@@ -376,11 +376,8 @@ func (m model) listCapacity() int {
 	if m.input.mode == inputSearch || m.list.searchQuery != "" {
 		header++
 	}
-	c := content - header - 2 // top and bottom scroll indicators
-	if c < 1 {
-		c = 1
-	}
-	return c
+	// minus the top and bottom scroll indicators; at least one row
+	return max(content-header-2, 1)
 }
 
 // ensureListCursorVisible scrolls the list so the cursor row is on screen
