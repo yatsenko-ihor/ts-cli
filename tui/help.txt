@@ -14,7 +14,8 @@ KEYBOARD SHORTCUTS
                  see F12 → SSH in a tmux split)
   :              Run a one-off command on the selected machine(s)
   c              Copy the ssh command for the selected machine
-  Tab            Open the Run panel (Tab/Shift+Tab cycle panels)
+  Tab            Open the Run panel (Tab/Shift+Tab cycle panels); its
+                 Machine tab: ping with details, key expiry, rename, tags, delete
   r              Reload device list
   /              Search devices
   Shift+S        Cycle sort mode (Name/Last seen/Added)
@@ -25,7 +26,7 @@ KEYBOARD SHORTCUTS
   u              Run 'tailscale up'
   1, 2, 3        Focus panels (Machines, Run, Output)
   q / Ctrl+C     Quit
-  F1             This help screen
+  F1 or ?        This help screen
 
 TEXT EDITING (all inputs)
 ─────────────────────────

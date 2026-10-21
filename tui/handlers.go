@@ -298,6 +298,13 @@ func (m model) handleProfileSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // ─── Normal mode ──────────────────────────────────────────────────────────────
 
+// openHelp shows the full help screen (F1 or ?).
+func openHelp(m model) (tea.Model, tea.Cmd) {
+	m.helpMode = true
+	m.helpScroll = 0
+	return m, nil
+}
+
 var normalModeHandlers = map[string]keyHandler{
 	"ctrl+c":    cmdQuit,
 	"q":         cmdQuit,
@@ -409,11 +416,8 @@ var normalModeHandlers = map[string]keyHandler{
 		m.aboutMode = true
 		return m, nil
 	},
-	"f1": func(m model) (tea.Model, tea.Cmd) {
-		m.helpMode = true
-		m.helpScroll = 0
-		return m, nil
-	},
+	"f1": openHelp,
+	"?":  openHelp,
 	"S": func(m model) (tea.Model, tea.Cmd) {
 		// Cycle sort mode
 		m.list.sort = (m.list.sort + 1) % sortModeCount
@@ -650,7 +654,7 @@ func (m model) handleAboutMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) handleHelpMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "q", "f1", "enter":
+	case "esc", "q", "f1", "?", "enter":
 		m.helpMode = false
 	case "ctrl+c":
 		return m, tea.Quit
