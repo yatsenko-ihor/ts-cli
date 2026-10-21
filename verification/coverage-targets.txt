@@ -17,3 +17,4 @@ tui/tmux.go 100
 client/device_actions.go 100
 tui/pinginfo.go 100
 tui/copy.go 100
+tui/tailscalessh.go 100
