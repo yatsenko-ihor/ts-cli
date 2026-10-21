@@ -85,17 +85,8 @@ func ValidateAPIKey(apiKey string) error {
 		return fmt.Errorf("API key too long (max 200 characters)")
 	}
 
-	// Check for common prefixes
-	validPrefixes := []string{"tskey-", "tskey-api-", "tskey-auth-"}
-	hasValidPrefix := false
-	for _, prefix := range validPrefixes {
-		if strings.HasPrefix(apiKey, prefix) {
-			hasValidPrefix = true
-			break
-		}
-	}
-
-	if !hasValidPrefix {
+	// Every Tailscale key type (tskey-api-, tskey-auth-, ...) starts with tskey-.
+	if !strings.HasPrefix(apiKey, "tskey-") {
 		return fmt.Errorf("API key should start with 'tskey-' or 'tskey-api-' (Tailscale API key format)")
 	}
 

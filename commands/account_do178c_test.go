@@ -1011,3 +1011,77 @@ func TestACCCommandWiring(t *testing.T) {
 		t.Fatal("unknown subcommand must fail")
 	}
 }
+
+// Verifies: REQ-ACC-026
+func TestACCAddFindsTheAccountByTailnetOnly(t *testing.T) {
+	isolate(t)
+	startAPI(t, map[string]int{keyA: 200, keyB: 200, keyN: 200}, nil)
+	// An account whose display name equals the tailnet being added: that is
+	// another account, so adding the tailnet must not overwrite it.
+	err := config.Update(func(c *config.Config) error {
+		c.AddAccount("shared.example.com", keyA, "other.example.com", true)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = runAcc(t, "", "add", "--tailnet=shared.example.com", "--name=shared", "--api-key="+keyN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := loadCfg(t)
+	if len(c.Accounts) != 2 || c.Accounts[0].Tailnet != "other.example.com" || c.Accounts[0].APIKey != keyA || c.Accounts[1].Tailnet != "shared.example.com" {
+		t.Fatalf("the existing account must be untouched and a new one added: %+v", c.Accounts)
+	}
+}
+
+// Verifies: REQ-ACC-027
+func TestACCAddRejectsADisplayNameOfAnotherAccount(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{"new tailnet, name of another account", []string{"--tailnet=new.example.com", "--name=work"}, true},
+		{"new tailnet, name equal to another account's tailnet", []string{"--tailnet=new.example.com", "--name=third.example.com"}, true},
+		{"new tailnet, default name equals another account's name", []string{"--tailnet=home"}, false}, // "home" has no dot: fails tailnet validation instead
+		{"existing tailnet renamed to another account's name", []string{"--tailnet=home.example.com", "--name=work"}, true},
+		{"existing tailnet keeps its own name", []string{"--tailnet=home.example.com", "--name=home"}, false},
+		{"existing tailnet, no name: nothing to clash", []string{"--tailnet=home.example.com"}, false},
+		{"new tailnet, unused name", []string{"--tailnet=new.example.com", "--name=fresh"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			seed3(t)
+			startAPI(t, map[string]int{keyA: 200, keyN: 200}, nil)
+			before := loadCfg(t)
+			stdout, stderr, err := runAcc(t, "", append([]string{"add", "--api-key=" + keyN}, c.args...)...)
+			if c.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "failed to store") {
+					t.Fatalf("err = %v", err)
+				}
+				after := loadCfg(t)
+				if len(after.Accounts) != len(before.Accounts) {
+					t.Fatalf("nothing may be stored: %+v", after.Accounts)
+				}
+				for i := range before.Accounts {
+					if after.Accounts[i] != before.Accounts[i] {
+						t.Fatalf("account %d changed: %+v", i, after.Accounts[i])
+					}
+				}
+				noSecret(t, []string{keyN}, stdout, stderr, err.Error())
+			}
+		})
+	}
+
+	// the default name (the tailnet) clashing with another account's display name
+	seed3(t)
+	startAPI(t, map[string]int{keyN: 200}, nil)
+	err := config.Update(func(c *config.Config) error { return c.UpdateAccount("third", "fresh.example.com", "") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runAcc(t, "", "add", "--tailnet=fresh.example.com", "--api-key="+keyN); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("default name clash: %v", err)
+	}
+}
