@@ -77,9 +77,14 @@ func NewClient(apiKey string) *Client {
 
 // doRequest performs an HTTP request to the Tailscale API
 func (c *Client) doRequest(method, path string) (*http.Response, error) {
+	return c.doBody(method, path, nil)
+}
+
+// doBody is doRequest with an optional request body (sent as JSON).
+func (c *Client) doBody(method, path string, body io.Reader) (*http.Response, error) {
 	url := fmt.Sprintf("%s%s", baseURL, path)
 
-	req, err := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -87,6 +92,9 @@ func (c *Client) doRequest(method, path string) (*http.Response, error) {
 	// Use Bearer token authentication
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

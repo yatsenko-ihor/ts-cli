@@ -108,6 +108,14 @@ JSON output:
 ./ts-cli list --format=json
 ```
 
+Filter and script it (see [`list`](#list) for all flags):
+
+```bash
+ts-cli list --online --os linux
+ts-cli list --tag tag:server --format names
+ts-cli list --account work --format json
+```
+
 ### SSH
 
 Connect directly from the CLI:
@@ -349,7 +357,28 @@ Same as `account add`, and marks the account active. The key may also come from 
 ### `list`
 
 ```bash
-ts-cli list [--format=<table|json>] [--tailnet=<name>] [--api-key=<key>]
+ts-cli list [filters] [--sort=<key>] [--format=<table|json|names>] [-q] [--tailnet=<name>] [--api-key=<key>]
+```
+
+Filters are optional and combine with AND.
+
+| Flag | Description |
+|------|-------------|
+| `--online` / `--offline` | Only online (connected, or seen within 5 minutes) or offline devices; mutually exclusive |
+| `--os <name>` | OS equals `<name>`, case-insensitive (`linux`, `macOS`, `windows`, ...) |
+| `--tag <tag>` | Device has the tag; `tag:` prefix optional; repeatable, all must match |
+| `--account <name>` | Device belongs to the account (case-insensitive); repeatable, any of |
+| `--name <text>` | Case-insensitive substring of the name or hostname |
+| `--sort <key>` | `name` (default), `lastseen` (most recent first), `os`, `account` |
+| `--format <fmt>` | `table` (default), `json`, or `names` (one hostname per line, for scripts) |
+| `-q`, `--quiet` | Table without header and footer |
+
+A `tags` column appears in the table only when some device has tags. JSON output includes `tags` (array) and `online` (bool). When nothing matches, `No devices match the filters.` is printed to stderr, the exit status is 0, and `--format json` prints `[]`.
+
+```bash
+ts-cli list --online --os linux
+ts-cli list --tag tag:server --format names
+ts-cli list --account work --format json
 ```
 
 ### `ssh`

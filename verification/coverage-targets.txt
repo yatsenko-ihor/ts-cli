@@ -14,3 +14,4 @@ tui/runjob.go 100
 tui/procgroup_unix.go 100
 scripts/scripts.go 100
 tui/tmux.go 100
+client/device_actions.go 100
