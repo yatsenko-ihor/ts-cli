@@ -397,7 +397,7 @@ func TestRemoteBrowserNavigation(t *testing.T) {
 		t.Fatalf("~ asks for the home directory: %v", *asked)
 	}
 	m.browse.dir = "/"
-	updated, cmd = m.handleBrowser(browserKey("backspace"))
+	_, cmd = m.handleBrowser(browserKey("backspace"))
 	if (*asked)[len(*asked)-1] != "" { // not asked yet: the command has not run
 		t.Fatal("unexpected")
 	}
