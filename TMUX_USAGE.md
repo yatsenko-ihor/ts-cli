@@ -1,6 +1,6 @@
 # tmux Usage with ts-cli
 
-> **Inside tmux, `s` opens the ssh session in a split pane next to the list** (a real terminal on the right). It can be switched off in `F12` → *SSH in a tmux split*. See the README section "Running In tmux".
+> **Inside tmux, `s` opens the ssh session in a split pane next to the list** (a real terminal on the right). It can be switched off in `F12` → *SSH in a tmux split*. See [Running In tmux](docs/USAGE.md#running-in-tmux) in the guide.
 
 This guide shows practical ways to run `ts-cli` in `tmux` for split workflows.
 
