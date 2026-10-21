@@ -423,14 +423,24 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 		Padding(0, 1).
 		Width(popupWidth - 8)
 	content.WriteString(inputStyle.Render(renderEditable(value, m.input.cursor, masked, "▌", popupWidth-12)))
-	content.WriteString("\n\n")
+	content.WriteString("\n")
+	if m.input.mode == inputText && m.input.path != pathNone {
+		// A marker as well as colour, so focus is visible without colours.
+		button := "  " + lipgloss.NewStyle().Foreground(cur.accent).Render("[ Browse… ]")
+		if m.input.focusBrowse {
+			button = "▶ " + lipgloss.NewStyle().Foreground(cur.inputBg).Background(cur.accent).Bold(true).Render("[ Browse… ]")
+		}
+		content.WriteString(button)
+		content.WriteString("\n")
+	}
+	content.WriteString("\n")
 	if m.input.mode == inputText && m.input.note != "" {
 		content.WriteString(lipgloss.NewStyle().Foreground(cur.info).Render(truncateForWidth(m.input.note, popupWidth-8)))
 		content.WriteString("\n\n")
 	}
 	keys := "enter confirm • esc cancel • ctrl+v paste"
 	if m.input.mode == inputText && m.input.path != pathNone {
-		keys = "tab complete • ctrl+o browse • " + keys
+		keys = "tab complete • ↓ then enter, or ctrl+o: browse • " + keys
 	}
 	content.WriteString(grayItalicStyle.Render(truncateForWidth(keys, popupWidth-8)))
 

@@ -50,4 +50,4 @@
 - Ready-made group actions (reboot, update, disk check) on the marked machines
 - Tailscale SSH: fall back to plain ssh when the ACL refuses
 - Ping/latency history per machine
-
+- Mouse click on the Browse button (needs terminal mouse capture, which disables normal text selection; could be enabled only while a path prompt is open)

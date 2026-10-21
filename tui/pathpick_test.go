@@ -149,18 +149,21 @@ func TestBrowserListsDirectoriesFirstAndStartsWhereTheTextPoints(t *testing.T) {
 	names := func(b *fileBrowser) string {
 		var out []string
 		for _, e := range b.entries {
-			out = append(out, entryName(e.name, e.dir))
+			out = append(out, e.label())
 		}
 		return strings.Join(out, ",")
 	}
 	b := newBrowser(root, false)
-	if b.dir != root || names(b) != "alpha/,Beta/,link-to-beta/,alphabet.txt,beta.log,zeta.bin" {
+	if b.dir != root || names(b) != ". (choose this directory),.. (up),alpha/,Beta/,link-to-beta/,alphabet.txt,beta.log,zeta.bin" {
 		t.Fatalf("dir %s entries %s", b.dir, names(b))
 	}
-	if b.entries[3].size != 10 || b.entries[2].dir != true {
+	if b.cursor != 2 {
+		t.Fatalf("the cursor starts on the first real entry, got %d", b.cursor)
+	}
+	if b.entries[5].size != 10 || b.entries[4].dir != true {
 		t.Fatalf("sizes and symlinked directories: %+v", b.entries)
 	}
-	if got := names(newBrowser(root, true)); got != "alpha/,Beta/,link-to-beta/" {
+	if got := names(newBrowser(root, true)); got != ". (choose this directory),.. (up),alpha/,Beta/,link-to-beta/" {
 		t.Fatalf("dirs only: %s", got)
 	}
 	// starts: a directory, a file (its parent), a missing path (its parent), empty (cwd)
@@ -377,12 +380,15 @@ func TestBrowserHiddenHomeAndErrors(t *testing.T) {
 	if m.browse.dir != "/" {
 		t.Fatalf("dir = %s", m.browse.dir)
 	}
-	// empty directory: nothing to select, enter and right do nothing
+	// an empty directory has only "." and ".."; the cursor starts on ".."
 	empty := t.TempDir()
 	m = model{browse: newBrowser(empty, false)}
-	m = press(t, m, "enter", "right", "down", "up")
-	if m.browse == nil || m.browse.dir != empty {
-		t.Fatal("an empty directory stays put")
+	if len(m.browse.entries) != 2 || m.browse.cursor != 1 {
+		t.Fatalf("empty directory: %+v", m.browse)
+	}
+	m = press(t, m, "down", "up", "up", "down")
+	if m.browse == nil || m.browse.dir != empty || m.browse.cursor != 1 {
+		t.Fatal("moving in an empty directory stays within its two rows")
 	}
 }
 
@@ -442,7 +448,7 @@ func TestBrowserAndPromptRendering(t *testing.T) {
 	p.version = "t"
 	p.input.note = "alpha/  alphabet.txt"
 	view := p.renderInputPopup("Upload to box: local path", p.input.value, false)
-	for _, want := range []string{"tab complete", "ctrl+o browse", "alpha/  alphabet.txt"} {
+	for _, want := range []string{"tab complete", "ctrl+o", "[ Browse… ]", "alpha/  alphabet.txt"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("prompt lacks %q", want)
 		}
@@ -453,7 +459,111 @@ func TestBrowserAndPromptRendering(t *testing.T) {
 	}
 	// browser keys reach the browser through Update
 	updated, _ := model{browse: newBrowser(root, false)}.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if updated.(model).browse.cursor != 1 {
+	if updated.(model).browse.cursor != 3 {
 		t.Error("Update must route keys to the open browser")
+	}
+}
+
+// Verifies: REQ-PPK-008
+func TestBrowserDotAndDotDotRows(t *testing.T) {
+	root := tree(t)
+	open := func(dir string) model {
+		m := pathPrompt(t, pathAny, dir)
+		updated, _ := m.handleTextPrompt(tea.KeyMsg{Type: tea.KeyCtrlO})
+		return updated.(model)
+	}
+	sub := filepath.Join(root, "alpha")
+
+	// ".." goes up (enter and right), "." chooses (enter) but right does nothing
+	m := press(t, open(sub), "up", "up") // cursor on "."
+	if m.browse.cursor != 0 || !m.browse.entries[0].special {
+		t.Fatal("the first row is .")
+	}
+	m = press(t, m, "right")
+	if m.browse == nil || m.browse.dir != sub {
+		t.Fatal("right on . does nothing")
+	}
+	m = press(t, m, "down", "enter") // ".."
+	if m.browse.dir != root {
+		t.Fatalf("enter on .. goes up: %s", m.browse.dir)
+	}
+	m = press(t, m, "up", "up")
+	m = press(t, m, "enter") // "."
+	if m.browse != nil || m.input.value != root {
+		t.Fatalf("enter on . chooses the directory shown: %q", m.input.value)
+	}
+	m = press(t, open(sub), "up", "right") // ".." via right
+	if m.browse.dir != root {
+		t.Fatalf("right on .. goes up: %s", m.browse.dir)
+	}
+	if lines := m.renderBrowser(); !strings.Contains(lines, ". (choose this directory)") || !strings.Contains(lines, ".. (up)") {
+		t.Errorf("the rows are labelled:\n%s", lines)
+	}
+	// the root stays the root
+	m = press(t, model{browse: newBrowser("/", true)}, "up", "enter")
+	if m.browse.dir != "/" {
+		t.Fatalf("up from the root: %s", m.browse.dir)
+	}
+}
+
+// Verifies: REQ-PPK-009
+func TestBrowseButtonInPathPrompts(t *testing.T) {
+	root := tree(t)
+	m := pathPrompt(t, pathAny, root)
+	m.version = "t"
+	hasFocus := func(m model) bool { return m.input.focusBrowse }
+	render := func(m model) string { return m.renderInputPopup("x", m.input.value, false) }
+
+	if !strings.Contains(render(m), "[ Browse… ]") {
+		t.Fatal("a path prompt shows the button")
+	}
+	if strings.Contains(render(model{version: "t", input: textInput{mode: inputText}}), "Browse") {
+		t.Fatal("an ordinary prompt has no button")
+	}
+
+	// down focuses the button, up returns to the field
+	updated, _ := m.handleTextPrompt(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(model)
+	if !hasFocus(m) {
+		t.Fatal("down must focus the button")
+	}
+	focused := render(m)
+	updated, _ = m.handleTextPrompt(tea.KeyMsg{Type: tea.KeyUp})
+	if hasFocus(updated.(model)) || render(updated.(model)) == focused {
+		t.Fatal("up must return to the field and the button must look different when focused")
+	}
+
+	// enter on the button opens the browser instead of submitting
+	submitted := false
+	m.input.onSubmit = func(m model, v string) (tea.Model, tea.Cmd) { submitted = true; return m, nil }
+	updated, _ = m.handleTextPrompt(tea.KeyMsg{Type: tea.KeyEnter})
+	got := updated.(model)
+	if submitted || got.browse == nil || got.browse.dir != root || hasFocus(got) {
+		t.Fatalf("enter on the button: submitted=%v browse=%v focus=%v", submitted, got.browse, hasFocus(got))
+	}
+
+	// typing or Tab returns the focus to the field
+	for _, k := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune("a")}, {Type: tea.KeyTab}} {
+		m.input.focusBrowse = true
+		updated, _ = m.handleTextPrompt(k)
+		if hasFocus(updated.(model)) {
+			t.Fatalf("%v must return the focus to the field", k)
+		}
+	}
+	// enter without focus submits as before
+	m.input.focusBrowse = false
+	updated, _ = m.handleTextPrompt(tea.KeyMsg{Type: tea.KeyEnter})
+	if !submitted {
+		t.Fatal("enter in the field submits")
+	}
+	_ = updated
+
+	// ordinary prompts ignore up and down
+	plain := model{input: textInput{mode: inputText, value: "x"}}
+	for _, k := range []tea.KeyType{tea.KeyDown, tea.KeyUp} {
+		updated, _ = plain.handleTextPrompt(tea.KeyMsg{Type: k})
+		if updated.(model).input.focusBrowse {
+			t.Fatal("no button, no focus")
+		}
 	}
 }
