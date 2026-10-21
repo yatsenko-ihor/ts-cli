@@ -209,7 +209,7 @@ func TestDO178CUninstallRemovalFailures(t *testing.T) {
 		old := removeFn
 		removeFn = func(p string) error {
 			if filepath.Base(p) == "tsc" {
-				return d178ErrInjected
+				return errD178Injected
 			}
 			return old(p)
 		}
@@ -225,7 +225,7 @@ func TestDO178CUninstallRemovalFailures(t *testing.T) {
 	t.Run("config cannot be removed: warning only", func(t *testing.T) {
 		e := d178UninstallEnv(t)
 		old := removeAllFn
-		removeAllFn = func(string) error { return d178ErrInjected }
+		removeAllFn = func(string) error { return errD178Injected }
 		t.Cleanup(func() { removeAllFn = old })
 		out, _, err := d178Run(t, NewUninstallCommand(), "y\n", "--config")
 		if err != nil || !strings.Contains(out, "⚠ Failed to remove "+e.cfg) || !strings.Contains(out, "has been uninstalled") {

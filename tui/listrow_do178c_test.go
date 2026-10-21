@@ -19,7 +19,7 @@ func rowColors(t *testing.T) rowColorSeq {
 	prevProfile := lipgloss.ColorProfile()
 	po, pf, pw, pd, ps := colorOnline, colorOffline, colorWarn, colorDim, colorSel
 	// Profile 0 is true colour; the zero value is built without importing termenv.
-	lipgloss.SetColorProfile(prevProfile - prevProfile)
+	lipgloss.SetColorProfile(prevProfile * 0)
 	colorOnline, colorOffline, colorWarn, colorDim, colorSel = "#00ff00", "#ff0000", "#ffff00", "#808080", "#0000ff"
 	t.Cleanup(func() {
 		lipgloss.SetColorProfile(prevProfile)

@@ -478,7 +478,7 @@ func TestWriteFileKeyFailures(t *testing.T) {
 		t.Error("createTemp must fail in a missing directory")
 	}
 	// createTemp failure inside writeFileKey.
-	dir := useTempKeyDir(t)
+	useTempKeyDir(t)
 	stubCreateTemp(t, func(string, string) (keyTempFile, error) { return nil, errBoom })
 	if err := writeFileKey(key32(1)); err == nil || !strings.Contains(err.Error(), "failed to create key file") {
 		t.Errorf("createTemp: %v", err)
@@ -488,7 +488,7 @@ func TestWriteFileKeyFailures(t *testing.T) {
 		"write": {nil, errBoom, nil},
 		"close": {nil, nil, errBoom},
 	} {
-		dir = useTempKeyDir(t)
+		dir := useTempKeyDir(t)
 		stubTempFailure(t, tc[0], tc[1], tc[2])
 		if err := writeFileKey(key32(1)); !errors.Is(err, errBoom) {
 			t.Errorf("%s: %v", name, err)
@@ -607,7 +607,7 @@ func TestLoadOrCreateFileKeyRace(t *testing.T) {
 	}
 
 	// The winner's file is corrupt: its read error is returned, nothing replaced.
-	dir = useTempKeyDir(t)
+	useTempKeyDir(t)
 	stubOpenExclusive(t, func(path string) (io.WriteCloser, error) {
 		os.WriteFile(path, []byte("short"), 0600)
 		return nil, os.ErrExist
@@ -644,7 +644,7 @@ func TestLoadOrCreateFileKeyFailures(t *testing.T) {
 	}
 
 	// Exclusive create fails for a reason other than "exists".
-	dir = useTempKeyDir(t)
+	useTempKeyDir(t)
 	stubOpenExclusive(t, func(string) (io.WriteCloser, error) { return nil, errBoom })
 	if _, err := loadOrCreateFileKey(); !errors.Is(err, errBoom) || !strings.Contains(err.Error(), "failed to create encryption key") {
 		t.Errorf("open: %v", err)

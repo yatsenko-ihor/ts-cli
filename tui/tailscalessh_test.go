@@ -92,7 +92,7 @@ func TestSessionToATailscaleSSHMachineAsksNothingAndSavesNothing(t *testing.T) {
 
 	// commands and scripts are not affected
 	m.ssh.pending = pendingSSH{action: sshActionCommand, deviceIndex: 0, machineID: "dev-1", command: "uptime"}
-	cap = captureTeaExec(t)
+	captureTeaExec(t)
 	m.ssh.username = ""
 	updated, _ = m.continueSSH()
 	if updated.(model).input.mode != inputUsername {

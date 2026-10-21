@@ -444,7 +444,7 @@ func TestDO178CUseAccountCmd(t *testing.T) {
 	}
 
 	// the switch fails: the configuration change stays, the message is a notice
-	dir = awnFakeTailscale(t, "1")
+	awnFakeTailscale(t, "1")
 	msg = awnChanged(t, useAccountCmd("home", "home.com"))
 	if msg.err != nil || !strings.Contains(msg.notice, "Active account set, but this computer was not switched") {
 		t.Fatalf("failed switch: %+v", msg)
@@ -597,7 +597,7 @@ func TestDO178CAccountsChangedHealth(t *testing.T) {
 	checked = nil
 	m = accountsModel(t)
 	m.acct.health = map[string]accountHealth{"work": {checked: true}}
-	updated, cmd = m.handleAccountsChanged(accountsChangedMsg{notice: "x"})
+	_, cmd = m.handleAccountsChanged(accountsChangedMsg{notice: "x"})
 	awnMsgs(cmd)
 	if len(checked) != 1 || checked[0] != "home" {
 		t.Fatalf("checked %v, want home only", checked)
@@ -1222,7 +1222,7 @@ func TestDO178CRenderStatusLine(t *testing.T) {
 	}
 	m.acct.status = "good news"
 	m.acct.statusErr = false
-	if c, e, o = count(m.renderAccountManagement()); !c || o {
+	if c, _, o = count(m.renderAccountManagement()); !c || o {
 		t.Fatal("confirmation wins over success")
 	}
 	// an API key never reaches the view, even when the model holds it

@@ -45,7 +45,7 @@ func TestValidateSSHUsernameRejectsHostileCharacters(t *testing.T) {
 	for _, s := range []string{
 		"user name", "user;id", "user|id", "user&id", "user`id`", "user$(id)", "user$HOME",
 		"user@host", "user\n", "user\r", "user\t", "user\x00", "us/er", "us\\er", "user'", `user"`,
-		"юзер", "user‮", "user*", "user=x", "user:x", "user,x", "user\x7f",
+		"юзер", "user\u202e", "user*", "user=x", "user:x", "user,x", "user\x7f",
 	} {
 		cases = append(cases, valCase{"hostile", s, false})
 	}
