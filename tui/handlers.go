@@ -416,6 +416,8 @@ var normalModeHandlers = map[string]keyHandler{
 		m.aboutMode = true
 		return m, nil
 	},
+	"f":  func(m model) (tea.Model, tea.Cmd) { return m.promptUpload() },
+	"F":  func(m model) (tea.Model, tea.Cmd) { return m.promptDownload() },
 	"f1": openHelp,
 	"?":  openHelp,
 	"S": func(m model) (tea.Model, tea.Cmd) {

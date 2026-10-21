@@ -16,3 +16,4 @@ scripts/scripts.go 100
 tui/tmux.go 100
 client/device_actions.go 100
 tui/pinginfo.go 100
+tui/copy.go 100

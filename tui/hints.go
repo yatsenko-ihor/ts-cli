@@ -40,7 +40,7 @@ func (m model) listHints() []string {
 	hints := []string{
 		"↑/k ↓/j move", "space mark", "s ssh", "/ search", "p ping", ": run",
 		"tab run panel + machine actions", "H offline", "m accounts", "F12 settings",
-		"S sort", "r reload", "c copy", "P profile", "o options", "a about",
+		"f upload", "F download", "S sort", "r reload", "c copy", "P profile", "o options", "a about",
 	}
 	if m.ssh.username != "" {
 		hints = append(hints, "d clear-user")
