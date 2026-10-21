@@ -9,9 +9,9 @@ Pillow, and ffmpeg turns the images into demo.mp4 and demo.gif.
 
     pip install pyte pillow           # ffmpeg must be installed too
     go build -o /tmp/ts-cli-demo .    # from the repository root
-    python3 demo/record.py /tmp/ts-cli-demo docs/
-
-Output: docs/demo.mp4, docs/demo.gif (and the frames in a temporary directory).
+    python3 demo/record.py /tmp/ts-cli-demo docs/                  # dark theme -> docs/demo.mp4/.gif
+    python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=hacker   # -> docs/demo-hacker.mp4/.gif
+    python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=light    # -> docs/demo-light.mp4/.gif
 """
 import fcntl
 import json
@@ -38,7 +38,11 @@ FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
 CAPTION_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_SIZE = 16
 CAPTION_H = 54
-DEFAULT_FG, DEFAULT_BG = "d7dae0", "14161b"
+DEFAULT_FG, DEFAULT_BG = "d7dae0", "14161b"   # the terminal's own colours; set per theme in main
+CAPTION_BG, CAPTION_FG = "#0b0d11", "#f2f4f8"
+THEME_TERMINALS = {   # light does not paint a background, so the terminal must be light too
+    "light": ("1f2328", "ffffff", "#e6e9ef", "#1f2328"),
+}
 
 ANSI = {
     "black": "1e2127", "red": "e06c75", "green": "98c379", "brown": "e5c07b", "yellow": "e5c07b",
@@ -81,7 +85,7 @@ def make_home():
     return home
 
 
-def make_config(root, keys):
+def make_config(root, keys, theme="dark"):
     cfg = os.path.join(root, "config")
     shutil.rmtree(cfg, ignore_errors=True)
     os.makedirs(os.path.join(cfg, "scripts"))
@@ -98,7 +102,7 @@ def make_config(root, keys):
                 for i, n in [(1, "web-01"), (2, "web-02"), (3, "web-03"), (4, "db-01"), (5, "build-mac")]
             },
             "commands": [{"name": "Uptime", "command": "uptime"}, {"name": "Free memory", "command": "free -h"}],
-            "ui": {"theme": "dark", "tmux_split": "off"},
+            "ui": {"theme": theme, "tmux_split": "off"},
             "config_version": "1.0",
         }, f)
     with open(os.path.join(cfg, "scripts", "disk-usage.sh"), "w") as f:
@@ -183,10 +187,10 @@ class Renderer:
                     d.ellipse(box, fill=None if ring else colour, outline=colour, width=2)
                 elif ch.data.strip():
                     d.text((px, py), ch.data, font=self.bold if ch.bold else self.font, fill=fg)
-        d.rectangle([0, ROWS * self.ch, self.w, self.h], fill="#0b0d11")
+        d.rectangle([0, ROWS * self.ch, self.w, self.h], fill=CAPTION_BG)
         if caption:
             tw = d.textlength(caption, font=self.cap)
-            d.text(((self.w - tw) / 2, ROWS * self.ch + 12), caption, font=self.cap, fill="#f2f4f8")
+            d.text(((self.w - tw) / 2, ROWS * self.ch + 12), caption, font=self.cap, fill=CAPTION_FG)
         return img
 
 
@@ -251,6 +255,14 @@ class Session:
             self.pump(every, every + 0.2)
             self.snap(every)
 
+    def wait_for(self, needle, timeout=20):
+        end = time.time() + timeout
+        while needle not in self.text() and time.time() < end:
+            self.pump(0.3, 0.6)
+        if needle not in self.text():
+            raise SystemExit(f"ts-cli did not show {needle!r} in {timeout}s:\n{self.text()}")
+        self.pump(0.5, 1.5)
+
     def say(self, text):
         self.caption = text
 
@@ -265,9 +277,12 @@ class Session:
             pass
 
 
-def scenario(s):
-    s.pump(1.5, 6)
-    s.key("x", capture=False)   # dismiss the "add to PATH" tip
+def scenario(s, theme="dark"):
+    s.wait_for("Machines")
+    for _ in range(5):          # dismiss the "add to PATH" tip (retry: it must be gone before we record)
+        s.key("x", capture=False)
+        if "Tip:" not in s.text():
+            break
     s.say("ts-cli: all your Tailscale machines in one terminal")
     s.hold(2.6)
 
@@ -313,21 +328,30 @@ def scenario(s):
     s.key("esc", hold=0.5)
     s.key("esc", hold=0.5)
 
-    s.say("Themes: dark, dark-pastel, hacker, light, or your own (F12)")
-    s.key("f12", hold=0.9)
-    for _ in range(5):
-        s.key("down", settle=0.08, capture=False)
-    s.key("down", hold=0.9)
-    s.key("enter", hold=1.1)                       # dark-pastel
-    s.key("esc", hold=2.0)
-    for want, hold in (("hacker", 2.2), ("dark", 1.0)):
-        s.key("f12", settle=0.1, capture=False)
+    if theme == "dark":
+        s.say("Themes: dark, dark-pastel, hacker, light, or your own (F12)")
+        s.key("f12", hold=0.9)
+        for _ in range(5):
+            s.key("down", settle=0.08, capture=False)
+        s.key("down", hold=0.9)
+        s.key("enter", hold=1.1)                       # dark-pastel
+        s.key("esc", hold=2.0)
+        for want, hold in (("hacker", 2.2), ("dark", 1.0)):
+            s.key("f12", settle=0.1, capture=False)
+            for _ in range(6):
+                s.key("down", settle=0.06, capture=False)
+            s.key("enter", settle=0.1, capture=False)  # hacker; or light ...
+            if want == "dark":
+                s.key("enter", settle=0.1, capture=False)  # ... and then dark again
+            s.key("esc", hold=hold)
+
+    else:
+        s.say(f"Settings (F12): theme ({theme}), icons, grouping, tmux, Tailscale SSH")
+        s.key("f12", hold=1.2)
         for _ in range(6):
-            s.key("down", settle=0.06, capture=False)
-        s.key("enter", settle=0.1, capture=False)  # hacker; or light ...
-        if want == "dark":
-            s.key("enter", settle=0.1, capture=False)  # ... and then dark again
-        s.key("esc", hold=hold)
+            s.key("down", hold=0.25)
+        s.hold(1.6)
+        s.key("esc", hold=1.5)
 
     s.say("Upload files: Tab completes, Ctrl+O browses your disk")
     s.key("f", hold=0.3, capture=False) if False else s.type("f", hold=0.8)
@@ -366,7 +390,7 @@ def scenario(s):
     return s
 
 
-def build(binary, outdir):
+def build(binary, outdir, theme="dark"):
     root = tempfile.mkdtemp(prefix="ts-demo-")
     frames = os.path.join(root, "frames")
     os.makedirs(frames)
@@ -379,7 +403,7 @@ def build(binary, outdir):
         time.sleep(0.05)
     sys.path.insert(0, HERE)
     import fake_api
-    cfg = make_config(root, fake_api.KEYS)
+    cfg = make_config(root, fake_api.KEYS, theme)
     env = {
         "PATH": f"{HERE}/bin:/usr/local/bin:/usr/bin:/bin",
         "HOME": home, "USER": "demo", "LOGNAME": "demo",
@@ -389,7 +413,7 @@ def build(binary, outdir):
     }
     s = Session(binary, env, frames)
     try:
-        scenario(s)
+        scenario(s, theme)
         s.say("")
     finally:
         s.close()
@@ -408,15 +432,15 @@ def audit(s):
         raise SystemExit(f"audit failed: frames {bad[:5]} contain data that must not appear in the video")
 
 
-def encode(s, outdir):
+def encode(s, outdir, name="demo"):
     os.makedirs(outdir, exist_ok=True)
     listing = os.path.join(os.path.dirname(s.frames[0][0]), "frames.txt")
     with open(listing, "w") as f:
         for path, hold in s.frames:
             f.write(f"file '{path}'\nduration {hold}\n")
         f.write(f"file '{s.frames[-1][0]}'\n")
-    mp4 = os.path.join(outdir, "demo.mp4")
-    gif = os.path.join(outdir, "demo.gif")
+    mp4 = os.path.join(outdir, name + ".mp4")
+    gif = os.path.join(outdir, name + ".gif")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing,
                     "-vf", "fps=25,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p", "-c:v", "libx264", "-crf", "26",
                     "-preset", "slow", "-movflags", "+faststart", mp4], check=True)
@@ -427,9 +451,16 @@ def encode(s, outdir):
 
 
 if __name__ == "__main__":
-    binary, outdir = sys.argv[1], sys.argv[2]
-    sess, root = build(binary, outdir)
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    binary, outdir = args[0], args[1]
+    theme = "dark"
+    for a in sys.argv[1:]:
+        if a.startswith("--theme="):
+            theme = a.split("=", 1)[1]
+    if theme in THEME_TERMINALS:
+        DEFAULT_FG, DEFAULT_BG, CAPTION_BG, CAPTION_FG = THEME_TERMINALS[theme]
+    sess, root = build(binary, outdir, theme)
     audit(sess)
     print(f"{len(sess.frames)} frames in {root}/frames; audit passed ({len(sess.texts)} screens checked)")
     if "--no-encode" not in sys.argv:
-        print(*encode(sess, outdir))
+        print(*encode(sess, outdir, "demo" if theme == "dark" else f"demo-{theme}"))
