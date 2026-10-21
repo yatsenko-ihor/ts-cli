@@ -59,3 +59,14 @@ func TestF12SettingsToggle(t *testing.T) {
 		t.Fatal("esc closes settings")
 	}
 }
+
+func TestEveryThemeLoadsFromTheStoredName(t *testing.T) {
+	for _, name := range themeOrder {
+		if got := loadUISettings(map[string]string{"theme": name}).theme; got != name {
+			t.Errorf("stored %q loads as %q", name, got)
+		}
+	}
+	if themes[themeHacker].text == themes[themeHacker].accent {
+		t.Error("the hacker theme must not be a single green: text and accent differ")
+	}
+}

@@ -221,7 +221,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Group by account**: section headers per account (only with more than one account).
 - **SSH in a tmux split**: inside tmux, `s` opens the session in a new pane to the right of the list instead of taking over ts-cli's terminal (see [Running In tmux](#running-in-tmux)). On by default; has no effect outside tmux.
 - **Use Tailscale SSH when offered** (off by default): for machines that run the Tailscale SSH server, `s` runs `tailscale ssh [user@]machine` instead of plain ssh. No password, key or username prompt and nothing is saved; the tailnet's ACL decides who may connect. Machines that offer it show `Tailscale SSH` in the details panel.
-- **Theme**: `light` (default, keeps your terminal background), `dark` or `hacker` (green on black). `dark` and `hacker` paint the whole screen, so they look the same on any terminal background.
+- **Theme**: `light` (default, keeps your terminal background), `dark`, `dark-pastel` (soft pastels on slate) or `hacker` (near-black with a muted green text; bright green only for the cursor and online machines, cyan, amber and red for the rest). Every theme except `light` paints the whole screen, so it looks the same on any terminal background. The choice is stored in `~/.ts-cli/config.json` under `ui.theme` (`light`, `dark`, `dark-pastel`, `hacker`) and can be edited there too.
 - **Icon style**: coloured symbols (default) or emoji.
 
 #### Machine status and ping
