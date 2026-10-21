@@ -99,7 +99,22 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m = cancel(m)
 		}
 		return m, nil
+	case "down":
+		if m.input.path != pathNone {
+			m.input.focusBrowse = true
+		}
+		return m, nil
+	case "up":
+		if m.input.path != pathNone {
+			m.input.focusBrowse = false
+		}
+		return m, nil
 	case "enter":
+		if m.input.focusBrowse {
+			m.input.focusBrowse = false
+			m.browse = newBrowser(m.input.value, m.input.path == pathDirs)
+			return m, nil
+		}
 		submit := m.input.onSubmit
 		value := m.input.value
 		if submit == nil {
@@ -111,6 +126,7 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, readClipboard(pasteTargetText)
 	case "tab":
 		if m.input.path != pathNone {
+			m.input.focusBrowse = false
 			v, names := completePath(m.input.value, m.input.path == pathDirs)
 			m.input.value, m.input.cursor, m.input.note = v, len([]rune(v)), completionNote(names)
 		}
@@ -122,6 +138,7 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.input.note = ""
+	m.input.focusBrowse = false
 	m.editInput(msg)
 	return m, nil
 }

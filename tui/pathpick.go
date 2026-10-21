@@ -100,9 +100,21 @@ func completionNote(names []string) string {
 // ─── Browser ─────────────────────────────────────────────────────────────────
 
 type browserEntry struct {
-	name string
-	dir  bool
-	size int64
+	name    string
+	dir     bool
+	size    int64
+	special bool // "." (choose this directory) or ".." (go up)
+}
+
+// label is how the entry is shown in the list.
+func (e browserEntry) label() string {
+	switch {
+	case e.special && e.name == ".":
+		return ". (choose this directory)"
+	case e.special:
+		return ".. (up)"
+	}
+	return entryName(e.name, e.dir)
 }
 
 // fileBrowser lists one local directory at a time.
@@ -125,8 +137,7 @@ func (b *fileBrowser) load(dir string) {
 	}
 	b.err = ""
 	b.dir = dir
-	b.cursor = 0
-	b.entries = b.entries[:0]
+	b.entries = append(b.entries[:0], browserEntry{name: ".", dir: true, special: true}, browserEntry{name: "..", dir: true, special: true})
 	for _, e := range entries {
 		name := e.Name()
 		if strings.HasPrefix(name, ".") && !b.hidden {
@@ -141,13 +152,15 @@ func (b *fileBrowser) load(dir string) {
 		}
 		b.entries = append(b.entries, browserEntry{name: name, dir: isDir, size: size})
 	}
-	sort.SliceStable(b.entries, func(i, j int) bool {
-		a, c := b.entries[i], b.entries[j]
+	real := b.entries[2:] // "." and ".." stay on top
+	sort.SliceStable(real, func(i, j int) bool {
+		a, c := real[i], real[j]
 		if a.dir != c.dir {
 			return a.dir
 		}
 		return strings.ToLower(a.name) < strings.ToLower(c.name)
 	})
+	b.cursor = min(2, len(b.entries)-1) // the first real entry
 }
 
 // newBrowser starts in the directory the typed text points into: the text
@@ -219,6 +232,12 @@ func (m model) handleBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "right", "l", "enter":
 		switch {
 		case selected == nil:
+		case selected.special && selected.name == ".":
+			if msg.String() == "enter" {
+				return choose(b.dir)
+			}
+		case selected.special:
+			b.load(filepath.Dir(b.dir))
 		case selected.dir:
 			b.load(filepath.Join(b.dir, selected.name))
 		case msg.String() == "enter":
@@ -257,7 +276,7 @@ func (m model) renderBrowser() string {
 	c.WriteString(grayItalicStyle.Render(truncateLeft(b.dir, inner)))
 	c.WriteString("\n\n")
 
-	if len(b.entries) == 0 {
+	if len(b.entries) == 2 {
 		c.WriteString(grayItalicStyle.Render("  (empty)"))
 		c.WriteString("\n")
 	}
@@ -268,7 +287,7 @@ func (m model) renderBrowser() string {
 	end := min(len(b.entries), start+browserRows)
 	for i := start; i < end; i++ {
 		e := b.entries[i]
-		name := entryName(e.name, e.dir)
+		name := e.label()
 		size := ""
 		if !e.dir {
 			size = humanBytes(e.size)
@@ -290,9 +309,9 @@ func (m model) renderBrowser() string {
 		c.WriteString("\n")
 	}
 	c.WriteString("\n")
-	help := "↑/↓ move • →/enter open • ←/⌫ up • space choose this directory • . hidden • ~ home • esc back"
+	help := "↑/↓ move • →/enter open • ←/⌫ up • enter on . or space chooses this directory • . hidden • ~ home • esc back"
 	if !b.dirsOnly {
-		help = "↑/↓ move • →/enter open or choose a file • ←/⌫ up • space choose this directory • . hidden • ~ home • esc back"
+		help = "↑/↓ move • →/enter open or choose a file • ←/⌫ up • enter on . or space chooses this directory • . hidden • ~ home • esc back"
 	}
 	c.WriteString(grayItalicStyle.Render(truncateForWidth(help, inner)))
 
