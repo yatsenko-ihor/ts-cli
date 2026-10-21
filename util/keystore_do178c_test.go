@@ -607,7 +607,7 @@ func TestLoadOrCreateFileKeyRace(t *testing.T) {
 	}
 
 	// The winner's file is corrupt: its read error is returned, nothing replaced.
-	useTempKeyDir(t)
+	dir = useTempKeyDir(t)
 	stubOpenExclusive(t, func(path string) (io.WriteCloser, error) {
 		os.WriteFile(path, []byte("short"), 0600)
 		return nil, os.ErrExist
