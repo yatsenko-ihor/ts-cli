@@ -70,3 +70,4 @@ Unreachable statements: none. All statements of `tailscale.go` are executed by t
 - **REQ-API-022** Invalid input (empty device ID, empty name, no tags, a tag not of the form `tag:name`) shall be rejected before anything is sent.
 - **REQ-API-023** `NormalizeTags` shall turn comma/space separated input into `tag:`-prefixed tags without empties or duplicates, preserving order.
 - **REQ-API-024** `SetBaseURL` shall redirect all requests to another root (trailing slash trimmed) and return a function that restores the previous root.
+- **REQ-API-025** The API root shall be the Tailscale API unless `TS_CLI_API_URL` holds an `http://` or `https://` URL, which then replaces it (surrounding whitespace and trailing slashes removed); any other value (other schemes, no scheme, blank) shall be ignored.

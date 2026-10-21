@@ -12,9 +12,25 @@ import (
 	"time"
 )
 
+// APIURLEnv overrides the Tailscale API root (for a proxy, a mock server or
+// the demo). API keys are sent to it, so only point it at a server you trust.
+const APIURLEnv = "TS_CLI_API_URL"
+
+const defaultBaseURL = "https://api.tailscale.com/api/v2"
+
+// apiRoot returns the API root: the value of TS_CLI_API_URL when it is an
+// http(s) URL (trailing slash removed), otherwise the real Tailscale API.
+func apiRoot(env string) string {
+	v := strings.TrimRight(strings.TrimSpace(env), "/")
+	if strings.HasPrefix(v, "https://") || strings.HasPrefix(v, "http://") {
+		return v
+	}
+	return defaultBaseURL
+}
+
 // baseURL is the Tailscale API root. It is a variable so tests can point the
 // client at an httptest server.
-var baseURL = "https://api.tailscale.com/api/v2"
+var baseURL = apiRoot(os.Getenv(APIURLEnv))
 
 // errInvalidKey is returned when the API rejects the key (401/403). Callers
 // classify on it with errors.Is rather than on server-supplied text.

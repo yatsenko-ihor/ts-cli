@@ -1,0 +1,4 @@
+#!/bin/sh
+# A fake scp for the demo: pretends to copy, copies nothing.
+sleep 1.6
+exit 0

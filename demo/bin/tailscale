@@ -1,0 +1,35 @@
+#!/bin/sh
+# A fake `tailscale` CLI for the demo: invented peers, no network.
+case "$1" in
+  status)
+    if [ "$2" = "--json" ]; then
+      cat <<'JSON'
+{"Self":{"UserID":1},
+ "User":{"1":{"LoginName":"acme.example"}},
+ "Peer":{
+  "nodekey:01":{"TailscaleIPs":["100.64.10.11"],"Online":true,"Active":true,"CurAddr":"192.168.1.40:41641","RxBytes":48213000,"TxBytes":9120000,"LastHandshake":"2026-01-01T00:00:00Z"},
+  "nodekey:02":{"TailscaleIPs":["100.64.10.12"],"Online":true,"Relay":"fra","RxBytes":120000,"TxBytes":80000},
+  "nodekey:03":{"TailscaleIPs":["100.64.10.13"],"Online":true,"CurAddr":"192.168.1.42:41641","RxBytes":900000,"TxBytes":700000},
+  "nodekey:04":{"TailscaleIPs":["100.64.10.21"],"Online":true,"CurAddr":"10.0.0.21:41641","RxBytes":5400000,"TxBytes":1200000,"SSHHostKeys":["ssh-ed25519 AAAADEMO"]},
+  "nodekey:05":{"TailscaleIPs":["100.64.10.31"],"Online":true,"Relay":"ams"},
+  "nodekey:06":{"TailscaleIPs":["100.64.10.41"],"Online":false}
+ }}
+JSON
+    else
+      echo "100.64.10.1   demo-laptop   acme.example   macOS   -"
+    fi ;;
+  ping)
+    addr=""; for a in "$@"; do addr="$a"; done
+    sleep 0.5
+    case "$addr" in
+      100.64.10.11)
+        echo "pong from web-01 (100.64.10.11) via DERP(fra) in 48ms"
+        sleep 0.4
+        echo "pong from web-01 (100.64.10.11) via DERP(fra) in 47ms"
+        sleep 0.4
+        echo "pong from web-01 (100.64.10.11) via 192.168.1.40:41641 in 3ms" ;;
+      *) echo "pong from host ($addr) via 192.168.1.50:41641 in 4ms" ;;
+    esac ;;
+  switch) echo "Switching to account \"$2\"" ;;
+  *) exit 0 ;;
+esac

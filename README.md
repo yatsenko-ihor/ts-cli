@@ -4,6 +4,10 @@
 
 A terminal tool for managing the machines of your Tailscale tailnets: browse them in a keyboard-driven TUI, connect over SSH, run scripts and commands on one or many machines, copy files, and manage devices and accounts through the Tailscale API.
 
+![ts-cli demo](docs/demo.gif)
+
+The demo uses invented machines and a fake API ([how it is made](demo/README.md)); [MP4 version](docs/demo.mp4).
+
 ## Highlights
 
 - **Several accounts at once**: add, switch, hide and health-check tailnets; API keys are stored encrypted

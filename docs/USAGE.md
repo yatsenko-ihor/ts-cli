@@ -343,6 +343,8 @@ tmux split-window -v -c "#{pane_current_path}" "ts-cli"
 
 ## Configuration
 
+`TS_CLI_API_URL` (optional) replaces the Tailscale API root (`https://api.tailscale.com/api/v2`) with another `http(s)` URL, for a proxy or a mock server (the demo uses it). API keys are sent to that server, so only point it at one you trust; other schemes and blank values are ignored.
+
 Configuration is stored in `~/.ts-cli/config.json` (override the directory with `TS_CLI_CONFIG_DIR`) and contains all saved accounts (API key + tailnet per account), the active account selection, the default SSH username and per-machine SSH credentials. The file is created with permissions `0600`; the directory with `0700`.
 
 The API keys grant whatever access they were created with in the Tailscale admin console. They are stored encrypted (see **SSH Credential Management → Security**), but treat `~/.ts-cli/` like `~/.ssh/` anyway: do not sync it to shared folders or commit it anywhere.

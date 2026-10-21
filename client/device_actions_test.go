@@ -156,3 +156,21 @@ func TestSetBaseURLRedirectsAndRestores(t *testing.T) {
 		t.Fatalf("restore must bring back %q, got %q", srvURL, baseURL)
 	}
 }
+
+// Verifies: REQ-API-025
+func TestAPIRootFromEnvironment(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                           defaultBaseURL,
+		"   ":                        defaultBaseURL,
+		"http://127.0.0.1:8080":      "http://127.0.0.1:8080",
+		"https://proxy.example/api/": "https://proxy.example/api",
+		"  http://localhost:9//":     "http://localhost:9",
+		"ftp://example.com":          defaultBaseURL,
+		"example.com/api":            defaultBaseURL,
+		"file:///etc/passwd":         defaultBaseURL,
+	} {
+		if got := apiRoot(in); got != want {
+			t.Errorf("apiRoot(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

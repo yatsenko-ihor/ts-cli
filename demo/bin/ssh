@@ -1,0 +1,51 @@
+#!/bin/sh
+# A fake ssh for the demo: answers like invented machines; runs nothing real.
+# Arguments: [-o opt]... [user@]host [remote command]
+host=""; cmd=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) shift 2; continue ;;
+    -*) shift; continue ;;
+  esac
+  if [ -z "$host" ]; then host="$1"; else cmd="$cmd$1 "; fi
+  shift
+done
+user="${host%@*}"; addr="${host#*@}"
+case "$addr" in
+  100.64.10.11) name=web-01 ;; 100.64.10.12) name=web-02 ;; 100.64.10.13) name=web-03 ;;
+  100.64.10.21) name=db-01 ;; 100.64.10.31) name=build-mac ;; *) name=machine ;;
+esac
+
+# remote command: directory listing for the file browser
+case "$cmd" in
+  *"pwd -P"*)
+    dir="/home/$user"
+    case "$cmd" in
+      *"'/home/$user/backups'"*|*'$HOME"'"'/backups'"*) echo "/home/$user/backups"; printf 'db-2026-01-04.sql.gz\nweb-2026-01-05.tar.gz\n'; exit 0 ;;
+      *"'/home/$user/Projects'"*|*'/Projects'*) echo "/home/$user/Projects"; printf 'api/\nwebsite/\nREADME.md\n'; exit 0 ;;
+    esac
+    echo "$dir"; printf 'Projects/\nbackups/\nlogs/\n.cache/\nnotes.txt\n'; exit 0 ;;
+  *mktemp*)   # a script is being run: canned output, depends on the machine
+    sleep 0.6
+    echo "Filesystem      Size  Used Avail Use% Mounted on"
+    case "$name" in
+      web-01) echo "/dev/sda1        80G   31G   45G  41% /"; echo "/dev/sdb1       200G  118G   72G  62% /var/www" ;;
+      web-02) echo "/dev/sda1        80G   54G   22G  71% /"; echo "/dev/sdb1       200G  141G   49G  75% /var/www" ;;
+      *)      echo "/dev/sda1        80G   12G   64G  16% /" ;;
+    esac
+    sleep 0.4; echo "done"; exit 0 ;;
+  "")         # an interactive session
+    printf 'Welcome to Ubuntu 24.04 LTS (GNU/Linux 6.8.0 x86_64)\n\nLast login: Mon Jan  5 09:12:41 2026 from 100.64.10.1\n'
+    while true; do
+      printf '%s@%s:~$ ' "$user" "$name"
+      IFS= read -r line || exit 0
+      case "$line" in
+        exit|logout) echo logout; exit 0 ;;
+        uptime) echo " 09:14:02 up 41 days,  3:12,  1 user,  load average: 0.08, 0.11, 0.09" ;;
+        ls) echo "Projects  backups  logs  notes.txt" ;;
+        "") ;;
+        *) echo "$line: ok" ;;
+      esac
+    done ;;
+  *) echo "(fake ssh) $name: $cmd"; exit 0 ;;
+esac

@@ -106,7 +106,7 @@ func (m model) renderDeviceList() string {
 // (Run panel closed) layout, or 0 for "as tall as the content".
 func (m model) listFrameHeight() int {
 	if m.height > 0 {
-		if h := m.height - 25; h > 10 {
+		if h := m.height - 25 - m.extraRows(); h > 10 {
 			return h
 		}
 	}
