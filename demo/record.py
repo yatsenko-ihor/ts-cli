@@ -9,8 +9,8 @@ Pillow, and ffmpeg turns the images into demo.mp4 and demo.gif.
 
     pip install pyte pillow           # ffmpeg must be installed too
     go build -o /tmp/ts-cli-demo .    # from the repository root
-    python3 demo/record.py /tmp/ts-cli-demo docs/                  # dark theme -> docs/demo.mp4/.gif
-    python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=hacker   # -> docs/demo-hacker.mp4/.gif
+    python3 demo/record.py /tmp/ts-cli-demo docs/                  # hacker theme -> docs/demo.mp4/.gif
+    python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=dark     # -> docs/demo-dark.mp4/.gif (cycles the themes)
     python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=light    # -> docs/demo-light.mp4/.gif
 """
 import fcntl
@@ -85,7 +85,7 @@ def make_home():
     return home
 
 
-def make_config(root, keys, theme="dark"):
+def make_config(root, keys, theme="hacker"):
     cfg = os.path.join(root, "config")
     shutil.rmtree(cfg, ignore_errors=True)
     os.makedirs(os.path.join(cfg, "scripts"))
@@ -277,7 +277,7 @@ class Session:
             pass
 
 
-def scenario(s, theme="dark"):
+def scenario(s, theme="hacker"):
     s.wait_for("Machines")
     for _ in range(5):          # dismiss the "add to PATH" tip (retry: it must be gone before we record)
         s.key("x", capture=False)
@@ -390,7 +390,7 @@ def scenario(s, theme="dark"):
     return s
 
 
-def build(binary, outdir, theme="dark"):
+def build(binary, outdir, theme="hacker"):
     root = tempfile.mkdtemp(prefix="ts-demo-")
     frames = os.path.join(root, "frames")
     os.makedirs(frames)
@@ -453,7 +453,7 @@ def encode(s, outdir, name="demo"):
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     binary, outdir = args[0], args[1]
-    theme = "dark"
+    theme = "hacker"
     for a in sys.argv[1:]:
         if a.startswith("--theme="):
             theme = a.split("=", 1)[1]
@@ -463,4 +463,4 @@ if __name__ == "__main__":
     audit(sess)
     print(f"{len(sess.frames)} frames in {root}/frames; audit passed ({len(sess.texts)} screens checked)")
     if "--no-encode" not in sys.argv:
-        print(*encode(sess, outdir, "demo" if theme == "dark" else f"demo-{theme}"))
+        print(*encode(sess, outdir, "demo" if theme == "hacker" else f"demo-{theme}"))

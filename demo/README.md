@@ -1,6 +1,6 @@
 # Demo video
 
-`docs/demo.mp4`/`.gif` (and the `demo-hacker.*` and `demo-light.*` variants) are recorded from **invented data only**. Nothing on the recording machine, no real account, key, machine name or address is involved:
+`docs/demo.mp4`/`.gif` (hacker theme; the `demo-dark.*` and `demo-light.*` variants) are recorded from **invented data only**. Nothing on the recording machine, no real account, key, machine name or address is involved:
 
 - `fake_api.py` is a fake Tailscale API with made-up machines (`web-01`, `db-01`, `pi-kitchen`, ...), tailnets (`acme.example`, `home.example`) and keys. ts-cli is pointed at it with the `TS_CLI_API_URL` environment variable.
 - `bin/tailscale`, `bin/ssh` and `bin/scp` are fake programs placed first on `PATH`: they print canned ping results, directory listings and a pretend shell, and run nothing real.
@@ -10,11 +10,11 @@ Re-record it (needs `ffmpeg`, `pip install pyte pillow`, and a writable `/home/d
 
 ```bash
 go build -o /tmp/ts-cli-demo .
-python3 demo/record.py /tmp/ts-cli-demo docs/                  # docs/demo.mp4 + .gif (dark theme)
-python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=hacker   # docs/demo-hacker.*
+python3 demo/record.py /tmp/ts-cli-demo docs/                  # docs/demo.mp4 + .gif (hacker theme, the default one)
+python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=dark     # docs/demo-dark.* (cycles through the themes)
 python3 demo/record.py /tmp/ts-cli-demo docs/ --theme=light    # docs/demo-light.* (light terminal)
 ```
 
-The themed versions run the same script; instead of cycling the themes they show the settings window with the theme in use. The light theme does not paint a background, so that recording uses a light terminal background.
+The hacker and light versions run the same script; instead of cycling the themes they show the settings window with the theme in use (the dark one cycles through them). The light theme does not paint a background, so that recording uses a light terminal background.
 
 The script (`scenario()` in `record.py`) shows: the machine list with details, search, a script run on two machines in parallel, ping details and machine actions, themes, an upload with the local and the remote file browser, and an SSH session.
