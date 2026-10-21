@@ -103,8 +103,6 @@ func (a accounts) healthText(name string) (text string, level int) {
 			return fmt.Sprintf("key expires in %dd", d), 1
 		}
 		return fmt.Sprintf("key ok, %dd left", d), 0
-	case hs.h.ExpiryNote != "":
-		return "key ok", 0
 	}
 	return "key ok", 0
 }
@@ -430,7 +428,7 @@ func (m model) handleAccountManagement(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.acct.busy = true
 		m.acct.status, m.acct.statusErr = "Switching…", false
 		return m, useAccountCmd(acc.Name, acc.Tailnet)
-	case " ", "space":
+	case " ":
 		m.acct.busy = true
 		return m, hideAccountCmd(acc.Name, !acc.Hidden)
 	case "e":

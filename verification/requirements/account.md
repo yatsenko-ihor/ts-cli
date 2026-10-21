@@ -43,6 +43,8 @@
 
 ## Wiring
 
+- **REQ-ACC-026** `account add` shall identify an existing account by its tailnet only: a tailnet equal to another account's display name shall add a new account and leave that one untouched; for an existing tailnet it shall replace the key and rename the account only when `--name` is given.
+- **REQ-ACC-027** `account add` shall refuse, storing nothing and without a "failed to store" message, a display name (given or defaulted to the tailnet) that is already another account's name or tailnet; an account's own name is not a clash.
 - **REQ-ACC-025** The `account` command shall offer exactly the subcommands add, list (ls), edit, use (set-active), hide, show and remove (rm, delete); the key flags shall exist on add and edit with a usage text that discourages `--api-key`; an unknown subcommand shall be an error.
 
 ## MC/DC
@@ -73,9 +75,6 @@ Derived (behaviour in the code that no user need asked for, now pinned by tests)
 - `account list` loads the configuration before checking the format, so a corrupt configuration is reported first (REQ-ACC-014).
 - Failure of the `tailscale switch` step is deliberately non-fatal (REQ-ACC-022).
 
-Observations recorded, behaviour deliberately not changed:
-
-- `account add` finds an existing account with `FindAccount`, which matches the account's name as well as its tailnet; adding a tailnet that equals another account's display name therefore updates that account (and overwrites its tailnet).
-- `account add --name X` on an existing tailnet does not check that `X` is already another account's name (`account edit` does), so two accounts can end up with the same display name.
+The two former observations (add matched accounts by name too, and did not reject a duplicate `--name`) were fixed: REQ-ACC-026 and REQ-ACC-027.
 
 Unreachable statements: none; every statement of `account.go` is executed by the tests.

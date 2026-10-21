@@ -73,6 +73,6 @@ Decision D10: `expired` / `else if soon` (styledFlags symbol mode, REQ-ROW-011):
 ## Derived requirements / unreachable code
 
 - Derived: shortHost of the bare string ".ts.net" returns "" (first label is empty); it is not a real machine name and no requirement protects it.
-- Defensive condition: `len(parts) >= 3` in shortHost and tailnetLabel is always true once the name ends in ".ts.net" (the suffix contains two dots), so its false outcome is unreachable; it has no statement of its own.
+- The former defensive condition `len(parts) >= 3` in shortHost and tailnetLabel (always true once the name ends in ".ts.net") was removed; behaviour is identical.
 - The final clamp of listCapacity was written as `if c < 1 { c = 1 }`; the Run panel height is never below 15, so the clamp can never act. It was rewritten without a branch (`max(..., 1)`) with identical behaviour so no statement is left unexecuted.
 - The status icon in symbol mode has the same shape for a reachable and an unreachable machine; the difference is the colour (REQ-ROW-009).

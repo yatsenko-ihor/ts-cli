@@ -36,7 +36,7 @@
 - [x] `UseKeychain` with a lost key: creates a new key, removes the unreadable secrets and says what was removed
 - [x] `runJob.kill` kills the whole process group (sshpass's ssh child too)
 - [x] Requirement/coverage gate extended to `commands/` and the TUI account/list logic (all gated files at 100 %)
-- [ ] `account add` matches an existing account by name as well as tailnet and does not reject a duplicate `--name` (see `verification/requirements/account.md`)
+- [x] `account add` identifies the account by tailnet only and rejects a duplicate display name
 
 ## Ideas (not planned yet)
 

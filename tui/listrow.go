@@ -26,9 +26,7 @@ var (
 func shortHost(name string) string {
 	n := strings.TrimSuffix(name, ".")
 	if strings.HasSuffix(n, ".ts.net") {
-		if parts := strings.Split(n, "."); len(parts) >= 3 {
-			return parts[0]
-		}
+		return strings.Split(n, ".")[0]
 	}
 	return n
 }
@@ -37,9 +35,7 @@ func shortHost(name string) string {
 func tailnetLabel(name string) string {
 	n := strings.TrimSuffix(name, ".")
 	if strings.HasSuffix(n, ".ts.net") {
-		if parts := strings.Split(n, "."); len(parts) >= 3 {
-			return parts[1]
-		}
+		return strings.Split(n, ".")[1]
 	}
 	return ""
 }
