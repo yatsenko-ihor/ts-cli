@@ -16,7 +16,11 @@ A terminal tool for managing the machines of your Tailscale tailnets: browse the
 
 ## Install
 
-Requires Go 1.24+ and a Tailscale [API key](https://login.tailscale.com/admin/settings/keys). Optional: `sshpass` for saved-password logins.
+You need a Tailscale [API key](https://login.tailscale.com/admin/settings/keys). Optional: `sshpass` for saved-password logins.
+
+**Download a binary** from the [Releases](https://github.com/yatsenko-ihor/ts-cli/releases) page (Linux, macOS and Windows, amd64 and arm64; `checksums.txt` lists SHA-256 sums), unpack it and put `ts-cli` on your `PATH`, or run `./ts-cli install`. On macOS a downloaded binary may be blocked by Gatekeeper: `xattr -d com.apple.quarantine ts-cli`.
+
+**Or build it** (Go 1.24+):
 
 ```bash
 go install github.com/yatsenko-ihor/ts-cli@latest
