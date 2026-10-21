@@ -32,7 +32,6 @@
 - [x] Device key reminders (line on the main screen, list flag)
 - [x] Contextual key hints, `?` for help
 - [x] Tailscale SSH when the machine offers it (option, off by default)
-- [ ] Embedded terminal inside ts-cli itself (PTY emulator) for use outside tmux
 - [ ] Re-enable background auto-ping (`autoPingEnabled` in `tui/ping.go`) once it is cheap enough
 - [x] `UseKeychain` with a lost key: creates a new key, removes the unreadable secrets and says what was removed
 - [x] `runJob.kill` kills the whole process group (sshpass's ssh child too)
