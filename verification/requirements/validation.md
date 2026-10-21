@@ -60,7 +60,7 @@ loop) are covered by the boundary cases of their requirements.
 Behaviour present in the code that no user need asked for:
 
 - The regexp in ValidateSSHUsername admits '.' and '..' and names consisting only of digits; these are accepted (not a security issue for ssh, but not a user need).
-- The prefix list in ValidateAPIKey contains `tskey-api-` and `tskey-auth-`, both of which already match `tskey-`; the longer entries are redundant, the effective rule is REQ-VAL-015.
+- The prefix list in ValidateAPIKey used to list `tskey-api-` and `tskey-auth-` besides `tskey-`; the longer entries were redundant and are gone, the rule is REQ-VAL-015.
 - SanitizeInput keeps U+007F (DEL) and C1 controls (U+0080..U+009F) because it only filters below U+0020; it is defence in depth, not a complete control-character filter.
 - ValidateTailnet accepts any text containing '.' or '@' (e.g. `@`, `.`, spaces); it is a sanity check, not a domain validator.
 - The regexps are compiled on every call (performance only).

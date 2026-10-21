@@ -3,6 +3,7 @@ package commands
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -69,6 +70,13 @@ func (k keyInput) resolve(in io.Reader) (string, error) {
 	return util.SanitizeInput(os.Getenv("TAILSCALE_API_KEY")), nil
 }
 
+// duplicateNameError is returned when the display name belongs to another account.
+type duplicateNameError struct{ name string }
+
+func (e duplicateNameError) Error() string {
+	return fmt.Sprintf("an account named %q already exists; choose another --name", e.name)
+}
+
 // addAccount validates the key against the API and stores the account.
 func addAccount(out io.Writer, tailnet, name, apiKey string, makeActive bool) error {
 	tailnet = util.SanitizeInput(tailnet)
@@ -79,7 +87,8 @@ func addAccount(out io.Writer, tailnet, name, apiKey string, makeActive bool) er
 	if tailnet == "" {
 		return fmt.Errorf("tailnet name is required.\nUse --tailnet to specify your tailnet name")
 	}
-	if name != "" {
+	explicitName := name != ""
+	if explicitName {
 		if err := util.ValidateAccountName(name); err != nil {
 			return fmt.Errorf("invalid name: %w", err)
 		}
@@ -102,10 +111,18 @@ func addAccount(out io.Writer, tailnet, name, apiKey string, makeActive bool) er
 	// Read-modify-write under the config lock. A corrupt or unreadable
 	// config is an error, never silently replaced.
 	err := config.Update(func(cfg *config.Config) error {
-		if existing := cfg.FindAccount(tailnet); existing != nil {
+		// The tailnet identifies the account. The name must not belong to a
+		// different account (as its name or as its tailnet).
+		existing := cfg.GetAccountByTailnet(tailnet)
+		for i := range cfg.Accounts {
+			other := &cfg.Accounts[i]
+			if other != existing && (other.Name == name || other.Tailnet == name) {
+				return duplicateNameError{name: name}
+			}
+		}
+		if existing != nil {
 			existing.APIKey = apiKey
-			existing.Tailnet = tailnet
-			if name != tailnet {
+			if explicitName {
 				existing.Name = name
 			}
 			fmt.Fprintf(out, "✓ Updated account: %s\n", existing.Name)
@@ -118,6 +135,10 @@ func addAccount(out io.Writer, tailnet, name, apiKey string, makeActive bool) er
 		}
 		return nil
 	})
+	var dup duplicateNameError
+	if errors.As(err, &dup) {
+		return dup
+	}
 	if err != nil {
 		return fmt.Errorf("failed to store config: %w", err)
 	}

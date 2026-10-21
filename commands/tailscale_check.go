@@ -3,10 +3,12 @@ package commands
 import (
 	"fmt"
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 )
+
+// sleepFn is a test seam for time.Sleep.
+var sleepFn = time.Sleep
 
 // CheckTailscaleStatus checks if the Tailscale daemon is running
 func CheckTailscaleStatus() (isRunning bool, message string) {
@@ -31,7 +33,7 @@ func CheckTailscaleStatus() (isRunning bool, message string) {
 
 // buildTailscaleNotRunningMessage creates an OS-specific message for starting Tailscale
 func buildTailscaleNotRunningMessage() string {
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
 		return `Tailscale doesn't appear to be running.
 
@@ -71,7 +73,7 @@ func attemptToStartTailscale() bool {
 	var cmd *exec.Cmd
 	var description string
 
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
 		// On macOS, try to open the Tailscale app
 		cmd = exec.Command("open", "-a", "Tailscale")
@@ -104,7 +106,7 @@ func attemptToStartTailscale() bool {
 	// Wait a moment for Tailscale to start
 	fmt.Println("   Waiting for Tailscale to initialize...")
 	// Give it a couple seconds to start
-	time.Sleep(2 * time.Second)
+	sleepFn(2 * time.Second)
 
 	// Verify it's running
 	isRunning, _ := CheckTailscaleStatus()

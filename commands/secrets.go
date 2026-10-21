@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -35,23 +36,24 @@ func newSecretsStatusCommand() *cobra.Command {
 		Use:   "status",
 		Short: "Show where the master key is stored and whether the keychain is available",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Secret store: %s\n", util.CurrentSecretStore())
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Secret store: %s\n", util.CurrentSecretStore())
 			if err := util.KeychainAvailable(); err != nil {
-				fmt.Printf("Keychain:     unavailable (%v)\n", err)
+				fmt.Fprintf(out, "Keychain:     unavailable (%v)\n", err)
 			} else {
-				fmt.Println("Keychain:     available")
+				fmt.Fprintln(out, "Keychain:     available")
 			}
 
 			// Loading the config exercises the key; report how it went.
 			cfg, err := config.Load()
 			if err != nil {
-				fmt.Printf("Config:       cannot be decrypted: %v\n", err)
+				fmt.Fprintf(out, "Config:       cannot be decrypted: %v\n", err)
 				return nil
 			}
-			fmt.Printf("Config:       %d account(s), %d saved machine credential(s)\n",
+			fmt.Fprintf(out, "Config:       %d account(s), %d saved machine credential(s)\n",
 				len(cfg.Accounts), len(cfg.MachineCredentials))
 			if notice := util.KeyStoreNotice(); notice != "" {
-				fmt.Printf("Notice:       %s\n", notice)
+				fmt.Fprintf(out, "Notice:       %s\n", notice)
 			}
 			return nil
 		},
@@ -70,20 +72,21 @@ func newSecretsUseCommand() *cobra.Command {
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"keychain", "file"},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			switch util.SecretStore(args[0]) {
 			case util.SecretStoreKeychain:
 				if err := util.UseKeychain(); err != nil {
 					return err
 				}
 				if util.KeyWasReset() {
-					reportLostKey()
+					reportLostKey(out)
 				}
-				fmt.Println("✓ Master key is now stored in the OS keychain; ~/.ts-cli/key removed")
+				fmt.Fprintln(out, "✓ Master key is now stored in the OS keychain; ~/.ts-cli/key removed")
 			case util.SecretStoreFile:
 				if err := util.UseFile(); err != nil {
 					return err
 				}
-				fmt.Println("✓ Master key is now stored in ~/.ts-cli/key; keychain item removed")
+				fmt.Fprintln(out, "✓ Master key is now stored in ~/.ts-cli/key; keychain item removed")
 			default:
 				return fmt.Errorf("unknown store %q (use 'keychain' or 'file')", args[0])
 			}
@@ -92,7 +95,7 @@ func newSecretsUseCommand() *cobra.Command {
 			if _, err := config.Load(); err != nil {
 				return fmt.Errorf("switched, but the config can no longer be decrypted: %w", err)
 			}
-			fmt.Println("✓ Stored credentials verified readable")
+			fmt.Fprintln(out, "✓ Stored credentials verified readable")
 			return nil
 		},
 	}
@@ -100,22 +103,22 @@ func newSecretsUseCommand() *cobra.Command {
 
 // reportLostKey explains that the old master key was gone, removes the
 // secrets that were encrypted with it and says what was lost.
-func reportLostKey() {
-	fmt.Println("⚠ The master key was missing from the keychain and there was no key file,")
-	fmt.Println("  so a NEW key was created. Secrets encrypted with the old key cannot be recovered.")
+func reportLostKey(out io.Writer) {
+	fmt.Fprintln(out, "⚠ The master key was missing from the keychain and there was no key file,")
+	fmt.Fprintln(out, "  so a NEW key was created. Secrets encrypted with the old key cannot be recovered.")
 	dropped, err := config.DropUnreadableSecrets()
 	if err != nil {
-		fmt.Printf("  Could not remove the unreadable secrets: %v\n", err)
+		fmt.Fprintf(out, "  Could not remove the unreadable secrets: %v\n", err)
 		return
 	}
 	if len(dropped.Accounts) == 0 && len(dropped.Passwords) == 0 {
-		fmt.Println("  No stored secret depended on the old key.")
+		fmt.Fprintln(out, "  No stored secret depended on the old key.")
 		return
 	}
 	if len(dropped.Accounts) > 0 {
-		fmt.Printf("  Removed accounts (add them again with `ts-cli account add`): %s\n", strings.Join(dropped.Accounts, ", "))
+		fmt.Fprintf(out, "  Removed accounts (add them again with `ts-cli account add`): %s\n", strings.Join(dropped.Accounts, ", "))
 	}
 	if len(dropped.Passwords) > 0 {
-		fmt.Printf("  Removed saved SSH passwords for: %s (you will be asked again on the next connection)\n", strings.Join(dropped.Passwords, ", "))
+		fmt.Fprintf(out, "  Removed saved SSH passwords for: %s (you will be asked again on the next connection)\n", strings.Join(dropped.Passwords, ", "))
 	}
 }
