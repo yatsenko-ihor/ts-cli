@@ -122,6 +122,16 @@ func (m model) continueSSH() (tea.Model, tea.Cmd) {
 			p.username = m.ssh.username
 		}
 	}
+	// A machine that offers Tailscale SSH needs no username prompt, password
+	// or key: tailscaled authenticates the connection.
+	if p.action == sshActionSession && p.deviceIndex >= 0 && p.deviceIndex < len(m.list.filteredDevices) {
+		if device := m.list.filteredDevices[p.deviceIndex]; m.tailscaleSSHActive(device) {
+			username := p.username
+			m.ssh.pending = pendingSSH{}
+			m.lastMachine = machineKey(device)
+			return m, tea.Batch(m.launchTailscaleSSH(device, username), storeLastMachine(machineKey(device)))
+		}
+	}
 	if p.username == "" {
 		m.input = textInput{mode: inputUsername}
 		return m, nil

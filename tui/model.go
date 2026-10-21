@@ -202,6 +202,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Outcome of an interactive session; see sshflow.go.
 		return m.finishSSHAttempt(msg.failure, msg.err)
 
+	case tailscaleSSHDoneMsg:
+		return m.handleTailscaleSSHDone(msg)
+
 	case tmuxOpenedMsg:
 		if msg.err != nil {
 			m.notify.sshError = msg.err

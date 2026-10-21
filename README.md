@@ -155,6 +155,10 @@ ts-cli tui          # alternative alias
 | `Space`     | Mark/unmark the machine for a multi-machine run   |
 | `*`         | Mark all visible machines (again to clear)        |
 | `p`         | Ping the selected machine(s)                      |
+| `f` / `F`   | Upload to the selected machine(s) / download from one (scp) |
+| `H`         | Show/hide offline machines                        |
+| `F12`       | Settings                                          |
+| `?` / `F1`  | Help                                              |
 | `Esc`       | Clear marks / close the right panels              |
 | `Tab`       | Cycle panel focus: machines → run → output        |
 | `Shift+Tab` | Reverse cycle panel focus                         |
@@ -216,6 +220,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Details panel**: with the Run panel closed and a terminal at least 100 columns wide, the highlighted machine's OS, address, last seen, key expiry, SSH setup and ping result are shown on the right.
 - **Group by account**: section headers per account (only with more than one account).
 - **SSH in a tmux split**: inside tmux, `s` opens the session in a new pane to the right of the list instead of taking over ts-cli's terminal (see [Running In tmux](#running-in-tmux)). On by default; has no effect outside tmux.
+- **Use Tailscale SSH when offered** (off by default): for machines that run the Tailscale SSH server, `s` runs `tailscale ssh [user@]machine` instead of plain ssh. No password, key or username prompt and nothing is saved; the tailnet's ACL decides who may connect. Machines that offer it show `Tailscale SSH` in the details panel.
 - **Theme**: `light` (default, keeps your terminal background), `dark` or `hacker` (green on black). `dark` and `hacker` paint the whole screen, so they look the same on any terminal background.
 - **Icon style**: coloured symbols (default) or emoji.
 
@@ -233,6 +238,27 @@ A ping is started:
 - as a **pre-flight check** (at most 2 seconds) before `s` or before running a command/script on a single machine, so an unreachable machine fails right away with a clear message instead of waiting for ssh to time out. Press `Esc` to cancel the check.
 
 Machines that belong to another Tailscale account than the active one are never pinged automatically (and are skipped by the pre-flight check), because this computer cannot reach them until the account is switched; their colour stays the API baseline. Nothing is pinged if the `tailscale` CLI is not installed, and a missing CLI never blocks a connection.
+
+#### Machine actions and ping details
+
+The **Machine** tab of the Run panel (`Tab`, then `]` to the last tab) acts on the *highlighted* machine, never on the marked set:
+
+| Action | What it does |
+|---|---|
+| Ping with details | `tailscale ping`: whether traffic goes direct (with the endpoint) or through a relay (with the region), and the latency |
+| Disable / enable key expiry | The device key never expires (or expires again). The API cannot extend a key; to renew one, log in again on the device |
+| Expire key now | Logs the device out; asks you to type the machine name |
+| Rename… | Sets the machine name |
+| Edit tags… | Replaces the tags (`tag:server, tag:prod`); the ACL must allow them |
+| Delete from tailnet… | Removes the machine; asks you to type the machine name |
+
+These use the Tailscale API with the account's key, which therefore needs permission to write devices; a read-only key shows the API's error. The details panel also shows what the local daemon knows about the machine (`tailscale status`): the current path, traffic and whether it offers Tailscale SSH.
+
+**Key reminders.** A device whose key expires drops off the tailnet. Expired keys and keys expiring within 14 days are flagged in the list (`exp`, red when expired, yellow when soon) and summarised in a line on the main screen.
+
+#### Copying files
+
+`f` uploads a file or directory to the selected machines (the highlighted one, or all marked), `F` downloads from the highlighted one. Both ask for the paths (`~` works for local paths; an empty remote path means the home directory; downloads go to an existing local directory, `.` by default) and run `scp -r` as an ordinary job: the usual credential flow for one machine, saved credentials only for several, per-machine output and status, stop with `x`. A password is passed like for ssh, never in the argument list. Local paths are made absolute so they cannot be read as an option or as `host:path`.
 
 #### Scripts
 

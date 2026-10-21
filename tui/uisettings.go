@@ -19,9 +19,10 @@ const (
 	uiHideOffline    = "hide_offline"
 	uiShowDetails    = "show_details"
 	uiShortNames     = "short_names"
-	uiIcons          = "icons"      // "symbols" (default) or "emoji"
-	uiTmuxSplit      = "tmux_split" // ssh sessions in a tmux pane when running inside tmux
-	uiTheme          = "theme"      // "light" (default), "dark" or "hacker"
+	uiIcons          = "icons"         // "symbols" (default) or "emoji"
+	uiTailscaleSSH   = "tailscale_ssh" // use `tailscale ssh` for machines that offer it (default off)
+	uiTmuxSplit      = "tmux_split"    // ssh sessions in a tmux pane when running inside tmux
+	uiTheme          = "theme"         // "light" (default), "dark" or "hacker"
 )
 
 // uiSettings are the display options of the machine list.
@@ -33,6 +34,7 @@ type uiSettings struct {
 	emojiIcons     bool   // 🟢/🔴/⭕️ instead of coloured ●/○ symbols
 	theme          string // light, dark or hacker
 	tmuxSplit      bool   // open ssh sessions in a tmux split when inside tmux
+	tailscaleSSH   bool   // use `tailscale ssh` for machines that offer it
 }
 
 // loadUISettings builds the settings from the config map; absent keys mean "on".
@@ -46,6 +48,7 @@ func loadUISettings(ui map[string]string) uiSettings {
 		emojiIcons:     ui[uiIcons] == "emoji",
 		theme:          validTheme(ui[uiTheme]),
 		tmuxSplit:      on(uiTmuxSplit),
+		tailscaleSSH:   ui[uiTailscaleSSH] == "on",
 	}
 }
 
@@ -62,6 +65,7 @@ var settingItems = []settingItem{
 	{uiShowDetails, "Details panel", "Show OS, last seen, key expiry, SSH setup of the highlighted machine when the Run panel is closed"},
 	{uiShortNames, "Short names", "Strip the tailnet suffix (.tailXXXX.ts.net) from machine names"},
 	{uiTmuxSplit, "SSH in a tmux split", "Inside tmux, s opens the session in a pane next to the list (a real terminal: vim, htop, mouse, scrolling)"},
+	{uiTailscaleSSH, "Use Tailscale SSH when offered", "s runs `tailscale ssh` for machines that offer it (no password or key needed; the ACL decides); off = plain ssh"},
 	{uiTheme, "Theme", "light, dark or hacker (green on black); dark and hacker paint the whole screen"},
 	{uiIcons, "Icon style", "symbols: coloured ● ○ and text flags   emoji: 🟢 🔴 ⭕️ 🔐"},
 }
@@ -85,6 +89,8 @@ func (s uiSettings) value(key string) string {
 		return flag(s.shortNames)
 	case uiTmuxSplit:
 		return flag(s.tmuxSplit)
+	case uiTailscaleSSH:
+		return flag(s.tailscaleSSH)
 	case uiTheme:
 		return validTheme(s.theme)
 	case uiIcons:
@@ -109,6 +115,8 @@ func (s uiSettings) toggled(key string) uiSettings {
 		s.shortNames = !s.shortNames
 	case uiTmuxSplit:
 		s.tmuxSplit = !s.tmuxSplit
+	case uiTailscaleSSH:
+		s.tailscaleSSH = !s.tailscaleSSH
 	case uiTheme:
 		s.theme = nextTheme(validTheme(s.theme))
 	case uiIcons:

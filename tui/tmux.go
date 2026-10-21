@@ -70,6 +70,12 @@ func tmuxSSHScript(target, fifo, dir string) string {
 	if fifo != "" {
 		run = fmt.Sprintf("exec 3<%s; rm -rf %s; sshpass -d 3 %s", scripts.ShellQuote(fifo), scripts.ShellQuote(dir), run)
 	}
+	return paneScript(run)
+}
+
+// paneScript runs the command line and, after a failure, keeps the pane open
+// until Enter so the error can be read.
+func paneScript(run string) string {
 	return run + `; rc=$?; if [ $rc -ne 0 ]; then printf '\nssh exited with status %s. Press Enter to close. ' "$rc"; read _; fi`
 }
 
