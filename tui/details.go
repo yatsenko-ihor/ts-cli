@@ -69,6 +69,9 @@ func (m model) sshSetupText(d client.Device) string {
 
 // pingText describes the last explicit ping.
 func (m model) pingText(d client.Device) string {
+	if info, ok := m.pingInfo[machineKey(d)]; ok {
+		return info.text()
+	}
 	at := m.pingAt[machineKey(d)]
 	switch m.ping[machineKey(d)] {
 	case pingOK:
@@ -117,6 +120,15 @@ func (m model) renderDetailsPanel(width, height int) string {
 		b.WriteString("\n")
 		b.WriteString(row("Status", m.styledStatus(d)+" "+m.statusText(d)) + "\n")
 		b.WriteString(row("Ping", m.pingText(d)) + "\n")
+		if p, ok := m.peerFor(d); ok {
+			b.WriteString(row("Path", p.pathText()) + "\n")
+			if t := p.trafficText(); t != "" {
+				b.WriteString(row("Traffic", t) + "\n")
+			}
+			if p.ssh {
+				b.WriteString(row("Tailscale SSH", "offered by the machine") + "\n")
+			}
+		}
 		for i, a := range d.Addresses {
 			name := ""
 			if i == 0 {

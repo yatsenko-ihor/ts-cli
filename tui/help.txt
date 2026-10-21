@@ -8,13 +8,15 @@ KEYBOARD SHORTCUTS
   *              Mark all visible machines (again to clear)
   Esc            Clear marks / close right panels
   p              Ping the selected machine(s) with `tailscale ping`
+  f / F          Upload to selected machine(s) / download from one (scp)
   H              Show/hide offline machines
   F12            Settings (names, grouping, details panel, icons)
   s              SSH to selected machine (inside tmux: in a split pane,
                  see F12 → SSH in a tmux split)
   :              Run a one-off command on the selected machine(s)
   c              Copy the ssh command for the selected machine
-  Tab            Open the Run panel (Tab/Shift+Tab cycle panels)
+  Tab            Open the Run panel (Tab/Shift+Tab cycle panels); its
+                 Machine tab: ping with details, key expiry, rename, tags, delete
   r              Reload device list
   /              Search devices
   Shift+S        Cycle sort mode (Name/Last seen/Added)
@@ -25,7 +27,7 @@ KEYBOARD SHORTCUTS
   u              Run 'tailscale up'
   1, 2, 3        Focus panels (Machines, Run, Output)
   q / Ctrl+C     Quit
-  F1             This help screen
+  F1 or ?        This help screen
 
 TEXT EDITING (all inputs)
 ─────────────────────────
@@ -153,7 +155,7 @@ ACCOUNTS WINDOW (m)
 LIST VIEW
 ─────────
   F12  Settings: short names, hide offline, details panel,
-       group by account, tmux split for ssh, theme (light/dark/hacker),
+       group by account, tmux split for ssh, Tailscale SSH, theme (light/dark/hacker),
        icon style
        (saved in config.json)
   H    Show/hide offline machines (search always finds them)

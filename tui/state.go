@@ -64,6 +64,7 @@ const (
 	tabScripts  runTab = iota // Local scripts from ~/.ts-cli/scripts
 	tabCommands               // Saved named commands (config.json)
 	tabRecent                 // Recently run things for this machine
+	tabMachine                // Actions on the highlighted machine (API) and ping details
 	tabCount
 )
 
@@ -75,6 +76,8 @@ func (t runTab) String() string {
 		return "Commands"
 	case tabRecent:
 		return "Recent"
+	case tabMachine:
+		return "Machine"
 	}
 	return "?"
 }
@@ -199,6 +202,7 @@ const (
 	sshActionSession           // Interactive ssh session
 	sshActionCommand           // Run pending.command and stream output
 	sshActionScript            // Stream pending.script to the machine and run it
+	sshActionCopy              // scp a file or directory to or from the machine
 )
 
 // pendingSSH tracks a single connection attempt from key press to outcome.
@@ -213,6 +217,7 @@ type pendingSSH struct {
 	command         string // Remote command for sshActionCommand
 	script          *scripts.Script
 	args            []string // Script arguments for sshActionScript
+	copy            copySpec // What to copy for sshActionCopy
 	usedSavedPass   bool     // The attempt used a password loaded from config
 	passwordTried   bool     // A TUI-entered password has already been tried
 	askPasswordNext bool     // After the username prompt, go straight to the password prompt

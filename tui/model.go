@@ -37,12 +37,15 @@ type model struct {
 	set            uiSettings
 	settingsMode   bool
 	settingsCursor int
-	lastMachine    string               // key of the machine connected to most recently
-	ping           map[string]pingState // explicit reachability results by machineKey
-	pingAt         map[string]time.Time // when each machine was last pinged
-	pinging        map[string]bool      // pings in flight
-	pingSeq        int                  // debounce counter for auto-ping on cursor rest
-	preflight      *preflight           // launch waiting for its reachability check
+	act            actionState           // Machine tab result
+	peers          map[string]peerInfo   // daemon view of peers, by Tailscale IP
+	pingInfo       map[string]pingDetail // detailed ping results by machineKey
+	lastMachine    string                // key of the machine connected to most recently
+	ping           map[string]pingState  // explicit reachability results by machineKey
+	pingAt         map[string]time.Time  // when each machine was last pinged
+	pinging        map[string]bool       // pings in flight
+	pingSeq        int                   // debounce counter for auto-ping on cursor rest
+	preflight      *preflight            // launch waiting for its reachability check
 }
 
 // NewModel builds the initial TUI state. machineCreds is the per-machine
@@ -159,6 +162,9 @@ func (m model) Init() tea.Cmd {
 		cmds = append(cmds, pingDevice(d, pingAuto, manualPingWait))
 	}
 	cmds = append(cmds, m.checkAllHealth())
+	if tailscaleAvailable() {
+		cmds = append(cmds, loadPeersCmd())
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -196,6 +202,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Outcome of an interactive session; see sshflow.go.
 		return m.finishSSHAttempt(msg.failure, msg.err)
 
+	case tailscaleSSHDoneMsg:
+		return m.handleTailscaleSSHDone(msg)
+
 	case tmuxOpenedMsg:
 		if msg.err != nil {
 			m.notify.sshError = msg.err
@@ -210,6 +219,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pingMsg:
 		return m.handlePing(msg)
+
+	case pingDetailMsg:
+		return m.handlePingDetail(msg)
+
+	case deviceActionMsg:
+		return m.handleDeviceAction(msg)
+
+	case peersMsg:
+		if msg.err == nil {
+			m.peers = msg.peers
+		}
+		return m, nil
 
 	case autoPingTickMsg:
 		return m.handleAutoPingTick(msg)
@@ -316,7 +337,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.list.selected = -1
 		}
 		// A reload refreshes last-seen times; forget stale ping results
-		m.ping, m.pingAt = nil, nil
+		m.ping, m.pingAt, m.pingInfo = nil, nil, nil
 		// Drop marks for machines that disappeared
 		for k := range m.list.marked {
 			found := false
@@ -345,9 +366,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notify.reloadSuccess = fmt.Sprintf("Reloaded %d device(s) from %d account(s)", len(msg.devices), len(m.acct.list))
 
 		// Clear the success message after 3 seconds
-		return m, tea.Tick(time.Second*3, func(time.Time) tea.Msg {
+		clear := tea.Tick(time.Second*3, func(time.Time) tea.Msg {
 			return clearReloadMsg{}
 		})
+		if tailscaleAvailable() {
+			return m, tea.Batch(clear, loadPeersCmd())
+		}
+		return m, clear
 
 	case runLinesMsg:
 		if m.run.runFor(msg.job) == nil {
@@ -517,6 +542,10 @@ func (m model) viewBody() string {
 
 	if w := m.keyWarning(); w != "" {
 		b.WriteString(lipgloss.NewStyle().Foreground(colorWarn).Render(w))
+		b.WriteString("\n")
+	}
+	if w := m.deviceKeyWarning(time.Now()); w != "" {
+		b.WriteString(lipgloss.NewStyle().Foreground(colorWarn).Render(truncateForWidth(w, max(20, m.width-2))))
 		b.WriteString("\n")
 	}
 

@@ -62,3 +62,11 @@ Non-test change made (message text and behaviour unchanged for all non-hostile r
 - Bug fix (REQ-API-018): `CheckAccount` set `Unauth` when `strings.Contains(err.Error(), "invalid API key")`, so a server-supplied message such as `{"message":"invalid API key format"}` on a 400/500 was classified as an auth rejection. The 401/403 error is now the sentinel `errInvalidKey` (same text) and `CheckAccount` uses `errors.Is`.
 
 Unreachable statements: none. All statements of `tailscale.go` are executed by the tests (100.0 %). The `Content-Length` mismatch trick in the tests provokes the body-read failures without any test seam.
+
+## Device actions (client/device_actions.go)
+
+- **REQ-API-020** The device action calls shall send exactly the documented requests: `POST /device/{id}/key` with `{"keyExpiryDisabled":bool}`, `POST /device/{id}/expire` (no body), `POST /device/{id}/name` with `{"name":…}` (trimmed), `POST /device/{id}/tags` with `{"tags":[…]}`, `DELETE /device/{id}`; the device ID shall be path-escaped, and the JSON content type shall be set only when there is a body.
+- **REQ-API-021** A non-2xx answer shall be returned as an error carrying the API's own message (or the status), a 2xx answer without body shall be success, network errors shall be wrapped, and an unencodable payload shall be an error.
+- **REQ-API-022** Invalid input (empty device ID, empty name, no tags, a tag not of the form `tag:name`) shall be rejected before anything is sent.
+- **REQ-API-023** `NormalizeTags` shall turn comma/space separated input into `tag:`-prefixed tags without empties or duplicates, preserving order.
+- **REQ-API-024** `SetBaseURL` shall redirect all requests to another root (trailing slash trimmed) and return a function that restores the previous root.
