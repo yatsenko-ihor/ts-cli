@@ -35,6 +35,8 @@ type textInput struct {
 	label  string    // Prompt title for inputText popups
 	hint   string    // Optional helper line under the label
 	masked bool      // Show bullets instead of the typed text (secrets)
+	path   pathKind  // the prompt asks for a local path: Tab completes, Ctrl+O browses
+	note   string    // transient line under the hint (completion candidates)
 	// onCancel, when set, runs on Esc instead of just closing the prompt.
 	onCancel func(m model) model
 	// onSubmit receives the entered value for inputText prompts and returns

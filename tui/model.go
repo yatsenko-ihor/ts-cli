@@ -37,6 +37,7 @@ type model struct {
 	set            uiSettings
 	settingsMode   bool
 	settingsCursor int
+	browse         *fileBrowser          // local file browser opened from a path prompt
 	act            actionState           // Machine tab result
 	peers          map[string]peerInfo   // daemon view of peers, by Tailscale IP
 	pingInfo       map[string]pingDetail // detailed ping results by machineKey
@@ -426,6 +427,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.settingsMode {
 			return m.handleSettings(msg)
 		}
+		if m.browse != nil {
+			return m.handleBrowser(msg)
+		}
 		// Dispatch to appropriate mode handler
 		switch m.input.mode {
 		case inputPassword:
@@ -474,6 +478,9 @@ func (m model) viewBody() string {
 	}
 	if m.settingsMode {
 		return m.renderSettings()
+	}
+	if m.browse != nil {
+		return m.renderBrowser()
 	}
 
 	// Show profile selection view if in profile selection mode

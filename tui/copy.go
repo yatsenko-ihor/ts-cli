@@ -81,12 +81,12 @@ func (m model) promptUpload() (tea.Model, tea.Cmd) {
 	if len(targets) == 0 {
 		return m, nil
 	}
-	where := displayName(targets[0])
+	where := shortHost(displayName(targets[0]))
 	if len(targets) > 1 {
 		where = fmt.Sprintf("%d machines", len(targets))
 	}
 	m.input = textInput{
-		mode: inputText, label: "Upload to " + where + ": local path",
+		mode: inputText, label: "Upload to " + where + ": local path", path: pathAny,
 		hint: "file or directory on this computer",
 		onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
 			m.input = textInput{}
@@ -127,7 +127,7 @@ func (m model) promptDownload() (tea.Model, tea.Cmd) {
 		m.notify.sshError = fmt.Errorf("download works on one machine; clear the marks (esc) first")
 		return m, nil
 	}
-	name := displayName(targets[0])
+	name := shortHost(displayName(targets[0]))
 	m.input = textInput{
 		mode: inputText, label: "Download from " + name + ": remote path",
 		hint: "a file or directory; relative paths start in the home directory",
@@ -138,7 +138,7 @@ func (m model) promptDownload() (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.input = textInput{
-				mode: inputText, label: "Download to: local directory", value: ".", cursor: 1,
+				mode: inputText, label: "Download to: local directory", value: ".", cursor: 1, path: pathDirs,
 				hint: "an existing directory on this computer",
 				onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
 					m.input = textInput{}

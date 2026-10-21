@@ -236,7 +236,7 @@ func TestDownloadPromptsThenCopiesFromOneMachine(t *testing.T) {
 
 	updated, _ := m.promptDownload()
 	m = updated.(model)
-	if m.input.mode != inputText || !strings.Contains(m.input.label, "alpha.ts.net") {
+	if m.input.mode != inputText || !strings.Contains(m.input.label, "alpha") && !strings.Contains(m.input.label, ".ts.net") {
 		t.Fatalf("first prompt: %+v", m.input)
 	}
 	if u, cmd := m.input.onSubmit(m, " "); cmd != nil || u.(model).input.mode != inputNone {
