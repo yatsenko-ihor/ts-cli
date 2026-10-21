@@ -521,8 +521,9 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 	device := m.list.filteredDevices[target]
 
-	// Check if device is offline
-	if m.launchBlocked(device) {
+	// Only the API baseline refuses here: ssh itself finds out whether the
+	// machine answers (and sets the path up), so no ping first.
+	if m.ping[machineKey(device)] == pingUnknown && !isDeviceOnline(device) {
 		deviceName := device.Name
 		if deviceName == "" {
 			deviceName = device.Hostname
@@ -539,9 +540,7 @@ func (m model) handleSSHRequest() (tea.Model, tea.Cmd) {
 
 	// Everything else (account switch, username/password prompts, persistence)
 	// is handled by the credential flow in sshflow.go.
-	return m.withPreflight(device, func(m model) (tea.Model, tea.Cmd) {
-		return m.beginSSH(m.indexOf(device), sshJob{action: sshActionSession})
-	})
+	return m.beginSSH(m.indexOf(device), sshJob{action: sshActionSession})
 }
 
 // ─── Options menu constants ───────────────────────────────────────────────────
