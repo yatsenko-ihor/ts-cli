@@ -23,6 +23,9 @@ var (
 	teaExec = tea.Exec // hands the interactive ssh process to Bubble Tea
 )
 
+// keepAliveOpts make ssh notice a dead peer: 3 unanswered probes, 10 s apart.
+var keepAliveOpts = []string{"-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3"}
+
 // Exit codes used to tell a credential problem apart from an ordinary
 // non-zero exit of the remote shell.
 const (
@@ -94,8 +97,10 @@ func newSSHCommand(target, password string, batch bool, remoteArgs ...string) (*
 // for both: the password goes through a private pipe to `sshpass -d 3`, never
 // into the argument list.
 func newSecureCommand(tool string, opts, tail []string, password string, batch bool) (*exec.Cmd, func(), error) {
-	// ConnectTimeout keeps a dead host from hanging the TUI for minutes.
-	sshArgs := append([]string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15"}, opts...)
+	// ConnectTimeout keeps a dead host from hanging the TUI for minutes;
+	// the keep-alive probes make a session whose peer vanished (a rebooted
+	// Raspberry Pi sends no FIN) end after about 30 s instead of hanging.
+	sshArgs := append(append([]string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15"}, keepAliveOpts...), opts...)
 
 	if password != "" {
 		if sshpassPath, err := exec.LookPath("sshpass"); err == nil {

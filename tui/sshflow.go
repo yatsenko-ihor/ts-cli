@@ -226,9 +226,13 @@ func (m model) finishSSHAttempt(failure sshFailure, err error) (tea.Model, tea.C
 	// The probe already proved these credentials. If the interactive session
 	// later ends with ssh's 255 (connection closed), it was an established
 	// session that ended, not a login failure.
-	if p.verified && p.action == sshActionSession && failure == sshFailureConnection {
+	lost := p.verified && p.action == sshActionSession && failure == sshFailureConnection
+	if lost {
 		failure = sshFailureRemoteExit
-		err = fmt.Errorf("connection closed: %v", err)
+		err = fmt.Errorf("connection to %s lost (it may have rebooted or the network dropped); press s to reconnect", p.machineName)
+		// The old ping result no longer says anything about the machine.
+		delete(m.ping, p.machineID)
+		delete(m.pingAt, p.machineID)
 	}
 
 	switch failure {
@@ -236,7 +240,11 @@ func (m model) finishSSHAttempt(failure sshFailure, err error) (tea.Model, tea.C
 		// The connection worked. Persist what we learned, then clear.
 		cmds := m.persistSuccessfulCredentials()
 		if failure == sshFailureRemoteExit && p.action == sshActionSession {
-			m.notify.sshError = fmt.Errorf("remote session ended with an error: %v", err)
+			if lost {
+				m.notify.sshError = err
+			} else {
+				m.notify.sshError = fmt.Errorf("remote session ended with an error: %v", err)
+			}
 		}
 		m.ssh.pending = pendingSSH{}
 		return m, tea.Batch(cmds...)

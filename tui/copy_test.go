@@ -103,7 +103,7 @@ func TestNewSCPCommandBuildsSafeArgumentLists(t *testing.T) {
 	}
 	cleanup()
 	args := strings.Join(cmd.Args[1:], "\x00")
-	want := strings.Join([]string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "-r", "-o", "BatchMode=yes", "--", filepath.Join(wd, "-oProxyCommand=evil"), "root@100.64.0.5:dest dir"}, "\x00")
+	want := strings.Join([]string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3", "-r", "-o", "BatchMode=yes", "--", filepath.Join(wd, "-oProxyCommand=evil"), "root@100.64.0.5:dest dir"}, "\x00")
 	if args != want {
 		t.Fatalf("args = %q\nwant   %q", cmd.Args[1:], strings.Split(want, "\x00"))
 	}
