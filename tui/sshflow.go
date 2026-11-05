@@ -226,13 +226,16 @@ func (m model) finishSSHAttempt(failure sshFailure, err error) (tea.Model, tea.C
 	// The probe already proved these credentials. If the interactive session
 	// later ends with ssh's 255 (connection closed), it was an established
 	// session that ended, not a login failure.
-	lost := p.verified && p.action == sshActionSession && failure == sshFailureConnection
-	if lost {
-		failure = sshFailureRemoteExit
-		err = fmt.Errorf("connection to %s lost (it may have rebooted or the network dropped); press s to reconnect", p.machineName)
+	if p.verified && p.action == sshActionSession && (failure == sshFailureConnection || failure == sshFailureUnreachable) {
+		// An established session ended with ssh's 255: the machine went away
+		// (reboot, network). Credentials are kept; ask about reconnecting.
 		// The old ping result no longer says anything about the machine.
 		delete(m.ping, p.machineID)
 		delete(m.pingAt, p.machineID)
+		cmds := m.persistSuccessfulCredentials()
+		m.ssh.askReconnect = true
+		m.ssh.askCursor = 0
+		return m, tea.Batch(cmds...)
 	}
 
 	switch failure {
@@ -240,11 +243,7 @@ func (m model) finishSSHAttempt(failure sshFailure, err error) (tea.Model, tea.C
 		// The connection worked. Persist what we learned, then clear.
 		cmds := m.persistSuccessfulCredentials()
 		if failure == sshFailureRemoteExit && p.action == sshActionSession {
-			if lost {
-				m.notify.sshError = err
-			} else {
-				m.notify.sshError = fmt.Errorf("remote session ended with an error: %v", err)
-			}
+			m.notify.sshError = fmt.Errorf("remote session ended with an error: %v", err)
 		}
 		m.ssh.pending = pendingSSH{}
 		return m, tea.Batch(cmds...)
@@ -266,6 +265,10 @@ func (m model) finishSSHAttempt(failure sshFailure, err error) (tea.Model, tea.C
 		m.ssh.pending.passwordTried = true
 		m.input = textInput{mode: inputPassword}
 		return m, tea.Batch(cmds...)
+
+	case sshFailureUnreachable:
+		// Not a credentials problem: keep trying until the machine answers.
+		return m.waitReconnect(err)
 
 	case sshFailureConnection:
 		// Key-based attempt failed: ask for a password, once. If that also
@@ -340,6 +343,9 @@ func (m model) handleProbe(msg probeMsg) (tea.Model, tea.Cmd) {
 	if p.action != sshActionSession {
 		return m, nil // cancelled while the probe was running
 	}
+	if m.ssh.reconnect != nil && msg.failure != sshFailureUnreachable {
+		m.ssh.reconnect = nil // the machine answered (or failed for another reason)
+	}
 	if msg.failure != sshFailureNone && msg.failure != sshFailureRemoteExit {
 		return m.finishSSHAttempt(msg.failure, msg.err)
 	}
@@ -360,7 +366,7 @@ func (m model) handleProbe(msg probeMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, openInTmux(device, p.username, password))
 		return m, tea.Batch(cmds...)
 	}
-	cmds = append(cmds, m.sshToDevice(device, p.username, p.password))
+	cmds = append(cmds, m.sshToDevice(device, p.username, password))
 	return m, tea.Batch(cmds...)
 }
 
@@ -368,6 +374,8 @@ func (m model) handleProbe(msg probeMsg) (tea.Model, tea.Cmd) {
 func (m model) cancelSSHAttempt() model {
 	m.ssh.pending = pendingSSH{}
 	m.ssh.retryMode = false
+	m.ssh.reconnect = nil
+	m.ssh.askReconnect = false
 	m.input = textInput{mode: inputNone}
 	m.notify.sshError = nil
 	return m

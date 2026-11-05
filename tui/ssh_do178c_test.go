@@ -33,6 +33,7 @@ if [ -n "$FAKE_READ_STDIN" ]; then
   while IFS= read -r l; do printf '%s\n' "$l" >> "$d/ssh.stdin"; done
 fi
 if [ -n "$FAKE_SSH_OUT" ]; then printf '%s\n' "$FAKE_SSH_OUT"; fi
+if [ -n "$FAKE_SSH_ERR" ]; then printf "%s\n" "$FAKE_SSH_ERR" >&2; fi
 exit ${FAKE_SSH_EXIT:-0}
 `
 
@@ -436,7 +437,7 @@ func TestDO178CBannerExec(t *testing.T) {
 		b.SetStdin(strings.NewReader("in"))
 		b.SetStdout(&out)
 		b.SetStderr(&errw)
-		if b.cmd.Stdin == nil || b.cmd.Stdout != &out || b.cmd.Stderr != &errw || b.stdout != &out {
+		if b.cmd.Stdin == nil || b.cmd.Stdout != &out || b.cmd.Stderr == nil || b.stdout != &out {
 			t.Fatal("setters did not wire the process streams")
 		}
 		if err := b.Run(); err != nil {

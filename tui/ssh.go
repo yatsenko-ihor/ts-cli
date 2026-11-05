@@ -42,6 +42,7 @@ const (
 	sshFailureConnection             // ssh could not connect or authenticate
 	sshFailureRemoteExit             // session worked; remote shell exited non-zero
 	sshFailureExec                   // process could not be started at all
+	sshFailureUnreachable            // the machine did not answer (rebooting, network down)
 )
 
 // classifySSHError maps the error returned by exec/tea.Exec to an sshFailure.
@@ -138,6 +139,7 @@ type bannerExec struct {
 	banner string
 	cmd    *exec.Cmd
 	stdout io.Writer
+	tail   tailBuffer // the end of ssh's stderr, to tell "unreachable" from "refused"
 }
 
 func (b *bannerExec) Run() error {
@@ -148,7 +150,7 @@ func (b *bannerExec) Run() error {
 }
 func (b *bannerExec) SetStdin(r io.Reader)  { b.cmd.Stdin = r }
 func (b *bannerExec) SetStdout(w io.Writer) { b.stdout = w; b.cmd.Stdout = w }
-func (b *bannerExec) SetStderr(w io.Writer) { b.cmd.Stderr = w }
+func (b *bannerExec) SetStderr(w io.Writer) { b.cmd.Stderr = io.MultiWriter(w, &b.tail) }
 
 // sshToDevice starts an interactive SSH session with the given credentials.
 // When no password is available and sshpass is installed, BatchMode makes a
@@ -173,9 +175,10 @@ func (m model) sshToDevice(device client.Device, username, password string) tea.
 	}
 
 	banner := fmt.Sprintf("\nConnection to %s (%s)\n", displayName(device), target)
-	return teaExec(&bannerExec{banner: banner, cmd: cmd}, func(err error) tea.Msg {
+	be := &bannerExec{banner: banner, cmd: cmd}
+	return teaExec(be, func(err error) tea.Msg {
 		cleanup()
-		return sshMsg{err: err, failure: classifySSHError(err)}
+		return sshMsg{err: err, failure: classifySSHStderr(classifySSHError(err), be.tail.String())}
 	})
 }
 
@@ -197,8 +200,10 @@ func probeSSH(device client.Device, username, password string) tea.Cmd {
 			return probeMsg{err: err, failure: sshFailureExec}
 		}
 		defer cleanup()
+		var stderr tailBuffer
+		cmd.Stderr = &stderr
 		err = cmd.Run()
-		return probeMsg{err: err, failure: classifySSHError(err)}
+		return probeMsg{err: err, failure: classifySSHStderr(classifySSHError(err), stderr.String())}
 	}
 }
 
