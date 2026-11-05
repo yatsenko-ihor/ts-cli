@@ -536,12 +536,8 @@ func TestDO178CVerifiedSessionDroppedWith255(t *testing.T) {
 		m := pendingFlow(t, "pi", base)
 		updated, _ := m.finishSSHAttempt(sshFailureConnection, err255)
 		m2 := asModel(t, updated)
-		if m2.ssh.retryMode || m2.input.mode != inputNone || m2.ssh.pending.action != sshActionNone {
-			t.Fatalf("must end quietly: retry=%v mode=%v", m2.ssh.retryMode, m2.input.mode)
-		}
-		if m2.notify.sshError == nil || !strings.Contains(m2.notify.sshError.Error(), "connection to") ||
-			!strings.Contains(m2.notify.sshError.Error(), "press s to reconnect") {
-			t.Fatalf("err = %v", m2.notify.sshError)
+		if m2.ssh.retryMode || m2.input.mode != inputNone || !m2.ssh.askReconnect || m2.ssh.pending.action != sshActionSession {
+			t.Fatalf("must ask about reconnecting: retry=%v mode=%v ask=%v", m2.ssh.retryMode, m2.input.mode, m2.ssh.askReconnect)
 		}
 		if m2.ssh.machineCreds["dev-1"].passwordEncrypted == "" {
 			t.Fatal("password must be (still) saved")

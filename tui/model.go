@@ -418,7 +418,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case reconnectTickMsg:
+		return m.handleReconnectTick(msg)
+
 	case tea.KeyMsg:
+		if m.ssh.reconnect != nil {
+			return m.handleReconnectKey(msg)
+		}
+		if m.ssh.askReconnect {
+			return m.handleReconnectAskKey(msg)
+		}
 		// While a pre-flight check runs (at most ~2 s) only cancel is accepted.
 		if m.preflight != nil {
 			if k := msg.String(); k == "esc" || k == "ctrl+c" {
@@ -509,6 +518,13 @@ func (m model) viewBody() string {
 	// Show help screen
 	if m.helpMode {
 		return m.renderHelp()
+	}
+
+	if m.ssh.reconnect != nil {
+		return m.renderReconnect()
+	}
+	if m.ssh.askReconnect {
+		return m.renderReconnectAsk()
 	}
 
 	// Show SSH retry menu after failed connection

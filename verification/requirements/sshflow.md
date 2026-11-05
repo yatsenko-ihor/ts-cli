@@ -67,6 +67,13 @@ ordinary non-zero exit of the remote command never deletes credentials.
 - **REQ-FLW-037** For a single-machine run that did not connect (connection failure, bad password, exec failure) handleRunDone shall settle the machine run, record no history, save no credentials and hand the failure to finishSSHAttempt (prompt or retry menu or error).
 - **REQ-FLW-038** For a multi-machine run handleRunDone shall settle the machine and continue the multi-run logic without touching the interactive credential flow (pending attempt, prompts) and without saving or forgetting credentials on failure.
 
+## Reconnecting
+
+- **REQ-FLW-050** classifySSHStderr shall turn sshFailureConnection into sshFailureUnreachable when ssh's stderr names an unreachable or closed connection (timed out, refused, no route, closed by ...) and does not contain "permission denied"; every other failure and every refused login shall keep its classification.
+- **REQ-FLW-051** When an attempt ends with sshFailureUnreachable finishSSHAttempt shall neither open the retry menu nor a credential prompt but wait reconnectDelay seconds with a countdown and probe again, repeating until the machine answers; once it answers the loop shall end and the normal handling of the result shall apply.
+- **REQ-FLW-052** While reconnecting only Esc and Ctrl+C shall be accepted; they shall end the loop and the attempt, and a late tick of the ended loop shall be ignored.
+- **REQ-FLW-053** When an interactive session that was already verified ends with sshFailureConnection or sshFailureUnreachable, finishSSHAttempt shall keep the credentials, forget the machine's ping result and ask whether to reconnect automatically; yes shall start the reconnect loop at once, no (or Esc) shall end the attempt and tell the user to press s.
+
 ## Credential key migration
 
 - **REQ-FLW-039** migrateCredentialKeys shall move credentials stored under a device's Name or Hostname to its stable key (ID, else Hostname), setting the display name, keep an already existing entry of the stable key and drop the legacy entry, never touch entries whose legacy name is empty or equal to the key, skip devices without any key, keep unrelated entries, and be idempotent.

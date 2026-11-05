@@ -253,8 +253,8 @@ func TestSessionEndingWith255AfterVerifiedProbeKeepsCredentials(t *testing.T) {
 	if m.ssh.machineCreds["dev-1"].passwordEncrypted == "" {
 		t.Fatal("saved password must survive a dropped session")
 	}
-	if m.ssh.pending.action != sshActionNone {
-		t.Fatal("pending should be cleared")
+	if !m.ssh.askReconnect || m.ssh.pending.action != sshActionSession {
+		t.Fatal("the dropped session must ask about reconnecting and keep the attempt")
 	}
 }
 

@@ -198,6 +198,10 @@ type ssh struct {
 	pending      pendingSSH                   // The connection attempt in progress
 	retryMode    bool                         // Show retry menu after SSH failure
 	retryCursor  int                          // Cursor position in retry menu
+	reconnect    *reconnectState              // Reconnect loop in progress, nil when none
+	reconnectSeq int                          // Counter that tells reconnect loops apart
+	askReconnect bool                         // A working session dropped: ask whether to reconnect
+	askCursor    int                          // 0 = yes, 1 = no
 }
 
 // sshAction says what a pending SSH attempt should do once credentials are known.
