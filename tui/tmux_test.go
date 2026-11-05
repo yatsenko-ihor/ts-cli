@@ -134,8 +134,15 @@ func TestTmuxSSHScriptKeyAuthRunsSSHAndKeepsPaneOpenOnFailure(t *testing.T) {
 		t.Fatalf("a failure must be shown before the pane closes: %q", out)
 	}
 	argv := fakeArgv(t, dir, "ssh.argv")
-	if argv[len(argv)-1] != "root@100.64.0.9" || strings.Join(argv, " ") != "-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@100.64.0.9" {
+	if argv[len(argv)-1] != "root@100.64.0.9" || strings.Join(argv, " ") != "-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 root@100.64.0.9" {
 		t.Fatalf("ssh argv = %q", argv)
+	}
+
+	// A dropped connection (status 255) tells how to reconnect.
+	t.Setenv("FAKE_SSH_EXIT", "255")
+	out, _ = runShell(t, script, "")
+	if !strings.Contains(out, "Connection lost") || !strings.Contains(out, "press s to reconnect") {
+		t.Fatalf("status 255 must explain the loss: %q", out)
 	}
 
 	// A clean exit closes the pane silently.

@@ -243,7 +243,7 @@ func TestDO178CNewSSHCommandPlainSSH(t *testing.T) {
 		if cmd.Args[0] != "ssh" || len(cmd.ExtraFiles) != 0 {
 			t.Fatalf("expected plain ssh, got %v (%d extra files)", cmd.Args, len(cmd.ExtraFiles))
 		}
-		want := []string{"ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "admin@100.64.0.1"}
+		want := []string{"ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3", "admin@100.64.0.1"}
 		if strings.Join(cmd.Args, "\x00") != strings.Join(want, "\x00") {
 			t.Fatalf("args = %q, want %q", cmd.Args, want)
 		}
@@ -308,7 +308,7 @@ func TestDO178CNewSSHCommandSSHPassUsesPrivatePipe(t *testing.T) {
 			if filepath.Base(cmd.Path) != "sshpass" || len(cmd.ExtraFiles) != 1 {
 				t.Fatalf("expected sshpass with one extra fd, got %q (%d)", cmd.Args, len(cmd.ExtraFiles))
 			}
-			want := []string{"-d", "3", "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "admin@100.64.0.1", "uptime", "-a"}
+			want := []string{"-d", "3", "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3", "admin@100.64.0.1", "uptime", "-a"}
 			if strings.Join(cmd.Args[1:], "\x00") != strings.Join(want, "\x00") {
 				t.Fatalf("args = %q, want %q", cmd.Args[1:], want)
 			}

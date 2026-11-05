@@ -61,7 +61,7 @@ type tmuxOpenedMsg struct {
 // when no password is passed. The pane stays open after a failure so the
 // error can be read.
 func tmuxSSHScript(target, fifo, dir string) string {
-	args := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15", target}
+	args := append(append([]string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15"}, keepAliveOpts...), target)
 	quoted := make([]string, len(args))
 	for i, a := range args {
 		quoted[i] = scripts.ShellQuote(a)
@@ -76,7 +76,7 @@ func tmuxSSHScript(target, fifo, dir string) string {
 // paneScript runs the command line and, after a failure, keeps the pane open
 // until Enter so the error can be read.
 func paneScript(run string) string {
-	return run + `; rc=$?; if [ $rc -ne 0 ]; then printf '\nssh exited with status %s. Press Enter to close. ' "$rc"; read _; fi`
+	return run + `; rc=$?; if [ $rc -eq 255 ]; then printf '\nConnection lost or refused (ssh status 255): the machine may have rebooted or the network dropped. Press Enter to close, then press s to reconnect. '; read _; elif [ $rc -ne 0 ]; then printf '\nssh exited with status %s. Press Enter to close. ' "$rc"; read _; fi`
 }
 
 // tmuxSplitArgs are the tmux arguments that open script in a pane to the
