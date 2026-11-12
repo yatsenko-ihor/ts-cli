@@ -22,11 +22,6 @@ func storeUsername(username string) tea.Cmd {
 	}
 }
 
-// clearUsername removes the default SSH username from config.json
-func clearUsername() tea.Cmd {
-	return storeUsername("")
-}
-
 // storeLastMachine remembers the machine connected to most recently so the
 // next start can pre-select it.
 func storeLastMachine(key string) tea.Cmd {

@@ -159,7 +159,6 @@ ts-cli tui          # alternative alias
 | `u`         | Tailscale up                                      |
 | `o`         | Options menu (manage credentials)                 |
 | `a`         | About (version, author info)                      |
-| `d`         | Clear default SSH username                        |
 | `x`         | Dismiss install tip                               |
 | `:`         | Run a one-off command on the selected machine(s)  |
 | `Space`     | Mark/unmark the machine for a multi-machine run   |
@@ -167,6 +166,7 @@ ts-cli tui          # alternative alias
 | `p`         | Ping the selected machine(s)                      |
 | `f` / `F`   | Upload to the selected machine(s) / download from one (scp) |
 | `H`         | Show/hide offline machines                        |
+| `d`         | Forget the saved password of the machine under the cursor |
 | `F12`       | Settings                                          |
 | `?` / `F1`  | Help                                              |
 | `Esc`       | Clear marks / close the right panels              |

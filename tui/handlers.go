@@ -431,11 +431,7 @@ var normalModeHandlers = map[string]keyHandler{
 		return m, nil
 	},
 	"d": func(m model) (tea.Model, tea.Cmd) {
-		if m.ssh.username != "" {
-			m.ssh.username = ""
-			return m, clearUsername()
-		}
-		return m, nil
+		return m.deleteSavedPassword()
 	},
 	"o": func(m model) (tea.Model, tea.Cmd) {
 		m.opts.active = true
@@ -491,6 +487,27 @@ func (m model) handleNormalModeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // getTargetDevice returns the index of the currently-highlighted device.
 func (m model) getTargetDevice() int {
 	return m.list.cursor
+}
+
+// deleteSavedPassword forgets the saved password of the machine under the
+// cursor; its username stays, so the next connect only asks for the password.
+func (m model) deleteSavedPassword() (tea.Model, tea.Cmd) {
+	target := m.getTargetDevice()
+	if target < 0 || target >= len(m.list.filteredDevices) {
+		return m, nil
+	}
+	device := m.list.filteredDevices[target]
+	key := machineKey(device)
+	cred := m.ssh.machineCreds[key]
+	m.notify.sshError = nil
+	if cred.passwordEncrypted == "" {
+		m.notify.info = "No saved password for " + displayName(device)
+		return m, nil
+	}
+	cred.passwordEncrypted = ""
+	m.ssh.machineCreds[key] = cred
+	m.notify.info = "Saved password for " + displayName(device) + " deleted"
+	return m, storeMachineCredential(key, cred)
 }
 
 // moveCursorUp moves the device-list cursor up.
