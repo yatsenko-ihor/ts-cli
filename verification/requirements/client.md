@@ -16,6 +16,7 @@
 - **REQ-API-007** `ValidateAPIKey` shall return nil for statuses below 400 (including 399), the "invalid API key or insufficient permissions" error (recognisable with `errors.Is(err, errInvalidKey)`) for 401 and 403, the mapped API error for any other status >= 400 (400 included), and the transport error unchanged otherwise.
 - **REQ-API-008** `ListDevices` shall return the devices for status 200 (empty list when empty or absent), an API error and no devices for any other status (201, 204, 3xx, 4xx, 5xx), "failed to parse response" for a body that is not a device list, "failed to read response body" when reading fails, and the transport error otherwise.
 - **REQ-API-009** Device JSON shall be parsed into `Device` including `connectedToControl` (true while `lastSeen` is omitted, leaving `LastSeen` zero), addresses, tags, expiry flags and timestamps; the locally added `AccountName` and `AccountTailnet` shall never be taken from the API payload.
+- **REQ-API-026** A `Device` shall be parsed from JSON whose `created`, `lastSeen` or `expires` is an empty string, `null` or absent as a zero time (the API sends an empty `expires` when key expiry is disabled); a valid RFC3339 value shall be kept, and any other value shall be an error.
 
 ## Multiple accounts
 

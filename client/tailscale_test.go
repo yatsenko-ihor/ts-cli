@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -168,5 +169,27 @@ func TestCheckAccountRejectedAndRevoked(t *testing.T) {
 	})
 	if h := CheckAccount(AccountInfo{APIKey: "tskey-api-kID-secret", Tailnet: "x.com"}); h.Valid || !h.Unauth {
 		t.Fatalf("revoked key must be rejected: %+v", h)
+	}
+}
+
+// Verifies: REQ-API-026
+func TestDeviceToleratesEmptyAndNullTimestamps(t *testing.T) {
+	var d Device
+	in := `{"id":"1","name":"box","created":"2026-01-02T03:04:05Z","lastSeen":"","expires":null,"os":"linux"}`
+	if err := json.Unmarshal([]byte(in), &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.ID != "1" || d.OS != "linux" || d.Created.Year() != 2026 || !d.LastSeen.IsZero() || !d.Expires.IsZero() {
+		t.Fatalf("device = %+v", d)
+	}
+	d = Device{}
+	if err := json.Unmarshal([]byte(`{"id":"2"}`), &d); err != nil || !d.Expires.IsZero() {
+		t.Fatalf("absent timestamps: %v %+v", err, d)
+	}
+	if err := json.Unmarshal([]byte(`{"expires":"not a date"}`), &d); err == nil {
+		t.Fatal("a malformed timestamp must be an error")
+	}
+	if err := json.Unmarshal([]byte(`{"expires":5}`), &d); err == nil {
+		t.Fatal("a non-string timestamp must be an error")
 	}
 }
