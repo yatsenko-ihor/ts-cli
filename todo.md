@@ -21,6 +21,7 @@
 - [x] Themes: dark-pastel, calmer hacker, custom themes from `~/.ts-cli/themes/*.json`
 - [x] Release workflow: tagged builds for Linux/macOS/Windows attached to a GitHub Release
 - [x] Version 1.2.0
+- [x] Version 1.3.0: auto-reconnect, `d` forgets the saved password, empty timestamps in device JSON
 
 ## Not done
 
