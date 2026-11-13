@@ -179,6 +179,7 @@ optional features that are unavailable.
 			}
 			fmt.Fprintf(out, "\n%d problem(s), %d warning(s)\n", fails, warns)
 			if fails > 0 {
+				cmd.SilenceUsage = true // a finding, not a usage mistake
 				return fmt.Errorf("%d problem(s) found", fails)
 			}
 			return nil
