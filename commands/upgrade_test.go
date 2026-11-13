@@ -38,6 +38,7 @@ func tarGz(t *testing.T, files map[string]string, order ...string) []byte {
 	return buf.Bytes()
 }
 
+// Verifies: REQ-UPG-002
 func TestDownload(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -78,6 +79,7 @@ func TestDownload(t *testing.T) {
 	}
 }
 
+// Verifies: REQ-UPG-003
 func TestChecksumFor(t *testing.T) {
 	h := strings.Repeat("ab", 32)
 	list := h + "  ts-cli_1_linux_amd64.tar.gz\n" + strings.ToUpper(h) + " *other.zip\nshort  x\n\n"
@@ -94,6 +96,7 @@ func TestChecksumFor(t *testing.T) {
 	}
 }
 
+// Verifies: REQ-UPG-004
 func TestExtractBinary(t *testing.T) {
 	good := tarGz(t, map[string]string{"dir/": "", "dir/README.md": "r", "dir/ts-cli": "BINARY"}, "dir/", "dir/README.md", "dir/ts-cli")
 	if data, err := extractBinary(good); err != nil || string(data) != "BINARY" {
@@ -180,6 +183,7 @@ func upgradeSetup(t *testing.T) *upgradeEnv {
 	return env
 }
 
+// Verifies: REQ-UPG-005
 func TestInstallReleaseSuccess(t *testing.T) {
 	env := upgradeSetup(t)
 	var out bytes.Buffer
@@ -207,6 +211,7 @@ func TestInstallReleaseSuccess(t *testing.T) {
 	}
 }
 
+// Verifies: REQ-UPG-002, REQ-UPG-003, REQ-UPG-004, REQ-UPG-005
 func TestInstallReleaseRefusals(t *testing.T) {
 	var env *upgradeEnv
 	fail := func(want string, mutate func()) {
@@ -247,6 +252,7 @@ func TestInstallReleaseRefusals(t *testing.T) {
 	})
 }
 
+// Verifies: REQ-UPG-001
 func TestUpgradeCommand(t *testing.T) {
 	env := upgradeSetup(t)
 	oldVer := Version

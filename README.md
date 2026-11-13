@@ -27,6 +27,7 @@ The demo uses invented machines and a fake API ([how it is made](demo/README.md)
 - **Run panel**: local scripts, saved commands with `{{placeholders}}`, streaming output, runs on many machines in parallel
 - **Files**: `scp` upload and download, a two-pane file manager (`b`), local and remote browsers
 - **Operations**: reboot and wait, port forwarding, health check, background monitor with latency history and down/up alerts, automatic reconnect
+- **Health and updates**: `ts-cli doctor` checks tools, the daemon, the key and API keys; `ts-cli upgrade` checks GitHub Releases (and installs a verified build with `--install`)
 - **ssh-config**: `ts-cli ssh-config --install` makes every machine reachable by name from ssh, scp, rsync, git and editors
 - **Machine actions**: ping details (direct or relay), key expiry, rename, tags, delete
 - **Scriptable CLI**: `ts-cli list` with filters and JSON output, `ts-cli account`, `ts-cli ssh`

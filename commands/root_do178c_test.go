@@ -65,7 +65,7 @@ func TestROOTRegistersAllSubcommands(t *testing.T) {
 		got = append(got, c.Name())
 	}
 	sort.Strings(got)
-	want := []string{"account", "install", "interactive", "list", "login", "secrets", "ssh", "ssh-config", "uninstall", "up", "upgrade"}
+	want := []string{"account", "doctor", "install", "interactive", "list", "login", "secrets", "ssh", "ssh-config", "uninstall", "up", "upgrade"}
 	// cobra adds help (and completion) itself
 	var own []string
 	for _, n := range got {

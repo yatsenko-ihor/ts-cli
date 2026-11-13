@@ -466,6 +466,10 @@ ts-cli ssh-config --install             # also add `Include "<file>"` at the top
 
 Run it again to refresh after machines change.
 
+### `doctor`
+
+Reports what works and what does not: the tools ts-cli drives (`ssh` and `scp` are required; `sshpass`, `tmux` and the `tailscale` CLI are optional), whether the local Tailscale daemon runs and is logged in, the configuration and the encryption key, saved passwords that can no longer be decrypted, and each account's API key (valid, expires within 14 days, rejected). The exit status is 1 when a `✗` line is present, so scripts can use it; `⚠` lines are optional features that are unavailable. `--offline` skips the API key checks (no network requests).
+
 ### `upgrade`
 
 Asks GitHub for the latest release and compares it with this version (one unauthenticated GET of the public release information; nothing about you or your tailnet is sent). `ts-cli upgrade` only reports; `ts-cli upgrade --install` downloads the archive for this system, verifies its SHA-256 against the release's `checksums.txt`, and replaces the running binary (a refused or mismatching download changes nothing; on Windows, replace the file by hand). If the binary lives in a directory you cannot write to, run it with `sudo`.
