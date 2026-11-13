@@ -61,8 +61,8 @@ type Config struct {
 	SSHUsername        string                 `json:"ssh_username,omitempty"`
 	MachineCredentials map[string]MachineAuth `json:"machine_credentials,omitempty"`
 	Commands           []SavedCommand         `json:"commands,omitempty"`
-	UI                 map[string]string      `json:"ui,omitempty"`           // display settings (F12)
-	LastMachine        string                 `json:"last_machine,omitempty"` // key of the machine connected to most recently
+	UI                 map[string]string      `json:"ui,omitempty"`              // display settings (F12)
+	LastMachine        string                 `json:"last_machine,omitempty"`    // key of the machine connected to most recently
 	PinnedMachines     []string               `json:"pinned_machines,omitempty"` // machine keys shown at the top of the list
 	MachineNotes       map[string]string      `json:"machine_notes,omitempty"`   // free text per machine key, local only
 	ConfigVersion      string                 `json:"config_version"`
