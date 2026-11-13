@@ -235,7 +235,7 @@ func TestSettleMoveEdgeCases(t *testing.T) {
 func TestFileManagerKeyBarAndFunctionKeys(t *testing.T) {
 	f := fmOpen(t)
 	view := f.m.View()
-	for _, want := range []string{"F5 Copy", "F6 Move", "F7 MkDir", "F8 Delete", "F10 Close"} {
+	for _, want := range []string{"F2 Rename · F5 Copy", "F6 Move", "F7 MkDir", "F8 Delete", "F10 Close"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("key bar lacks %q", want)
 		}

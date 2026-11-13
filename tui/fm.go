@@ -504,7 +504,7 @@ func (m model) renderFM() string {
 		s.WriteString(infoStyle.Render(truncateForWidth(f.status, total-2)))
 	}
 	s.WriteString("\n")
-	s.WriteString(helpStyle.Render(truncateForWidth("F5 Copy · F6 Move · F7 MkDir · F8 Delete · F2 Rename · F10 Close — tab switch pane · →/enter open · ←/⌫ up · / filter · . hidden · r refresh", total-2)))
+	s.WriteString(helpStyle.Render(truncateForWidth("F2 Rename · F5 Copy · F6 Move · F7 MkDir · F8 Delete · F10 Close — tab switch pane · →/enter open · ←/⌫ up · / filter · . hidden · r refresh", total-2)))
 	return s.String()
 }
 
