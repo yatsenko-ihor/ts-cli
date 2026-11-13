@@ -443,6 +443,18 @@ ts-cli list --account work --format json
 ts-cli ssh <device-name-or-hostname> [--user=<username>] [--tailnet=<name>] [--api-key=<key>]
 ```
 
+### `ssh-config`
+
+Prints a `Host` block for every machine, so `ssh box`, `scp`, `rsync`, `git` and editors (VS Code Remote) reach it by its short name over the Tailscale address. The login is the one saved for the machine, else `--user`, else the default username; passwords are never written. The filters of `list` (`--online`, `--os`, `--tag`, `--account`, `--name`) apply.
+
+```bash
+ts-cli ssh-config                       # print
+ts-cli ssh-config --write               # save to ~/.ts-cli/ssh_config (0600)
+ts-cli ssh-config --install             # also add `Include "<file>"` at the top of ~/.ssh/config
+```
+
+Run it again to refresh after machines change.
+
 ### `interactive` / `i` / `tui`
 
 ```bash

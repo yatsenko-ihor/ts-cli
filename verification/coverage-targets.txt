@@ -12,6 +12,7 @@ commands/login.go 100
 commands/root.go 100
 commands/secrets.go 100
 commands/ssh.go 100
+commands/sshconfig.go 100
 commands/tailscale_check.go 100
 commands/uninstall.go 100
 commands/up.go 100
