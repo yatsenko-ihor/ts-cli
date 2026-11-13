@@ -72,9 +72,24 @@ func (m model) settleMove(res runResult) (model, tea.Cmd) {
 }
 
 func (m model) handleMoveDone(msg moveDoneMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	failure := ""
 	if msg.err != nil {
+		failure = fmt.Sprintf("copied %s, but could not delete the original: %v", msg.name, msg.err)
+	}
+	if m.fm != nil { // the manager is still open: show it there and reload
+		f := *m.fm
+		for i := range f.panes {
+			f.panes[i].entries = append([]browserEntry(nil), f.panes[i].entries...)
+		}
+		f.status, f.err, f.keep = "✓ Moved "+msg.name+" (the original is deleted)", failure, true
+		cmd = tea.Batch(f.fmGo(fmLocal, f.panes[fmLocal].dir), f.fmGo(fmRemote, f.panes[fmRemote].dir))
+		m.fm = &f
+		return m, cmd
+	}
+	if failure != "" {
 		m.notify.info = ""
-		m.notify.sshError = fmt.Errorf("copied %s, but could not delete the original: %w", msg.name, msg.err)
+		m.notify.sshError = fmt.Errorf("%s", failure)
 		return m, nil
 	}
 	m.notify.info = "✓ Moved " + msg.name + " (the original is deleted)"

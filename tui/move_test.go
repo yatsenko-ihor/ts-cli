@@ -66,7 +66,12 @@ func answerPrompt(t *testing.T, f *fmFixture, text string) tea.Cmd {
 func runMoveCmd(t *testing.T, f *fmFixture, cmd tea.Cmd) {
 	t.Helper()
 	for _, c := range flattenCmd(cmd) {
-		if mm, ok := c().(moveDoneMsg); ok {
+		switch mm := c().(type) {
+		case moveDoneMsg:
+			u, more := f.m.Update(mm)
+			f.m = u.(model)
+			runMoveCmd(t, f, more) // the reload that follows
+		case fmListMsg:
 			u, _ := f.m.Update(mm)
 			f.m = u.(model)
 		}
@@ -104,7 +109,7 @@ func TestMoveUploadsThenDeletesTheLocalOriginal(t *testing.T) {
 	}
 	f.key("M")
 	pumpPreflight(t, &f, answerPrompt(t, &f, "yes"))
-	if f.m.fm != nil || f.m.afterCopy == nil || f.m.afterCopy.src != filepath.Join(f.local, "a.txt") {
+	if f.m.fm == nil || f.m.afterCopy == nil || f.m.afterCopy.src != filepath.Join(f.local, "a.txt") {
 		t.Fatalf("move pending: %+v", f.m.afterCopy)
 	}
 	cmd := finishCopy(t, &f)
@@ -115,8 +120,8 @@ func TestMoveUploadsThenDeletesTheLocalOriginal(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.local, "a.txt")); err == nil {
 		t.Fatal("the original must be deleted after a successful copy")
 	}
-	if !strings.Contains(f.m.notify.info, "Moved a.txt") || f.m.afterCopy != nil {
-		t.Fatalf("info %q", f.m.notify.info)
+	if f.m.fm == nil || !strings.Contains(f.m.fm.status, "Moved a.txt") || f.m.afterCopy != nil {
+		t.Fatalf("status %q", f.m.fm.status)
 	}
 }
 
@@ -277,7 +282,108 @@ func TestMoveIsNotPendingWhenTheCopyCannotStart(t *testing.T) {
 	}
 	f.key("f6")
 	answerPrompt(t, &f, "yes")
-	if f.m.afterCopy != nil || f.m.notify.sshError == nil {
-		t.Fatalf("a refused launch leaves no move pending: %v / %v", f.m.afterCopy, f.m.notify.sshError)
+	if f.m.afterCopy != nil || f.m.fm == nil || f.m.fm.err == "" || f.m.notify.sshError != nil {
+		t.Fatalf("a refused launch leaves no move pending and says why in the manager: %v / %q", f.m.afterCopy, f.m.fm.err)
+	}
+}
+
+func TestCopyKeepsTheManagerOpenAndReportsInIt(t *testing.T) {
+	f := moveFixture(t, "0")
+	for f.m.fm.fmSelected(fmLocal).name != "a.txt" {
+		f.key("down")
+	}
+	pumpPreflight(t, &f, f.key("f5"))
+	if f.m.fm == nil || !strings.HasPrefix(f.m.fm.status, "Copying: upload a.txt") {
+		t.Fatalf("the manager stays and shows the progress: %+v", f.m.fm)
+	}
+	if view := f.m.View(); !strings.Contains(view, "⟳ upload a.txt") || !strings.Contains(view, "x stops") {
+		t.Fatalf("the progress line is on screen:\n%s", view)
+	}
+	// another copy while one runs is refused
+	f.key("f5")
+	if !strings.Contains(f.m.fm.status, "Another job is still running") {
+		t.Fatalf("status %q", f.m.fm.status)
+	}
+	cmd := finishCopy(t, &f)
+	runMoveCmd(t, &f, cmd)
+	if f.m.fm == nil || !strings.Contains(f.m.fm.status, "Copy finished") || f.m.fm.err != "" {
+		t.Fatalf("result on the status line: %q / %q", f.m.fm.status, f.m.fm.err)
+	}
+	if _, err := os.Stat(filepath.Join(f.local, "a.txt")); err != nil {
+		t.Fatal("a copy keeps the original")
+	}
+}
+
+func TestFailedCopyShowsTheReasonInTheManager(t *testing.T) {
+	f := moveFixture(t, "1")
+	for f.m.fm.fmSelected(fmLocal).name != "a.txt" {
+		f.key("down")
+	}
+	pumpPreflight(t, &f, f.key("f5"))
+	runMoveCmd(t, &f, finishCopy(t, &f))
+	if f.m.fm == nil || !strings.Contains(f.m.fm.err, "Copy failed (exit 1)") {
+		t.Fatalf("err %q", f.m.fm.err)
+	}
+	f.key("down") // any key dismisses the result
+	if f.m.fm.err != "" || f.m.fm.keep {
+		t.Fatalf("dismissed: %q keep=%v", f.m.fm.err, f.m.fm.keep)
+	}
+	// with a line of scp output before the result, it is shown too
+	g := moveFixture(t, "1")
+	g.m.run.spec = sshJob{action: sshActionCopy, copy: copySpec{local: "/x", remote: "/y"}}
+	g.m.run.runs = []*machineRun{{status: runDone, lines: []string{"scp: /y: Permission denied", "✗ Copy failed (exit 1) after 1s: upload x → /y"}}}
+	nm, _ := g.m.fmAfterRun(runResult{exitCode: 1, failure: sshFailureRemoteExit})
+	if !strings.Contains(nm.fm.err, "Copy failed") || !strings.Contains(nm.fm.err, "Permission denied") {
+		t.Fatalf("err %q", nm.fm.err)
+	}
+}
+
+func TestFmAfterRunIgnoresWhatIsNotItsBusiness(t *testing.T) {
+	f := moveFixture(t, "0")
+	m := f.m
+	// not a copy
+	m.run.spec = sshJob{action: sshActionCommand}
+	if nm, c := m.fmAfterRun(runResult{}); c != nil || nm.fm.status != "" {
+		t.Fatal("only copies")
+	}
+	// a login problem: the credential flow runs the copy again
+	m.run.spec = sshJob{action: sshActionCopy}
+	if _, c := m.fmAfterRun(runResult{failure: sshFailureConnection}); c != nil {
+		t.Fatal("retry")
+	}
+	// still running
+	busy := m
+	busy.run.runs = []*machineRun{{status: runRunning}}
+	if _, c := busy.fmAfterRun(runResult{}); c != nil {
+		t.Fatal("running")
+	}
+	// no manager
+	none := m
+	none.fm = nil
+	if _, c := none.fmAfterRun(runResult{}); c != nil {
+		t.Fatal("no manager")
+	}
+	// no output at all: reload only
+	m.run.runs = []*machineRun{{status: runDone}}
+	if nm, c := m.fmAfterRun(runResult{}); c == nil || nm.fm.status != "" {
+		t.Fatalf("reload without a status: %+v", nm.fm)
+	}
+	// x stops a running copy; without one it does nothing
+	m.run.runs = []*machineRun{{status: runRunning, job: &runJob{}}}
+	m.run.spec = sshJob{action: sshActionCopy, copy: copySpec{local: "/x", remote: "/y"}}
+	u, _ := m.Update(fmKey("x"))
+	if u.(model).fm.status != "Stopping…" {
+		t.Fatal("x stops")
+	}
+	m.run.runs = nil
+	u, _ = m.Update(fmKey("x"))
+	if u.(model).fm.status != "" {
+		t.Fatal("x without a job")
+	}
+	// a failed move delete shows in the manager
+	mv := f.m
+	u, _ = mv.handleMoveDone(moveDoneMsg{name: "a.txt", err: errors.New("denied")})
+	if !strings.Contains(u.(model).fm.err, "could not delete the original: denied") {
+		t.Fatalf("err %q", u.(model).fm.err)
 	}
 }

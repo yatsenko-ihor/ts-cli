@@ -32,6 +32,7 @@ type fileManager struct {
 	device client.Device
 	status string // last result line
 	err    string
+	keep   bool // status/err hold a copy result: the reload that follows must not wipe them
 }
 
 // fmListMsg is the answer to a listing of the remote pane.
@@ -111,7 +112,10 @@ func (m model) handleFMList(msg fmListMsg) (tea.Model, tea.Cmd) {
 		b.first = false
 		f.err = err.Error()
 	} else {
-		b.first, f.err = false, ""
+		b.first = false
+		if !f.keep {
+			f.err = ""
+		}
 		b.applyRemote(msg.msg.dir, msg.msg.lines)
 	}
 	f.panes[fmRemote] = b
@@ -136,7 +140,7 @@ func (f *fileManager) fmGo(i int, dir string) tea.Cmd {
 		b.load(dir)
 		if b.err != "" {
 			f.err, b.err = b.err, ""
-		} else {
+		} else if !f.keep {
 			f.err = ""
 		}
 		return nil
@@ -184,6 +188,9 @@ func (m model) handleFM(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	rows := m.fmRows()
 	var cmd tea.Cmd
 	f.status = ""
+	if f.keep { // the copy result was shown; any key dismisses it
+		f.keep, f.err = false, ""
+	}
 
 	switch key {
 	case "ctrl+c", "q":
@@ -241,6 +248,11 @@ func (m model) handleFM(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case sel.dir:
 			cmd = f.fmGo(f.focus, b.join(sel.name))
 		}
+	case "x":
+		if m.run.running() {
+			m.stopRun()
+			f.status = "Stopping…"
+		}
 	case "c", "f5":
 		return m.fmCopy()
 	case "n", "f7":
@@ -285,11 +297,16 @@ func (m model) fmCopy() (tea.Model, tea.Cmd) {
 	return m.fmLaunchCopy(spec, nil)
 }
 
-// fmLaunchCopy leaves the manager and runs the copy; move, when set, is what
-// to delete once the copy has succeeded.
+// fmLaunchCopy runs the copy while the manager stays open (prompts for a
+// login appear over it, the progress is on its status line, and both panes
+// reload when the copy is over); move, when set, is what to delete once the
+// copy has succeeded.
 func (m model) fmLaunchCopy(spec copySpec, move *moveJob) (tea.Model, tea.Cmd) {
 	f := m.fm
-	m = m.closeFM()
+	if m.run.running() {
+		f.status = "Another job is still running; wait for it or stop it with x"
+		return m, nil
+	}
 	m.list.marked = nil // the copy goes to the machine of the manager only
 	for i, d := range m.list.filteredDevices {
 		if machineKey(d) == machineKey(f.device) {
@@ -299,11 +316,51 @@ func (m model) fmLaunchCopy(spec copySpec, move *moveJob) (tea.Model, tea.Cmd) {
 	}
 	u, cmd := m.launch(sshJob{action: sshActionCopy, copy: spec})
 	nm := u.(model)
-	if move != nil && nm.notify.sshError == nil {
+	if nm.notify.sshError != nil { // refused (Tailscale off, machine offline): say why here
+		nm.fm.err, nm.notify.sshError = nm.notify.sshError.Error(), nil
+		return nm, cmd
+	}
+	nm.fm.err, nm.fm.status = "", "Copying: "+spec.label()
+	if move != nil {
 		move.spec, move.device = spec, f.device
 		nm.afterCopy = move // after launch, which clears any older one
 	}
 	return nm, cmd
+}
+
+// fmAfterRun runs when a job ended while the manager is open: after a copy
+// it shows the result on the status line and reloads both panes.
+func (m model) fmAfterRun(res runResult) (model, tea.Cmd) {
+	if m.fm == nil || m.run.running() || m.run.spec.action != sshActionCopy {
+		return m, nil
+	}
+	if (res.failure == sshFailureConnection || res.failure == sshFailureBadPassword) && !res.killed {
+		return m, nil // the credential flow asks again and runs the copy once more
+	}
+	f := *m.fm
+	for i := range f.panes {
+		f.panes[i].entries = append([]browserEntry(nil), f.panes[i].entries...)
+	}
+	f.status, f.err = "", ""
+	var lines []string
+	if s := m.run.single(); s != nil {
+		lines = s.lines
+	}
+	if len(lines) > 0 {
+		last := lines[len(lines)-1]
+		if strings.HasPrefix(last, "✗") {
+			f.err = strings.TrimPrefix(last, "✗ ")
+			if len(lines) > 1 && strings.TrimSpace(lines[len(lines)-2]) != "" {
+				f.err += " — " + strings.TrimSpace(lines[len(lines)-2])
+			}
+		} else {
+			f.status = last
+		}
+	}
+	f.keep = true
+	cmds := []tea.Cmd{f.fmGo(fmLocal, f.panes[fmLocal].dir), f.fmGo(fmRemote, f.panes[fmRemote].dir)}
+	m.fm = &f
+	return m, tea.Batch(cmds...)
 }
 
 // fmPane returns the name of the focused pane's side.
@@ -498,6 +555,8 @@ func (m model) renderFM() string {
 	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right))
 	s.WriteString("\n")
 	switch {
+	case m.run.running() && m.run.spec.action == sshActionCopy:
+		s.WriteString(infoStyle.Render(truncateForWidth(fmt.Sprintf("⟳ %s · %s · x stops", m.run.label, time.Since(m.run.startedAt).Round(time.Second)), total-2)))
 	case f.err != "":
 		s.WriteString(lipgloss.NewStyle().Foreground(cur.errc).Render(truncateForWidth("✗ "+f.err, total-2)))
 	case f.status != "":

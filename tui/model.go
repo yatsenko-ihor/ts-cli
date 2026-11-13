@@ -429,7 +429,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runDoneMsg:
 		u, cmd := m.handleRunDone(m.adjustForwardResult(msg))
 		nm, mvCmd := u.(model).settleMove(msg.res)
-		return nm, tea.Batch(cmd, mvCmd)
+		nm, fmCmd := nm.fmAfterRun(msg.res)
+		return nm, tea.Batch(cmd, mvCmd, fmCmd)
 
 	case moveDoneMsg:
 		return m.handleMoveDone(msg)

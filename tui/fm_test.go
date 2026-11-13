@@ -234,8 +234,8 @@ func TestFileManagerCopyUploadsAndDownloads(t *testing.T) {
 	f.m.list.marked = map[string]bool{"dev-1": true}
 	u, cmd := f.m.fmCopy()
 	m := u.(model)
-	if m.fm != nil || cmd == nil && m.notify.sshError == nil {
-		t.Fatalf("copy leaves the manager: %v", m.notify.sshError)
+	if m.fm == nil || cmd == nil && m.fm.err == "" {
+		t.Fatalf("the manager stays open during a copy: %v", m.fm)
 	}
 	if len(m.run.runs) == 1 {
 		spec := m.run.spec.copy
