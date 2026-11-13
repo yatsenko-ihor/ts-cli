@@ -12,7 +12,7 @@ var osExit = os.Exit
 
 // Version is the current version of ts-cli. Release builds set it from the tag
 // (-ldflags "-X github.com/yatsenko-ihor/ts-cli/commands.Version=1.2.3").
-var Version = "1.3.0"
+var Version = "1.4.0"
 
 // NewRootCommand creates the root command for ts-cli
 func NewRootCommand() *cobra.Command {

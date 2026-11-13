@@ -22,6 +22,7 @@
 - [x] Release workflow: tagged builds for Linux/macOS/Windows attached to a GitHub Release
 - [x] Version 1.2.0
 - [x] Version 1.3.0: auto-reconnect, `d` forgets the saved password, empty timestamps in device JSON
+- [x] Version 1.4.0: reboot and wait, port forwarding, health check, monitor, file manager, ssh-config, pins/notes/export, upgrade, doctor
 
 ## Not done
 
