@@ -101,6 +101,9 @@ func (m model) extraRows() int {
 	if m.notify.info != "" {
 		n++
 	}
+	if m.reboot != nil {
+		n++
+	}
 	if m.notify.reloadSuccess != "" {
 		n++
 	}

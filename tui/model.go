@@ -39,6 +39,8 @@ type model struct {
 	settingsCursor int
 	browse         *fileBrowser          // local file browser opened from a path prompt
 	act            actionState           // Machine tab result
+	reboot         *rebootState          // reboot being watched, nil when none
+	rebootSeq      int                   // tells watches apart
 	peers          map[string]peerInfo   // daemon view of peers, by Tailscale IP
 	pingInfo       map[string]pingDetail // detailed ping results by machineKey
 	lastMachine    string                // key of the machine connected to most recently
@@ -418,6 +420,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case rebootSentMsg:
+		return m.handleRebootSent(msg)
+
+	case rebootTickMsg:
+		return m.handleRebootTick(msg)
+
 	case reconnectTickMsg:
 		return m.handleReconnectTick(msg)
 
@@ -628,6 +636,11 @@ func (m model) viewBody() string {
 	if m.notify.copiedText != "" {
 		b.WriteString("\n")
 		b.WriteString(successStyle.Render(fmt.Sprintf("✓ Copied to clipboard: %s", m.notify.copiedText)))
+	}
+
+	if line := m.rebootLine(); line != "" {
+		b.WriteString("\n")
+		b.WriteString(infoStyle.Render(line))
 	}
 
 	// Show neutral status (ping progress/result)

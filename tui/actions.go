@@ -60,6 +60,14 @@ func machineActions(d client.Device) []machineAction {
 				return m, pingDetailCmd(d)
 			},
 		},
+		{
+			title:  "Reboot and wait…",
+			desc:   "Reboots over ssh (root or passwordless sudo, saved login) and tells you when it is back",
+			danger: true,
+			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
+				return m.confirmByName(d, "Reboot "+displayName(d), func(m model) (tea.Model, tea.Cmd) { return m.startReboot(d) })
+			},
+		},
 		expiry,
 		{
 			title:  "Expire key now",

@@ -467,6 +467,9 @@ func (m model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleNormalModeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.reboot != nil && msg.String() == "esc" {
+		return m.stopReboot(), nil
+	}
 	if m.handleFrameShortcut(msg.String()) {
 		return m, nil
 	}

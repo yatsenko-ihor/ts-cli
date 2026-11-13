@@ -117,7 +117,7 @@ func TestMachineActionsListDependsOnKeyExpiryState(t *testing.T) {
 	}
 	d := client.Device{}
 	for _, a := range machineActions(d) {
-		if (a.title == "Expire key now" || strings.HasPrefix(a.title, "Delete")) != a.danger {
+		if (a.title == "Expire key now" || strings.HasPrefix(a.title, "Delete") || strings.HasPrefix(a.title, "Reboot")) != a.danger {
 			t.Errorf("%q: danger flag = %v", a.title, a.danger)
 		}
 	}

@@ -275,6 +275,7 @@ The **Machine** tab of the Run panel (`Tab`, then `]` to the last tab) acts on t
 | Expire key now | Logs the device out; asks you to type the machine name |
 | Rename… | Sets the machine name |
 | Edit tags… | Replaces the tags (`tag:server, tag:prod`); the ACL must allow them |
+| Reboot and wait… | Reboots over ssh (root or passwordless sudo, uses the saved login), then watches with `tailscale ping` and tells you when the machine is back (Esc stops waiting); asks you to type the machine name |
 | Delete from tailnet… | Removes the machine; asks you to type the machine name |
 
 These use the Tailscale API with the account's key, which therefore needs permission to write devices; a read-only key shows the API's error. The details panel also shows what the local daemon knows about the machine (`tailscale status`): the current path, traffic and whether it offers Tailscale SSH.

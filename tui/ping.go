@@ -46,6 +46,7 @@ const (
 	pingManual    pingMode = iota // P: report the result
 	pingAuto                      // background for the cursor machine: silent
 	pingPreflight                 // before connecting: continue or abort
+	pingReboot                    // watching a rebooting machine
 )
 
 const (
@@ -243,6 +244,9 @@ func (m model) pingTargets() (tea.Model, tea.Cmd) {
 // handlePing records a ping result and, depending on how it was started,
 // reports it, stays silent, or resumes/aborts a pending launch.
 func (m model) handlePing(msg pingMsg) (tea.Model, tea.Cmd) {
+	if msg.mode == pingReboot {
+		return m.handleRebootPing(msg)
+	}
 	delete(m.pinging, msg.key)
 	pf := m.preflight
 	pending := msg.mode == pingPreflight && pf != nil && pf.key == msg.key
