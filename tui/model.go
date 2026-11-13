@@ -48,6 +48,8 @@ type model struct {
 	monitorSeq     int                   // tells monitor loops apart
 	monitorNext    int                   // where the next monitor round starts
 	health         map[string]healthInfo // last health check by machineKey
+	pinned         map[string]bool       // pinned machine keys
+	notes          map[string]string     // notes by machine key
 	fm             *fileManager          // two-pane file manager, nil when closed
 	fmDirs         map[string][2]string  // last directories of the manager by machineKey
 	rebootSeq      int                   // tells watches apart
@@ -64,7 +66,7 @@ type model struct {
 // NewModel builds the initial TUI state. machineCreds is the per-machine
 // credential map from config.json (keyed by device ID; older files keyed by
 // device name are migrated on first run). savedCommands feeds the Run panel.
-func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth, savedCommands []config.SavedCommand, lastMachine string, ui map[string]string) model {
+func NewModel(devices []client.Device, version string, sshUsername string, accountList []client.AccountInfo, machineCreds map[string]config.MachineAuth, savedCommands []config.SavedCommand, lastMachine string, ui map[string]string, extra ...Personal) model {
 	// Sort devices with online devices first
 	sortDevicesByStatus(devices)
 
@@ -105,6 +107,8 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 	loadThemes() // custom themes must be known before the stored theme name is checked
 	m := model{
 		set:         loadUISettings(ui),
+		pinned:      map[string]bool{},
+		notes:       map[string]string{},
 		lastMachine: lastMachine,
 		list: deviceList{
 			devices:         devices,
@@ -149,6 +153,14 @@ func NewModel(devices []client.Device, version string, sshUsername string, accou
 		activeFocus: focusList,
 		version:     version,
 		reloading:   false,
+	}
+	for _, p := range extra {
+		for _, k := range p.Pinned {
+			m.pinned[k] = true
+		}
+		for k, n := range p.Notes {
+			m.notes[k] = n
+		}
 	}
 	applyTheme(m.set.theme)
 	m.filterDevices()
@@ -430,6 +442,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.filterDevices()
 		} else {
 			m.input.value, m.input.cursor = insertText(m.input.value, m.input.cursor, msg.text)
+		}
+		return m, nil
+
+	case personalSavedMsg:
+		if msg.err != nil {
+			m.notify.sshError = fmt.Errorf("failed to save to config.json: %w", msg.err)
 		}
 		return m, nil
 

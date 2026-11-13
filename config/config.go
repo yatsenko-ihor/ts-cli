@@ -63,6 +63,8 @@ type Config struct {
 	Commands           []SavedCommand         `json:"commands,omitempty"`
 	UI                 map[string]string      `json:"ui,omitempty"`           // display settings (F12)
 	LastMachine        string                 `json:"last_machine,omitempty"` // key of the machine connected to most recently
+	PinnedMachines     []string               `json:"pinned_machines,omitempty"` // machine keys shown at the top of the list
+	MachineNotes       map[string]string      `json:"machine_notes,omitempty"`   // free text per machine key, local only
 	ConfigVersion      string                 `json:"config_version"`
 }
 
@@ -456,6 +458,34 @@ func (c *Config) SetMachineCredential(key string, auth MachineAuth) {
 // DeleteMachineCredential removes the credential stored under key.
 func (c *Config) DeleteMachineCredential(key string) {
 	delete(c.MachineCredentials, key)
+}
+
+// ─── Pins and notes ──────────────────────────────────────────────────────────
+
+// SetPinned pins or unpins the machine with key.
+func (c *Config) SetPinned(key string, on bool) {
+	kept := c.PinnedMachines[:0:0]
+	for _, k := range c.PinnedMachines {
+		if k != key {
+			kept = append(kept, k)
+		}
+	}
+	if on {
+		kept = append(kept, key)
+	}
+	c.PinnedMachines = kept
+}
+
+// SetNote stores the note of a machine; an empty note removes it.
+func (c *Config) SetNote(key, note string) {
+	if note == "" {
+		delete(c.MachineNotes, key)
+		return
+	}
+	if c.MachineNotes == nil {
+		c.MachineNotes = make(map[string]string)
+	}
+	c.MachineNotes[key] = note
 }
 
 // ─── Saved commands ──────────────────────────────────────────────────────────

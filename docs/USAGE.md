@@ -15,7 +15,7 @@ The detailed guide to [ts-cli](../README.md): every command, key, setting and fi
 - **Recent**: Re-run anything that ran on a machine before, or save it as a named command
 - **Ping and status icons**: coloured ● online, ● offline, ○ no reply to the last ping, `pw` a password is saved, `exp` the device key expired (switchable to the 🟢/🔴/⭕️/🔐 emoji style in Settings). See [Machine status and ping](#machine-status-and-ping)
 - **Resume where you left off**: on start the cursor is placed on the machine you connected to last time (if it is online)
-- **Multi-machine runs**: mark machines with `Space` (or `*` for all), then run a script or command on all of them in parallel; the output is split into one section per machine
+- **Multi-machine runs**: mark machines with `Space` (or `A` for all), then run a script or command on all of them in parallel; the output is split into one section per machine
 - **Clipboard Integration**: Copy SSH commands (`c`) or paste text (`ctrl+v` / `cmd+v`) in any input field
 - **Profile Filtering**: Filter the device list by account or view all accounts at once
 - **Shell Completion**: Built-in support for bash, zsh, fish, and PowerShell
@@ -162,7 +162,11 @@ ts-cli tui          # alternative alias
 | `x`         | Dismiss install tip                               |
 | `:`         | Run a one-off command on the selected machine(s)  |
 | `Space`     | Mark/unmark the machine for a multi-machine run   |
-| `*`         | Mark all visible machines (again to clear)        |
+| `A`         | Mark all visible machines (again to clear)        |
+| `*`         | Pin/unpin the machine: pinned machines stay at the top of the list (★) |
+| `N`         | Note for the machine (kept only in `config.json`; shown in the details panel and the Machine tab) |
+| `y` / `Y`   | Copy the machine's IP address / name to the clipboard |
+| `E`         | Export the visible machines to a file: `.json` for JSON, anything else CSV (notes included; mode 0600) |
 | `p`         | Ping the selected machine(s)                      |
 | `f` / `F`   | Upload to the selected machine(s) / download from one (scp) |
 | `b`         | Two-pane file manager for the highlighted machine |
@@ -311,7 +315,7 @@ du -xh --max-depth=1 "${1:-/}" | sort -h | tail -n 15
 
 #### Running on several machines
 
-Mark machines in the list with `Space` (`*` marks every visible one, `Esc` clears). Unreachable machines (🔴 or ⭕️) cannot be marked and are never run on; press `p` to ping a 🔴 machine, a reply makes it 🟢 and usable even when the Tailscale API still reports it offline. While marks exist, the Run panel and `:` target the whole set:
+Mark machines in the list with `Space` (`A` marks every visible one, `Esc` clears). Unreachable machines (🔴 or ⭕️) cannot be marked and are never run on; press `p` to ping a 🔴 machine, a reply makes it 🟢 and usable even when the Tailscale API still reports it offline. While marks exist, the Run panel and `:` target the whole set:
 
 - Jobs run in parallel, up to 8 at a time, in list order.
 - No prompts: each machine uses its saved username and password, or the default username. Machines that are offline, have no username, belong to another Tailscale account, or do not match the script's `os=` are listed as **skipped** with the reason. A machine whose key or saved password is rejected is listed as **failed** with a hint to connect once via `s` so the credentials get saved.

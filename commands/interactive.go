@@ -98,7 +98,7 @@ Use arrow keys or j/k to navigate, Enter to view details, and q to quit.`,
 				fmt.Printf("Found %d device(s) from %d account(s)\n", len(devices), len(cfg.Accounts))
 			}
 
-			m := tui.NewModel(devices, Version, cfg.SSHUsername, accounts, cfg.MachineCredentials, cfg.Commands, cfg.LastMachine, cfg.UI)
+			m := tui.NewModel(devices, Version, cfg.SSHUsername, accounts, cfg.MachineCredentials, cfg.Commands, cfg.LastMachine, cfg.UI, tui.Personal{Pinned: cfg.PinnedMachines, Notes: cfg.MachineNotes})
 			if err := runProgram(m); err != nil {
 				return fmt.Errorf("TUI error: %w", err)
 			}

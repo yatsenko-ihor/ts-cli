@@ -108,6 +108,13 @@ func (m model) renderRunPanel() string {
 	if m.run.tab == tabMachine && (m.act.result != "" || m.act.err != nil) {
 		footerLines++
 	}
+	note := ""
+	if m.run.tab == tabMachine {
+		note = m.notes[machineKey(device)]
+		if note != "" {
+			footerLines++
+		}
+	}
 	// header + tabs + footer; each row takes 1 line (main) — sub shown only for the cursor row
 	maxVisible := contentHeight - 2 - footerLines - 1
 	if maxVisible < 1 {
@@ -152,6 +159,10 @@ func (m model) renderRunPanel() string {
 		}
 	}
 
+	if note != "" {
+		b.WriteString(grayItalicStyle.Render(truncateForWidth("Note: "+note, inner)))
+		b.WriteString("\n")
+	}
 	if m.run.tab == tabMachine && (m.act.result != "" || m.act.err != nil) {
 		switch {
 		case m.act.err != nil:

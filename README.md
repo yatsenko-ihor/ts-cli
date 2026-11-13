@@ -60,9 +60,11 @@ In the TUI:
 |---|---|---|---|
 | `↑` `↓` / `j` `k` | move | `s` | SSH to the machine |
 | `/` | search | `:` | run a command |
-| `Space` / `*` | mark machine(s) | `Tab` | Run panel / machine actions |
+| `Space` / `A` | mark machine(s) | `Tab` | Run panel / machine actions |
 | `p` | ping | `f` / `F` | upload / download files |
 | `b` | file manager | `d` | forget saved password |
+| `*` | pin machine | `N` | note |
+| `y` / `Y` | copy IP / name | `E` | export list |
 | `m` | accounts | `F12` | settings and themes |
 | `?` / `F1` | help | `q` | quit |
 

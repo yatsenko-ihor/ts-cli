@@ -293,3 +293,29 @@ func TestHiddenAccountSurvivesSaveAndLoad(t *testing.T) {
 		t.Fatalf("hidden flags lost: %+v", cfg.Accounts)
 	}
 }
+
+func TestPinsAndNotes(t *testing.T) {
+	var c Config
+	c.SetPinned("a", true)
+	c.SetPinned("b", true)
+	c.SetPinned("a", true) // pinning twice keeps one entry
+	if strings.Join(c.PinnedMachines, ",") != "b,a" {
+		t.Fatalf("pinned = %v", c.PinnedMachines)
+	}
+	c.SetPinned("b", false)
+	c.SetPinned("zzz", false)
+	if strings.Join(c.PinnedMachines, ",") != "a" {
+		t.Fatalf("pinned = %v", c.PinnedMachines)
+	}
+	c.SetNote("a", "the NAS")
+	c.SetNote("b", "x")
+	c.SetNote("b", "")
+	if len(c.MachineNotes) != 1 || c.MachineNotes["a"] != "the NAS" {
+		t.Fatalf("notes = %v", c.MachineNotes)
+	}
+	var empty Config
+	empty.SetNote("a", "") // nothing to remove, no map needed
+	if empty.MachineNotes != nil {
+		t.Fatal("no map for an empty note")
+	}
+}

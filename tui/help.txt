@@ -5,7 +5,11 @@ KEYBOARD SHORTCUTS
 ──────────────────
   ↑/k, ↓/j      Navigate device list
   Space          Mark/unmark machine for a multi-machine run
-  *              Mark all visible machines (again to clear)
+  A              Mark all visible machines (again to clear)
+  *              Pin/unpin the machine (pinned ones stay on top, ★)
+  N              Note for the machine (local, shown in details)
+  y / Y          Copy the machine's IP / name
+  E              Export the visible machines (.json or CSV)
   Esc            Clear marks / close right panels
   p              Ping the selected machine(s) with `tailscale ping`
   f / F          Upload to selected machine(s) / download from one (scp)
@@ -70,7 +74,7 @@ RUN PANEL [2]
             machine list. Enter runs it immediately.
 
   Several machines:
-            Mark machines with Space (or * for all). The Run panel and
+            Mark machines with Space (or A for all). The Run panel and
             ":" then target the whole set, in parallel (8 at a time),
             without prompts: saved username/password or the default
             username. Offline machines, machines without a username,

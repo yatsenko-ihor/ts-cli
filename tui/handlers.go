@@ -382,10 +382,15 @@ var normalModeHandlers = map[string]keyHandler{
 		m.settingsCursor = 0
 		return m, nil
 	},
-	"*": func(m model) (tea.Model, tea.Cmd) {
+	"A": func(m model) (tea.Model, tea.Cmd) {
 		m.toggleAllMarks()
 		return m, nil
 	},
+	"*": func(m model) (tea.Model, tea.Cmd) { return m.togglePin() },
+	"N": func(m model) (tea.Model, tea.Cmd) { return m.promptNote() },
+	"y": func(m model) (tea.Model, tea.Cmd) { return m.copyAddress(false) },
+	"Y": func(m model) (tea.Model, tea.Cmd) { return m.copyAddress(true) },
+	"E": func(m model) (tea.Model, tea.Cmd) { return m.promptExport() },
 	"esc": func(m model) (tea.Model, tea.Cmd) {
 		if len(m.list.marked) > 0 {
 			m.clearMarks()

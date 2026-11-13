@@ -167,6 +167,9 @@ func (m model) renderDetailsPanel(width, height int) string {
 		if len(d.Tags) > 0 {
 			b.WriteString(row("Tags", strings.Join(d.Tags, ", ")) + "\n")
 		}
+		if note := m.notes[machineKey(d)]; note != "" {
+			b.WriteString(row("Note", note) + "\n")
+		}
 		b.WriteString("\n")
 		b.WriteString(row("SSH", m.sshSetupText(d)) + "\n")
 		b.WriteString(row("Run", fmt.Sprintf("%s · %s", plainCount(len(m.run.scripts), "script"), plainCount(len(m.run.commands), "saved command"))))

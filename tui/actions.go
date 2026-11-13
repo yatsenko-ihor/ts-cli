@@ -61,6 +61,11 @@ func machineActions(d client.Device) []machineAction {
 			},
 		},
 		{
+			title: "Edit note…",
+			desc:  "A free-text note about this machine, kept only in config.json (N from the list)",
+			run:   func(m model, d client.Device) (tea.Model, tea.Cmd) { return m.promptNote() },
+		},
+		{
 			title: "Check health",
 			desc:  "Uptime, load, memory and disk over ssh with the saved login (read-only)",
 			run:   func(m model, d client.Device) (tea.Model, tea.Cmd) { return m.startHealth(d) },

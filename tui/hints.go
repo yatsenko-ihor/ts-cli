@@ -40,7 +40,7 @@ func (m model) listHints() []string {
 	hints := []string{
 		"↑/k ↓/j move", "space mark", "s ssh", "/ search", "p ping", ": run",
 		"tab run panel + machine actions", "H offline", "d forget password", "m accounts", "F12 settings",
-		"f upload", "F download", "b files", "S sort", "r reload", "c copy", "P profile", "o options", "a about",
+		"f upload", "F download", "b files", "* pin", "N note", "y copy ip", "E export", "S sort", "r reload", "c copy", "P profile", "o options", "a about",
 	}
 	return hints
 }

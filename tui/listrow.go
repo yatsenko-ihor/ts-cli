@@ -198,6 +198,11 @@ type listCols struct {
 func (m model) listColumns(hasMarks bool) listCols {
 	c := listCols{names: m.shortNames()}
 	for _, d := range m.list.filteredDevices {
+		if m.pinned[machineKey(d)] {
+			c.names[machineKey(d)] = pinMark + c.names[machineKey(d)]
+		}
+	}
+	for _, d := range m.list.filteredDevices {
 		if w := lipgloss.Width(c.names[machineKey(d)]); w > c.name {
 			c.name = w
 		}

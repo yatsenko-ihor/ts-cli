@@ -173,6 +173,11 @@ func (m *model) filterDevices() {
 	// sortDevices sorts in place; work on a copy so m.list.devices keeps its order.
 	filtered = append([]client.Device(nil), filtered...)
 	sortDevices(filtered, m.list.sort)
+	if len(m.pinned) > 0 { // pinned machines first, in the order just made
+		sort.SliceStable(filtered, func(i, j int) bool {
+			return m.pinned[machineKey(filtered[i])] && !m.pinned[machineKey(filtered[j])]
+		})
+	}
 	if m.set.groupByAccount {
 		rank := m.accountRank()
 		sort.SliceStable(filtered, func(i, j int) bool {
