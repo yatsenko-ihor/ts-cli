@@ -122,8 +122,42 @@ func (m model) handleHealth(msg healthMsg) (tea.Model, tea.Cmd) {
 		m.health = map[string]healthInfo{}
 	}
 	m.health[msg.key] = msg.info
-	m.act = actionState{result: "✓ " + msg.name + ": " + msg.info.summary()}
+	d, found := m.deviceByKey(msg.key)
+	if !found || m.run.running() {
+		// A job owns the Output panel: keep it, show the one-line form.
+		m.act = actionState{result: "✓ " + msg.name + ": " + msg.info.summary()}
+		return m, nil
+	}
+	m.showHealthOutput(d, msg.info)
+	m.act = actionState{result: "✓ " + msg.name + ": health is in the Output panel"}
 	return m, nil
+}
+
+// showHealthOutput puts the result, one fact per line, in the Output panel.
+func (m *model) showHealthOutput(d client.Device, h healthInfo) {
+	lines := []string{displayName(d) + "  ·  health at " + h.at.Format("15:04:05"), ""}
+	add := func(name, value string) {
+		if value != "" {
+			lines = append(lines, fmt.Sprintf("%-8s%s", name, value))
+		}
+	}
+	add("Uptime", h.uptime)
+	if h.load != "" {
+		add("Load", h.load+"   (1, 5 and 15 min)")
+	}
+	add("Memory", h.memUsed)
+	add("Disk /", h.diskUsed)
+	if len(lines) == 2 {
+		lines = append(lines, "The machine reported nothing readable.")
+	}
+	now := time.Now()
+	m.run.spec = sshJob{}
+	m.run.label = "health " + shortHost(displayName(d))
+	m.run.multi = false
+	m.run.runs = []*machineRun{{device: d, status: runDone, lines: lines, startedAt: now}}
+	m.run.startedAt, m.run.elapsed = now, 0
+	m.run.outputCursor, m.run.outputScroll, m.run.follow = 0, 0, false
+	m.run.visible = true
 }
 
 // summary is the one-line form for the result area.

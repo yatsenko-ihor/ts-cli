@@ -283,7 +283,7 @@ The **Machine** tab of the Run panel (`Tab`, then `]` to the last tab) acts on t
 |---|---|
 | Ping with details | `tailscale ping`: whether traffic goes direct (with the endpoint) or through a relay (with the region), and the latency |
 | Forward a port… | `ssh -L`: a port on this computer (always `127.0.0.1`) leads to a port on the machine. Enter `8080`, `8080:80` or `5432:db.internal:5432`. It runs as a job in the Output panel until you stop it with `x`; a busy local port or a refused forward is reported there, not as a login problem |
-| Check health | Uptime, load, memory and root-disk usage over ssh with the saved login (read-only, no prompts); shown in the details panel with its age |
+| Check health | Uptime, load, memory and root-disk usage over ssh with the saved login (read-only, no prompts); one fact per line in the Output panel (unless a job is running there), and in the details panel with its age |
 | Reboot and wait… | Reboots over ssh (root or passwordless sudo, uses the saved login), then watches with `tailscale ping` and tells you when the machine is back (Esc stops waiting); asks you to type the machine name |
 
 The administrative actions (disable/enable key expiry, expire key, rename, edit tags, delete from tailnet) are **disabled on purpose for now**: their code is commented out in `tui/actions.go` and the API calls stay in `client/device_actions.go`, so they can be switched back on. Change keys, names and tags in the Tailscale admin console meanwhile. The details panel also shows a latency history (a sparkline of the last pings with min/avg/max; every ping adds to it) and what the local daemon knows about the machine (`tailscale status`): the current path, traffic and whether it offers Tailscale SSH.

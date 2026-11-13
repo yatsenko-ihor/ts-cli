@@ -68,8 +68,35 @@ func TestCheckHealthFlow(t *testing.T) {
 	}
 	u, _ = m.handleHealth(msg)
 	m = u.(model)
-	if m.health["dev-1"].load == "" || !strings.Contains(m.act.result, "load 0.12") {
+	if m.health["dev-1"].load == "" || !strings.Contains(m.act.result, "Output panel") {
 		t.Fatalf("%+v %q", m.health, m.act.result)
+	}
+	// the facts are one per line in the Output panel
+	if !m.run.visible || len(m.run.runs) != 1 || !strings.HasPrefix(m.run.label, "health ") {
+		t.Fatalf("run = %+v", m.run)
+	}
+	out := strings.Join(m.run.runs[0].lines, "\n")
+	for _, want := range []string{"laptop.example.com  ·  health at", "Uptime  3 days, 4 hours", "Load    0.12 0.20 0.18", "Memory  412 of 1895 MB (21%)", "Disk /  38% of 14.3 GB"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if got := len(m.outputLines()); got != 6 { // title, blank, four facts
+		t.Fatalf("%d output lines", got)
+	}
+	// while a job owns the Output panel, the result stays a single line there
+	busy := m
+	busy.run.runs = []*machineRun{{status: runRunning, lines: []string{"job output"}}}
+	u2, _ := busy.handleHealth(msg)
+	if b := u2.(model); b.run.runs[0].lines[0] != "job output" || !strings.Contains(b.act.result, "load 0.12") {
+		t.Fatalf("a running job keeps its output: %+v / %q", b.run.runs[0].lines, b.act.result)
+	}
+	// nothing readable
+	var empty model = m
+	empty.run = runPanel{}
+	empty.showHealthOutput(m.list.devices[0], healthInfo{at: time.Now()})
+	if l := empty.run.runs[0].lines; l[len(l)-1] != "The machine reported nothing readable." {
+		t.Fatalf("empty: %v", l)
 	}
 	m.health["dev-1"] = healthInfo{at: time.Now(), uptime: "1 hour", load: "0.1 0.1 0.1", memUsed: "1 of 2 MB (50%)", diskUsed: "1% of 1 MB"}
 	panel := m.renderDetailsPanel(70, 0)
