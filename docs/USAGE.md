@@ -275,6 +275,7 @@ The **Machine** tab of the Run panel (`Tab`, then `]` to the last tab) acts on t
 | Expire key now | Logs the device out; asks you to type the machine name |
 | Rename… | Sets the machine name |
 | Edit tags… | Replaces the tags (`tag:server, tag:prod`); the ACL must allow them |
+| Forward a port… | `ssh -L`: a port on this computer (always `127.0.0.1`) leads to a port on the machine. Enter `8080`, `8080:80` or `5432:db.internal:5432`. It runs as a job in the Output panel until you stop it with `x`; a busy local port or a refused forward is reported there, not as a login problem |
 | Reboot and wait… | Reboots over ssh (root or passwordless sudo, uses the saved login), then watches with `tailscale ping` and tells you when the machine is back (Esc stops waiting); asks you to type the machine name |
 | Delete from tailnet… | Removes the machine; asks you to type the machine name |
 

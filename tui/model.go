@@ -389,7 +389,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitRunEvent(msg.job)
 
 	case runDoneMsg:
-		return m.handleRunDone(msg)
+		return m.handleRunDone(m.adjustForwardResult(msg))
 
 	case runTickMsg:
 		if mr := m.run.runFor(msg.job); mr == nil || mr.status != runRunning {

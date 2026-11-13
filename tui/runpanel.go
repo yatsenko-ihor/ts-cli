@@ -505,6 +505,9 @@ func (m *model) beginSingleRun(device client.Device, username string, spec sshJo
 	m.run.outputScroll = 0
 	m.run.follow = true
 	m.run.visible = true
+	if spec.action == sshActionForward {
+		m.run.runs[0].lines = []string{spec.forward.startLine(device)}
+	}
 }
 
 // ─── Multi-machine run ────────────────────────────────────────────────────────
@@ -646,8 +649,12 @@ func (m *model) settleMachineRun(mr *machineRun, res runResult) {
 	mr.killed = res.killed
 	mr.elapsed = time.Since(mr.startedAt)
 	mr.job = nil
-	if m.run.spec.action == sshActionCopy {
+	switch m.run.spec.action {
+	case sshActionCopy:
 		mr.lines = append(mr.lines, copyResultLine(m.run.spec.copy, res, mr.elapsed))
+		m.jumpToOutputEnd()
+	case sshActionForward:
+		mr.lines = append(mr.lines, forwardResultLine(m.run.spec.forward, res, mr.elapsed, forwardFailure(mr.lines)))
 		m.jumpToOutputEnd()
 	}
 	if !m.run.running() {

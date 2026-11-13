@@ -232,6 +232,8 @@ func startRemoteJob(device client.Device, username, password string, spec sshJob
 		stdin = spec.script.Content
 	case sshActionCopy:
 		cmd, cleanup, err = newSCPCommand(sshTarget, password, spec.copy)
+	case sshActionForward:
+		cmd, cleanup, err = newSecureCommand("ssh", []string{"-N", "-o", "ExitOnForwardFailure=yes", "-L", spec.forward.arg()}, []string{sshTarget}, password, true)
 	default:
 		return nil, fmt.Errorf("nothing to run")
 	}

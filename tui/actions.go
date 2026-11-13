@@ -68,6 +68,11 @@ func machineActions(d client.Device) []machineAction {
 				return m.confirmByName(d, "Reboot "+displayName(d), func(m model) (tea.Model, tea.Cmd) { return m.startReboot(d) })
 			},
 		},
+		{
+			title: "Forward a port…",
+			desc:  "ssh -L: a port on this computer (127.0.0.1) leads to a port on the machine, until you stop it with x",
+			run:   func(m model, d client.Device) (tea.Model, tea.Cmd) { return m.promptForward(d) },
+		},
 		expiry,
 		{
 			title:  "Expire key now",

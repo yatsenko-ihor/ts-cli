@@ -213,6 +213,7 @@ const (
 	sshActionCommand           // Run pending.command and stream output
 	sshActionScript            // Stream pending.script to the machine and run it
 	sshActionCopy              // scp a file or directory to or from the machine
+	sshActionForward           // ssh -N -L: forward a local port to the machine
 )
 
 // pendingSSH tracks a single connection attempt from key press to outcome.
@@ -226,12 +227,13 @@ type pendingSSH struct {
 	password        string // Password entered in the TUI for this attempt (plaintext, memory only)
 	command         string // Remote command for sshActionCommand
 	script          *scripts.Script
-	args            []string // Script arguments for sshActionScript
-	copy            copySpec // What to copy for sshActionCopy
-	usedSavedPass   bool     // The attempt used a password loaded from config
-	passwordTried   bool     // A TUI-entered password has already been tried
-	askPasswordNext bool     // After the username prompt, go straight to the password prompt
-	verified        bool     // A probe proved the credentials; a later session ending with an ssh error is not an auth failure
+	args            []string    // Script arguments for sshActionScript
+	copy            copySpec    // What to copy for sshActionCopy
+	forward         forwardSpec // Which port to forward for sshActionForward
+	usedSavedPass   bool        // The attempt used a password loaded from config
+	passwordTried   bool        // A TUI-entered password has already been tried
+	askPasswordNext bool        // After the username prompt, go straight to the password prompt
+	verified        bool        // A probe proved the credentials; a later session ending with an ssh error is not an auth failure
 }
 
 // machineCredential holds per-machine SSH credentials in memory
