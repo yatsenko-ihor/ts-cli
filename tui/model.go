@@ -572,7 +572,7 @@ func (m model) viewBody() string {
 
 	// Show profile selection view if in profile selection mode
 	if m.acct.profileSelectMode {
-		return m.renderProfileSelection()
+		return overlayCenter(m.backgroundScreen(), m.renderProfileSelection(), m.width, m.height)
 	}
 
 	// Show account management view if in account management mode

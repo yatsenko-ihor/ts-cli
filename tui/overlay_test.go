@@ -210,3 +210,16 @@ func TestOptionsAndAboutArePopups(t *testing.T) {
 		}
 	}
 }
+
+func TestProfileSelectionIsAPopup(t *testing.T) {
+	m := personalModel(t)
+	m.width, m.height = 120, 40
+	m.version = "9.9.9"
+	m.acct.profileSelectMode = true
+	view := m.View()
+	for _, want := range []string{"Select Profile (ts-cli v9.9.9)", "All Accounts", "esc/q cancel", "alpha"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("profile popup: %q missing", want)
+		}
+	}
+}

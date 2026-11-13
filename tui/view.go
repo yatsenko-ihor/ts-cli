@@ -284,12 +284,6 @@ func (m model) renderOutputPanel() string {
 
 // renderProfileSelection renders the profile selection view
 func (m model) renderProfileSelection() string {
-	var b strings.Builder
-
-	title := fmt.Sprintf("Select Profile (ts-cli v%s)", m.version)
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
 	listWidth := 60
 	if m.width > 0 && m.width < 80 {
 		listWidth = m.width - 10
@@ -300,11 +294,13 @@ func (m model) renderProfileSelection() string {
 
 	profileList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(cur.border).
+		BorderForeground(cur.borderFocus).
 		Padding(1, 2).
 		Width(listWidth)
 
 	var listContent strings.Builder
+	listContent.WriteString(titleStyle.Render(fmt.Sprintf("Select Profile (ts-cli v%s)", m.version)))
+	listContent.WriteString("\n\n")
 
 	// Add "All Accounts" option
 	allAccountsLabel := "All Accounts"
@@ -338,13 +334,9 @@ func (m model) renderProfileSelection() string {
 		}
 	}
 
-	b.WriteString(profileList.Render(listContent.String()))
-	b.WriteString("\n\n")
-
-	help := "↑/k up • ↓/j down • enter select • esc/q cancel"
-	b.WriteString(helpStyle.Render(help))
-
-	return b.String()
+	listContent.WriteString("\n\n")
+	listContent.WriteString(helpStyle.Render(truncateForWidth("↑/k up • ↓/j down • enter select • esc/q cancel", listWidth-6)))
+	return profileList.Render(listContent.String())
 }
 
 // renderAbout renders the about/info popup
