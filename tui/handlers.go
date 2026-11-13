@@ -444,6 +444,7 @@ var normalModeHandlers = map[string]keyHandler{
 	},
 	"f":  func(m model) (tea.Model, tea.Cmd) { return m.promptUpload() },
 	"F":  func(m model) (tea.Model, tea.Cmd) { return m.promptDownload() },
+	"b":  func(m model) (tea.Model, tea.Cmd) { return m.openFileManager() },
 	"f1": openHelp,
 	"?":  openHelp,
 	"S": func(m model) (tea.Model, tea.Cmd) {

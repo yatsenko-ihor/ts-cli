@@ -25,7 +25,9 @@ The demo uses invented machines and a fake API ([how it is made](demo/README.md)
 - **Interactive TUI**: searchable machine list with online/offline state, details, themes (light, dark, dark-pastel, hacker, your own)
 - **SSH done right**: key first, password only when needed and saved encrypted, optional tmux split and Tailscale SSH
 - **Run panel**: local scripts, saved commands with `{{placeholders}}`, streaming output, runs on many machines in parallel
-- **Files**: `scp` upload and download with local and remote file browsers
+- **Files**: `scp` upload and download, a two-pane file manager (`b`), local and remote browsers
+- **Operations**: reboot and wait, port forwarding, health check, background monitor with latency history and down/up alerts, automatic reconnect
+- **ssh-config**: `ts-cli ssh-config --install` makes every machine reachable by name from ssh, scp, rsync, git and editors
 - **Machine actions**: ping details (direct or relay), key expiry, rename, tags, delete
 - **Scriptable CLI**: `ts-cli list` with filters and JSON output, `ts-cli account`, `ts-cli ssh`
 
@@ -60,6 +62,7 @@ In the TUI:
 | `/` | search | `:` | run a command |
 | `Space` / `*` | mark machine(s) | `Tab` | Run panel / machine actions |
 | `p` | ping | `f` / `F` | upload / download files |
+| `b` | file manager | `d` | forget saved password |
 | `m` | accounts | `F12` | settings and themes |
 | `?` / `F1` | help | `q` | quit |
 

@@ -48,6 +48,8 @@ type model struct {
 	monitorSeq     int                   // tells monitor loops apart
 	monitorNext    int                   // where the next monitor round starts
 	health         map[string]healthInfo // last health check by machineKey
+	fm             *fileManager          // two-pane file manager, nil when closed
+	fmDirs         map[string][2]string  // last directories of the manager by machineKey
 	rebootSeq      int                   // tells watches apart
 	peers          map[string]peerInfo   // daemon view of peers, by Tailscale IP
 	pingInfo       map[string]pingDetail // detailed ping results by machineKey
@@ -431,6 +433,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case fmListMsg:
+		return m.handleFMList(msg)
+
+	case fmOpMsg:
+		return m.handleFMOp(msg)
+
 	case monitorTickMsg:
 		return m.handleMonitorTick(msg)
 
@@ -479,6 +487,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleTextPrompt(msg)
 		case inputSearch:
 			return m.handleSearchMode(msg)
+		}
+		if m.fm != nil {
+			return m.handleFM(msg)
 		}
 		if m.ssh.retryMode {
 			return m.handleSSHRetryMenu(msg)
@@ -566,6 +577,10 @@ func (m model) viewBody() string {
 	}
 	if m.input.mode == inputText {
 		return m.renderInputPopup(m.input.label, m.input.value, m.input.masked)
+	}
+
+	if m.fm != nil {
+		return m.renderFM()
 	}
 
 	var b strings.Builder

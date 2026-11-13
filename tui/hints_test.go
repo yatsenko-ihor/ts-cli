@@ -49,10 +49,9 @@ func TestHelpBarMentionsTheCurrentKeysAndFitsTheTerminal(t *testing.T) {
 	if lipgloss.Width(narrow) > 80-2-4 || !strings.HasSuffix(narrow, "? help • q quit") || !strings.Contains(narrow, "s ssh") {
 		t.Fatalf("narrow bar (%d cells): %q", lipgloss.Width(narrow), narrow)
 	}
-	m.ssh.username = "root"
 	m.width = 300
-	if !strings.Contains(m.getHelpText(), "d clear-user") {
-		t.Error("clear-user hint when a default user is set")
+	if !strings.Contains(m.getHelpText(), "d forget password") || !strings.Contains(m.getHelpText(), "b files") {
+		t.Error("the wide bar names d and b")
 	}
 
 	// Run panel: Enter's meaning follows the tab

@@ -74,6 +74,11 @@ func machineActions(d client.Device) []machineAction {
 			},
 		},
 		{
+			title: "File manager…",
+			desc:  "Two panes: this computer and the machine; copy, create, rename, delete (b opens it from the list)",
+			run:   func(m model, d client.Device) (tea.Model, tea.Cmd) { return m.openFileManager() },
+		},
+		{
 			title: "Forward a port…",
 			desc:  "ssh -L: a port on this computer (127.0.0.1) leads to a port on the machine, until you stop it with x",
 			run:   func(m model, d client.Device) (tea.Model, tea.Cmd) { return m.promptForward(d) },

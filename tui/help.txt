@@ -9,6 +9,7 @@ KEYBOARD SHORTCUTS
   Esc            Clear marks / close right panels
   p              Ping the selected machine(s) with `tailscale ping`
   f / F          Upload to selected machine(s) / download from one (scp)
+  b              Two-pane file manager: this computer | the machine
   H              Show/hide offline machines
   F12            Settings (names, grouping, details panel, icons)
   s              SSH to selected machine (inside tmux: in a split pane,

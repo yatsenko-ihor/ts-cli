@@ -312,7 +312,7 @@ func TestMachineTabIsInertWithoutTargetOrWhileBusy(t *testing.T) {
 // Verifies: REQ-ACT-008
 func TestMachineTabRendersAndEnterRunsTheAction(t *testing.T) {
 	m := actionsFixtureModel(t)
-	m.width, m.height = 140, 40
+	m.width, m.height = 140, 60
 	m.activeFocus = focusRun
 	out := m.renderRunPanel()
 	for _, want := range []string{"Machine", "Ping with details", "Delete from tailnet", "only"} {
