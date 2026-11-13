@@ -23,6 +23,7 @@ const (
 	uiTailscaleSSH   = "tailscale_ssh" // use `tailscale ssh` for machines that offer it (default off)
 	uiTmuxSplit      = "tmux_split"    // ssh sessions in a tmux pane when running inside tmux
 	uiTheme          = "theme"         // light (default), dark, dark-pastel or hacker
+	uiMonitor        = "monitor"       // ping the visible machines in the background and report changes (default off)
 )
 
 // uiSettings are the display options of the machine list.
@@ -35,6 +36,7 @@ type uiSettings struct {
 	theme          string // light, dark, dark-pastel or hacker
 	tmuxSplit      bool   // open ssh sessions in a tmux split when inside tmux
 	tailscaleSSH   bool   // use `tailscale ssh` for machines that offer it
+	monitor        bool   // background monitor of the visible machines
 }
 
 // loadUISettings builds the settings from the config map; absent keys mean "on".
@@ -49,6 +51,7 @@ func loadUISettings(ui map[string]string) uiSettings {
 		theme:          validTheme(ui[uiTheme]),
 		tmuxSplit:      on(uiTmuxSplit),
 		tailscaleSSH:   ui[uiTailscaleSSH] == "on",
+		monitor:        ui[uiMonitor] == "on",
 	}
 }
 
@@ -66,6 +69,7 @@ var settingItems = []settingItem{
 	{uiShortNames, "Short names", "Strip the tailnet suffix (.tailXXXX.ts.net) from machine names"},
 	{uiTmuxSplit, "SSH in a tmux split", "Inside tmux, s opens the session in a pane next to the list (a real terminal: vim, htop, mouse, scrolling)"},
 	{uiTailscaleSSH, "Use Tailscale SSH when offered", "s runs `tailscale ssh` for machines that offer it (no password or key needed; the ACL decides); off = plain ssh"},
+	{uiMonitor, "Monitor machines", "Every 30 s ping the visible online machines in turn (a few at a time), keep a latency history and say when one stops or starts answering"},
 	{uiTheme, "Theme", "light, dark, dark-pastel, hacker or your own from ~/.ts-cli/themes/*.json; all but light paint the whole screen"},
 	{uiIcons, "Icon style", "symbols: coloured ● ○ and text flags   emoji: 🟢 🔴 ⭕️ 🔐"},
 }
@@ -91,6 +95,8 @@ func (s uiSettings) value(key string) string {
 		return flag(s.tmuxSplit)
 	case uiTailscaleSSH:
 		return flag(s.tailscaleSSH)
+	case uiMonitor:
+		return flag(s.monitor)
 	case uiTheme:
 		return validTheme(s.theme)
 	case uiIcons:
@@ -117,6 +123,8 @@ func (s uiSettings) toggled(key string) uiSettings {
 		s.tmuxSplit = !s.tmuxSplit
 	case uiTailscaleSSH:
 		s.tailscaleSSH = !s.tailscaleSSH
+	case uiMonitor:
+		s.monitor = !s.monitor
 	case uiTheme:
 		s.theme = nextTheme(validTheme(s.theme))
 	case uiIcons:
@@ -147,7 +155,13 @@ func (m model) applySetting(key string) (tea.Model, tea.Cmd) {
 		applyTheme(m.set.theme)
 	}
 	m.refilterKeepCursor()
-	return m, saveUISetting(key, m.set.value(key))
+	save := saveUISetting(key, m.set.value(key))
+	if key == uiMonitor {
+		var tick tea.Cmd
+		m, tick = m.startMonitor()
+		return m, tea.Batch(save, tick)
+	}
+	return m, save
 }
 
 // handleSettings processes keys in the F12 settings window.

@@ -120,6 +120,16 @@ func (m model) renderDetailsPanel(width, height int) string {
 		b.WriteString("\n")
 		b.WriteString(row("Status", m.styledStatus(d)+" "+m.statusText(d)) + "\n")
 		b.WriteString(row("Ping", m.pingText(d)) + "\n")
+		if text := latencyText(m.samples[machineKey(d)]); text != "" {
+			b.WriteString(row("Latency", text) + "\n")
+		}
+		if h, ok := m.health[machineKey(d)]; ok {
+			for _, r := range [][2]string{{"Uptime", h.uptime}, {"Load", h.load}, {"Memory", h.memUsed}, {"Disk", h.diskUsed}} {
+				if r[1] != "" {
+					b.WriteString(row(r[0], r[1]+" ("+ago(h.at)+")") + "\n")
+				}
+			}
+		}
 		if p, ok := m.peerFor(d); ok {
 			b.WriteString(row("Path", p.pathText()) + "\n")
 			if t := p.trafficText(); t != "" {

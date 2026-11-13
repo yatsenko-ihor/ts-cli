@@ -50,17 +50,24 @@ type rebootTickMsg struct{ seq int }
 
 // rebootSend runs the reboot command; replaced in tests.
 var rebootSend = func(device client.Device, username, password string) (string, error) {
+	return runSSHOnce(device, username, password, "sh -c "+scripts.ShellQuote(rebootScript), rebootSendTimeout)
+}
+
+// runSSHOnce runs one remote command without a terminal and returns its
+// combined output. It never prompts (saved login or key only) and kills the
+// whole process group when timeout passes.
+func runSSHOnce(device client.Device, username, password, command string, timeout time.Duration) (string, error) {
 	target, err := buildSSHTarget(username, device.Addresses[0])
 	if err != nil {
 		return "", err
 	}
-	cmd, cleanup, err := newSSHCommand(target, password, true, "sh -c "+scripts.ShellQuote(rebootScript))
+	cmd, cleanup, err := newSSHCommand(target, password, true, command)
 	if err != nil {
 		return "", err
 	}
 	defer cleanup()
 	setProcessGroup(cmd)
-	timer := time.AfterFunc(rebootSendTimeout, func() {
+	timer := time.AfterFunc(timeout, func() {
 		if cmd.Process != nil {
 			_ = killProcessTree(cmd)
 		}

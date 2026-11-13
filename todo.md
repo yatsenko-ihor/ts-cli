@@ -34,7 +34,9 @@
 - [x] Device key reminders (line on the main screen, list flag)
 - [x] Contextual key hints, `?` for help
 - [x] Tailscale SSH when the machine offers it (option, off by default)
-- [ ] Re-enable background auto-ping (`autoPingEnabled` in `tui/ping.go`) once it is cheap enough
+- [x] Background monitor (F12 → Monitor machines): latency history and down/up alerts (replaces the idea of re-enabling auto-ping)
+- [x] Machine tab: Reboot and wait, Forward a port, Check health
+- [x] `ts-cli ssh-config` (`--write`, `--install`)
 - [x] `UseKeychain` with a lost key: creates a new key, removes the unreadable secrets and says what was removed
 - [x] `runJob.kill` kills the whole process group (sshpass's ssh child too)
 - [x] Requirement/coverage gate extended to `commands/` and the TUI account/list logic (all gated files at 100 %)
@@ -45,9 +47,8 @@
 - Tailscale API: create auth keys (`ts-cli key create --tag … --ephemeral`) to onboard machines
 - Tailscale API: subnet routes (view, approve), device posture attributes
 - Tailscale API: ACL policy (`acl show`, `acl validate`), DNS settings, users and invites, webhooks, audit and flow logs
-- Export machines as `~/.ssh/config` blocks (`ts-cli ssh-config`); importing hosts from `~/.ssh/config` is a bigger job
+- Importing hosts from `~/.ssh/config` is a bigger job
 - Saved machine groups / tag-based selection for runs
 - Ready-made group actions (reboot, update, disk check) on the marked machines
 - Tailscale SSH: fall back to plain ssh when the ACL refuses
-- Ping/latency history per machine
 - Mouse click on the Browse button (needs terminal mouse capture, which disables normal text selection; could be enabled only while a path prompt is open)

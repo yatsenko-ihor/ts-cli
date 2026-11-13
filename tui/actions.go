@@ -61,6 +61,11 @@ func machineActions(d client.Device) []machineAction {
 			},
 		},
 		{
+			title: "Check health",
+			desc:  "Uptime, load, memory and disk over ssh with the saved login (read-only)",
+			run:   func(m model, d client.Device) (tea.Model, tea.Cmd) { return m.startHealth(d) },
+		},
+		{
 			title:  "Reboot and wait…",
 			desc:   "Reboots over ssh (root or passwordless sudo, saved login) and tells you when it is back",
 			danger: true,

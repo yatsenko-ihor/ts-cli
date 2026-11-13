@@ -47,6 +47,7 @@ const (
 	pingAuto                      // background for the cursor machine: silent
 	pingPreflight                 // before connecting: continue or abort
 	pingReboot                    // watching a rebooting machine
+	pingMonitor                   // background monitor round: silent, may raise an alert
 )
 
 const (
@@ -66,7 +67,8 @@ type pingMsg struct {
 	mode        pingMode
 	ok          bool
 	took        time.Duration
-	unavailable bool // the tailscale CLI is missing; says nothing about the machine
+	latency     time.Duration // round trip of the pong, else took
+	unavailable bool          // the tailscale CLI is missing; says nothing about the machine
 	err         error
 }
 
@@ -116,7 +118,11 @@ func pingDevice(device client.Device, mode pingMode, wait time.Duration) tea.Cmd
 		out, err := tailscalePing(ctx, addr, wait)
 		took := time.Since(start)
 		if err == nil {
-			return pingMsg{key: key, name: name, mode: mode, ok: true, took: took}
+			lat := parsePingOutput(string(out)).latency
+			if lat == 0 {
+				lat = took
+			}
+			return pingMsg{key: key, name: name, mode: mode, ok: true, took: took, latency: lat}
 		}
 		var notFound *exec.Error
 		if errors.As(err, &notFound) {
@@ -271,7 +277,13 @@ func (m model) handlePing(msg pingMsg) (tea.Model, tea.Cmd) {
 	if m.pingAt == nil {
 		m.pingAt = map[string]time.Time{}
 	}
+	d, found := m.deviceByKey(msg.key)
+	wasReachable := found && m.isReachable(d)
 	m.pingAt[msg.key] = time.Now()
+	m.recordSample(msg.key, msg.ok, msg.latency)
+	if msg.mode == pingMonitor {
+		m.noteMonitorResult(msg, wasReachable)
+	}
 	if msg.ok {
 		m.ping[msg.key] = pingOK
 	} else {

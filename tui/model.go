@@ -40,6 +40,14 @@ type model struct {
 	browse         *fileBrowser          // local file browser opened from a path prompt
 	act            actionState           // Machine tab result
 	reboot         *rebootState          // reboot being watched, nil when none
+	samples        map[string][]sample   // ping history by machineKey
+	failStreak     map[string]int        // consecutive failed monitor pings
+	downAlerted    map[string]bool       // machines reported as not answering
+	failedFromUp   map[string]bool       // the machine was reachable when its failure streak began
+	alerts         []string              // monitor events, newest last
+	monitorSeq     int                   // tells monitor loops apart
+	monitorNext    int                   // where the next monitor round starts
+	health         map[string]healthInfo // last health check by machineKey
 	rebootSeq      int                   // tells watches apart
 	peers          map[string]peerInfo   // daemon view of peers, by Tailscale IP
 	pingInfo       map[string]pingDetail // detailed ping results by machineKey
@@ -166,6 +174,9 @@ func (m model) Init() tea.Cmd {
 		cmds = append(cmds, pingDevice(d, pingAuto, manualPingWait))
 	}
 	cmds = append(cmds, m.checkAllHealth())
+	if m.set.monitor {
+		cmds = append(cmds, tickMonitor(m.monitorSeq, monitorFirst))
+	}
 	if tailscaleAvailable() {
 		cmds = append(cmds, loadPeersCmd())
 	}
@@ -419,6 +430,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.value, m.input.cursor = insertText(m.input.value, m.input.cursor, msg.text)
 		}
 		return m, nil
+
+	case monitorTickMsg:
+		return m.handleMonitorTick(msg)
+
+	case healthMsg:
+		return m.handleHealth(msg)
 
 	case rebootSentMsg:
 		return m.handleRebootSent(msg)

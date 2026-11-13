@@ -245,6 +245,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Details panel**: with the Run panel closed and a terminal at least 100 columns wide, the highlighted machine's OS, address, last seen, key expiry, SSH setup and ping result are shown on the right.
 - **Group by account**: section headers per account (only with more than one account).
 - **SSH in a tmux split**: inside tmux, `s` opens the session in a new pane to the right of the list instead of taking over ts-cli's terminal (see [Running In tmux](#running-in-tmux)). On by default; has no effect outside tmux.
+- **Monitor machines** (off by default): every 30 s ping the visible online machines in turn (a few at a time), keep a latency history for the details panel and report when a machine stops answering (after two failed pings in a row) or answers again. Pings use `tailscale ping`; nothing is sent to the machines beyond that.
 - **Use Tailscale SSH when offered** (off by default): for machines that run the Tailscale SSH server, `s` runs `tailscale ssh [user@]machine` instead of plain ssh. No password, key or username prompt and nothing is saved; the tailnet's ACL decides who may connect. Machines that offer it show `Tailscale SSH` in the details panel.
 - **Theme**: `light` (default, keeps your terminal background), `dark`, `dark-pastel` (soft pastels on slate) or `hacker` (near-black with a muted green text; bright green only for the cursor and online machines, cyan, amber and red for the rest). Every theme except `light` paints the whole screen, so it looks the same on any terminal background. The choice is stored in `~/.ts-cli/config.json` under `ui.theme` (`light`, `dark`, `dark-pastel`, `hacker`) and can be edited there too. You can also add your own themes, see below.
 - **Icon style**: coloured symbols (default) or emoji.
@@ -276,10 +277,11 @@ The **Machine** tab of the Run panel (`Tab`, then `]` to the last tab) acts on t
 | Rename… | Sets the machine name |
 | Edit tags… | Replaces the tags (`tag:server, tag:prod`); the ACL must allow them |
 | Forward a port… | `ssh -L`: a port on this computer (always `127.0.0.1`) leads to a port on the machine. Enter `8080`, `8080:80` or `5432:db.internal:5432`. It runs as a job in the Output panel until you stop it with `x`; a busy local port or a refused forward is reported there, not as a login problem |
+| Check health | Uptime, load, memory and root-disk usage over ssh with the saved login (read-only, no prompts); shown in the details panel with its age |
 | Reboot and wait… | Reboots over ssh (root or passwordless sudo, uses the saved login), then watches with `tailscale ping` and tells you when the machine is back (Esc stops waiting); asks you to type the machine name |
 | Delete from tailnet… | Removes the machine; asks you to type the machine name |
 
-These use the Tailscale API with the account's key, which therefore needs permission to write devices; a read-only key shows the API's error. The details panel also shows what the local daemon knows about the machine (`tailscale status`): the current path, traffic and whether it offers Tailscale SSH.
+These use the Tailscale API with the account's key, which therefore needs permission to write devices; a read-only key shows the API's error. The details panel also shows a latency history (a sparkline of the last pings with min/avg/max; every ping adds to it) and what the local daemon knows about the machine (`tailscale status`): the current path, traffic and whether it offers Tailscale SSH.
 
 **Key reminders.** A device whose key expires drops off the tailnet. Expired keys and keys expiring within 14 days are flagged in the list (`exp`, red when expired, yellow when soon) and summarised in a line on the main screen.
 
