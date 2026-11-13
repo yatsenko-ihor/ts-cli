@@ -379,6 +379,7 @@ func (m model) startCommand(command string) (tea.Model, tea.Cmd) {
 
 // launch dispatches a job to one machine (interactive flow) or many (batch).
 func (m model) launch(spec sshJob) (tea.Model, tea.Cmd) {
+	m.afterCopy = nil // a pending move belongs to the launch that set it, after this call
 	if spec.action == sshActionScript && spec.script != nil {
 		sc := *spec.script // pending holds a pointer; keep our own copy
 		spec.script = &sc

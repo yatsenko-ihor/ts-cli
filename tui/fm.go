@@ -245,33 +245,50 @@ func (m model) handleFM(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.fmCopy()
 	case "n", "f7":
 		return m.fmPromptMkdir()
-	case "R", "f6":
+	case "R", "f2":
 		return m.fmPromptRename()
+	case "M", "f6":
+		return m.fmPromptMove()
+	case "f10":
+		return m.closeFM(), nil
 	case "d", "delete", "f8":
 		return m.fmPromptDelete()
 	}
 	return m, cmd
 }
 
-// fmCopy runs an scp job for the selected entry into the other pane's directory.
-func (m model) fmCopy() (tea.Model, tea.Cmd) {
-	f := m.fm
+// fmCopySpec describes the copy of the selected entry into the other pane's
+// directory; ok is false (with a status) when nothing can be copied.
+func (f *fileManager) fmCopySpec(what string) (spec copySpec, name string, ok bool) {
 	sel := f.fmSelected(f.focus)
 	if sel == nil || sel.special {
-		f.status = "Select a file or directory to copy"
-		return m, nil
+		f.status = "Select a file or directory to " + what
+		return spec, "", false
 	}
 	local, remote := f.panes[fmLocal], f.panes[fmRemote]
 	if remote.dir == "" || remote.loading {
 		f.status = "The machine's directory is not loaded yet"
+		return spec, "", false
+	}
+	if f.focus == fmLocal {
+		return copySpec{local: local.join(sel.name), remote: remote.dir}, sel.name, true
+	}
+	return copySpec{local: local.dir, remote: remote.join(sel.name), download: true}, sel.name, true
+}
+
+// fmCopy runs an scp job for the selected entry into the other pane's directory.
+func (m model) fmCopy() (tea.Model, tea.Cmd) {
+	spec, _, ok := m.fm.fmCopySpec("copy")
+	if !ok {
 		return m, nil
 	}
-	spec := copySpec{local: local.dir, remote: remote.dir, download: true}
-	if f.focus == fmLocal {
-		spec = copySpec{local: local.join(sel.name), remote: remote.dir}
-	} else {
-		spec.remote = remote.join(sel.name)
-	}
+	return m.fmLaunchCopy(spec, nil)
+}
+
+// fmLaunchCopy leaves the manager and runs the copy; move, when set, is what
+// to delete once the copy has succeeded.
+func (m model) fmLaunchCopy(spec copySpec, move *moveJob) (tea.Model, tea.Cmd) {
+	f := m.fm
 	m = m.closeFM()
 	m.list.marked = nil // the copy goes to the machine of the manager only
 	for i, d := range m.list.filteredDevices {
@@ -280,7 +297,13 @@ func (m model) fmCopy() (tea.Model, tea.Cmd) {
 			break
 		}
 	}
-	return m.launch(sshJob{action: sshActionCopy, copy: spec})
+	u, cmd := m.launch(sshJob{action: sshActionCopy, copy: spec})
+	nm := u.(model)
+	if move != nil && nm.notify.sshError == nil {
+		move.spec, move.device = spec, f.device
+		nm.afterCopy = move // after launch, which clears any older one
+	}
+	return nm, cmd
 }
 
 // fmPane returns the name of the focused pane's side.
@@ -289,6 +312,35 @@ func (f *fileManager) fmName() string {
 		return shortHost(displayName(f.device))
 	}
 	return "this computer"
+}
+
+// fmPromptMove asks before moving the selected entry to the other pane: it is
+// copied with scp and the original is deleted only after the copy succeeded.
+func (m model) fmPromptMove() (tea.Model, tea.Cmd) {
+	f := m.fm
+	spec, name, ok := f.fmCopySpec("move")
+	if !ok {
+		return m, nil
+	}
+	from, to := "this computer", shortHost(displayName(f.device))
+	srcPath, fromRemote := spec.local, false
+	if spec.download {
+		from, to = to, "this computer"
+		srcPath, fromRemote = spec.remote, true
+	}
+	m.input = textInput{
+		mode: inputText, label: "Move " + name + " from " + from + " to " + to + "?",
+		hint: "Type yes: it is copied first, the original is deleted only when the copy succeeded",
+		onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
+			m.input = textInput{}
+			if strings.TrimSpace(v) != "yes" {
+				m.fm.status = "Not moved"
+				return m, nil
+			}
+			return m.fmLaunchCopy(spec, &moveJob{name: name, src: srcPath, fromRemote: fromRemote})
+		},
+	}
+	return m, nil
 }
 
 func (m model) fmPromptMkdir() (tea.Model, tea.Cmd) {
@@ -452,7 +504,7 @@ func (m model) renderFM() string {
 		s.WriteString(infoStyle.Render(truncateForWidth(f.status, total-2)))
 	}
 	s.WriteString("\n")
-	s.WriteString(helpStyle.Render(truncateForWidth("tab switch pane • ↑/↓ move • →/enter open • ←/⌫ up • c copy to the other pane • n new dir • R rename • d delete • / filter • . hidden • r refresh • esc close", total-2)))
+	s.WriteString(helpStyle.Render(truncateForWidth("F5 Copy · F6 Move · F7 MkDir · F8 Delete · F2 Rename · F10 Close — tab switch pane · →/enter open · ←/⌫ up · / filter · . hidden · r refresh", total-2)))
 	return s.String()
 }
 

@@ -51,6 +51,7 @@ type model struct {
 	pinned         map[string]bool                  // pinned machine keys
 	notes          map[string]string                // notes by machine key
 	pendingSwitch  func(model) (tea.Model, tea.Cmd) // continues an action after an automatic account switch
+	afterCopy      *moveJob                         // a move waiting for its copy to finish
 	fm             *fileManager                     // two-pane file manager, nil when closed
 	fmDirs         map[string][2]string             // last directories of the manager by machineKey
 	rebootSeq      int                              // tells watches apart
@@ -426,7 +427,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitRunEvent(msg.job)
 
 	case runDoneMsg:
-		return m.handleRunDone(m.adjustForwardResult(msg))
+		u, cmd := m.handleRunDone(m.adjustForwardResult(msg))
+		nm, mvCmd := u.(model).settleMove(msg.res)
+		return nm, tea.Batch(cmd, mvCmd)
+
+	case moveDoneMsg:
+		return m.handleMoveDone(msg)
 
 	case runTickMsg:
 		if mr := m.run.runFor(msg.job); mr == nil || mr.status != runRunning {

@@ -380,6 +380,7 @@ func (m model) cancelSSHAttempt() model {
 	m.ssh.retryMode = false
 	m.ssh.reconnect = nil
 	m.ssh.askReconnect = false
+	m.afterCopy = nil // a cancelled copy never deletes its source
 	m.input = textInput{mode: inputNone}
 	m.notify.sshError = nil
 	return m
