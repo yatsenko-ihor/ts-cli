@@ -506,13 +506,8 @@ func (m model) renderAccountManagement() string {
 		rows.WriteString("\n")
 	}
 
-	panel := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(cur.border).
-		Padding(1, 2).
-		Width(width)
-	b.WriteString(panel.Render(strings.TrimRight(rows.String(), "\n")))
-	b.WriteString("\n")
+	b.WriteString(strings.TrimRight(rows.String(), "\n"))
+	b.WriteString("\n\n")
 	b.WriteString(grayItalicStyle.Render("◉ = this computer is logged in to it. Hidden accounts' machines are not listed."))
 	b.WriteString("\n")
 
@@ -529,5 +524,12 @@ func (m model) renderAccountManagement() string {
 	}
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render("↑/↓ move • enter use (switch this computer) • space show/hide • a add • e edit • d remove • c re-check keys • esc close"))
-	return b.String()
+
+	// A popup over the screen it was opened from (see View).
+	panel := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(cur.borderFocus).
+		Padding(1, 2).
+		Width(width)
+	return panel.Render(b.String())
 }

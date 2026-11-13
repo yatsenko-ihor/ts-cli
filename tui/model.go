@@ -577,7 +577,7 @@ func (m model) viewBody() string {
 
 	// Show account management view if in account management mode
 	if m.acct.accountManageMode && m.input.mode == inputNone {
-		return m.renderAccountManagement()
+		return overlayCenter(m.backgroundScreen(), m.renderAccountManagement(), m.width, m.height)
 	}
 
 	// Show options menu if in options mode

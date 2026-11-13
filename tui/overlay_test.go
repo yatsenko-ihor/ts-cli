@@ -223,3 +223,16 @@ func TestProfileSelectionIsAPopup(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountsWindowIsAPopup(t *testing.T) {
+	m := personalModel(t)
+	m.width, m.height = 130, 40
+	m.version = "9.9.9"
+	m.acct.accountManageMode = true
+	view := m.View()
+	for _, want := range []string{"Accounts (ts-cli v9.9.9)", "No accounts yet", "re-check keys", "alpha"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("accounts popup: %q missing", want)
+		}
+	}
+}
