@@ -168,7 +168,17 @@ func (m model) renderDetailsPanel(width, height int) string {
 			b.WriteString(row("Tags", strings.Join(d.Tags, ", ")) + "\n")
 		}
 		if note := m.notes[machineKey(d)]; note != "" {
-			b.WriteString(row("Note", note) + "\n")
+			for i, line := range strings.Split(note, "\n") {
+				if i == 5 {
+					b.WriteString(row("", "…") + "\n")
+					break
+				}
+				name := ""
+				if i == 0 {
+					name = "Note"
+				}
+				b.WriteString(row(name, line) + "\n")
+			}
 		}
 		b.WriteString("\n")
 		b.WriteString(row("SSH", m.sshSetupText(d)) + "\n")

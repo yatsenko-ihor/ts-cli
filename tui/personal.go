@@ -24,6 +24,9 @@ type Personal struct {
 	Notes  map[string]string
 }
 
+// maxNoteRunes caps a note.
+const maxNoteRunes = 2000
+
 // pinMark is shown before the name of a pinned machine.
 const pinMark = "★ "
 
@@ -82,11 +85,14 @@ func (m model) promptNote() (tea.Model, tea.Cmd) {
 	key := machineKey(d)
 	current := m.notes[key]
 	m.input = textInput{
-		mode: inputText, label: "Note for " + shortHost(displayName(d)), value: current, cursor: len([]rune(current)),
-		hint: "free text, stored only in config.json; empty removes it",
+		mode: inputText, multiline: true, label: "Note for " + shortHost(displayName(d)), value: current, cursor: len([]rune(current)),
+		hint: "several lines; stored only in config.json; empty removes it",
 		onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
 			m.input = textInput{}
-			note := strings.TrimSpace(strings.NewReplacer("\n", " ", "\r", " ").Replace(v))
+			note := strings.TrimSpace(strings.ReplaceAll(v, "\r", ""))
+			if r := []rune(note); len(r) > maxNoteRunes {
+				note = string(r[:maxNoteRunes])
+			}
 			notes := make(map[string]string, len(m.notes)+1)
 			for k, n := range m.notes {
 				notes[k] = n

@@ -1,6 +1,11 @@
 package tui
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Layout calculation functions for determining panel sizes and dimensions
 
@@ -116,6 +121,7 @@ func (m model) extraRows() int {
 	if m.inst.showSuggestion {
 		n += 2
 	}
+	n += m.helpExtraLines()
 	if !m.run.visible && len(m.run.runs) > 0 && m.run.label != "" {
 		n++ // "Last run: ..."
 	}
@@ -162,4 +168,14 @@ func (m model) getMaxVisibleItems() int {
 		return 1
 	}
 	return available
+}
+
+// helpExtraLines is how many lines the help bar uses beyond its first: the
+// panels give those rows back so the bar never pushes the title away.
+func (m model) helpExtraLines() int {
+	text := m.getHelpText()
+	if w := m.hintWidth(); w > 0 {
+		text = lipgloss.NewStyle().Width(w).Render(text)
+	}
+	return strings.Count(text, "\n")
 }

@@ -104,13 +104,13 @@ func TestNotes(t *testing.T) {
 	}
 	u, cmd := m.input.onSubmit(m, "  backups\nhere ")
 	m = u.(model)
-	if m.notes["a"] != "backups here" || cmd == nil {
+	if m.notes["a"] != "backups\nhere" || cmd == nil {
 		t.Fatalf("notes = %v", m.notes)
 	}
 	if msg := cmd().(personalSavedMsg); msg.err != nil {
 		t.Fatal(msg.err)
 	}
-	if cfg, _ := config.Load(); cfg.MachineNotes["a"] != "backups here" {
+	if cfg, _ := config.Load(); cfg.MachineNotes["a"] != "backups\nhere" {
 		t.Fatalf("config notes = %v", cfg.MachineNotes)
 	}
 	u, _ = m.promptNote()

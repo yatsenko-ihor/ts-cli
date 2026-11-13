@@ -100,16 +100,24 @@ func (m model) handleTextPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "down":
-		if m.input.path != pathNone {
+		if m.input.multiline {
+			m.input.cursor = moveLine(m.input.value, m.input.cursor, 1)
+		} else if m.input.path != pathNone {
 			m.input.focusBrowse = true
 		}
 		return m, nil
 	case "up":
-		if m.input.path != pathNone {
+		if m.input.multiline {
+			m.input.cursor = moveLine(m.input.value, m.input.cursor, -1)
+		} else if m.input.path != pathNone {
 			m.input.focusBrowse = false
 		}
 		return m, nil
-	case "enter":
+	case "enter", "ctrl+s", "alt+enter":
+		if m.input.multiline && msg.String() == "enter" {
+			m.input.value, m.input.cursor = insertText(m.input.value, m.input.cursor, "\n")
+			return m, nil
+		}
 		if m.input.focusBrowse {
 			m.input.focusBrowse = false
 			return m.openBrowser()

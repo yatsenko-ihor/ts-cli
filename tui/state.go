@@ -29,14 +29,15 @@ const (
 
 // textInput holds the transient state for any single-line text input prompt.
 type textInput struct {
-	mode   inputMode // Which input is active (inputNone = no input active)
-	value  string    // Current text being typed
-	cursor int       // Cursor position in runes within value
-	label  string    // Prompt title for inputText popups
-	hint   string    // Optional helper line under the label
-	masked bool      // Show bullets instead of the typed text (secrets)
-	path   pathKind  // the prompt asks for a local path: Tab completes, Ctrl+O browses
-	note   string    // transient line under the hint (completion candidates)
+	mode      inputMode // Which input is active (inputNone = no input active)
+	value     string    // Current text being typed
+	cursor    int       // Cursor position in runes within value
+	label     string    // Prompt title for inputText popups
+	hint      string    // Optional helper line under the label
+	masked    bool      // Show bullets instead of the typed text (secrets)
+	multiline bool      // several lines: Enter adds a line, Ctrl+S saves
+	path      pathKind  // the prompt asks for a local path: Tab completes, Ctrl+O browses
+	note      string    // transient line under the hint (completion candidates)
 	// focusBrowse puts the focus on the Browse button below a path field.
 	focusBrowse bool
 	// device is the machine a remote path prompt browses.

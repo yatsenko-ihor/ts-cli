@@ -100,8 +100,8 @@ func TestCheckHealthRefusals(t *testing.T) {
 	other.AccountTailnet = "other.example.com"
 	m2 := m
 	m2.acct.tailscaleActiveAccount = "mine.example.com"
-	if u, c := m2.startHealth(other); c != nil || !strings.Contains(u.(model).act.err.Error(), "account") {
-		t.Fatal("other account")
+	if u, c := m2.startHealth(other); c == nil || u.(model).pendingSwitch == nil {
+		t.Fatal("another account is switched to by itself, not refused")
 	}
 	m3 := flowModel(t, nil, "")
 	if u, c := m3.startHealth(m3.list.devices[0]); c != nil || !strings.Contains(u.(model).act.err.Error(), "username") {

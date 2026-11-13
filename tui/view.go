@@ -160,7 +160,11 @@ func (m model) renderRunPanel() string {
 	}
 
 	if note != "" {
-		b.WriteString(grayItalicStyle.Render(truncateForWidth("Note: "+note, inner)))
+		first, rest, more := strings.Cut(note, "\n")
+		if more {
+			first += fmt.Sprintf(" (+%d more line(s))", strings.Count(rest, "\n")+1)
+		}
+		b.WriteString(grayItalicStyle.Render(truncateForWidth("Note: "+first, inner)))
 		b.WriteString("\n")
 	}
 	if m.run.tab == tabMachine && (m.act.result != "" || m.act.err != nil) {
@@ -384,17 +388,17 @@ func (m model) renderAbout() string {
 	return b.String()
 }
 
+// noteRows is the height of a multi-line prompt.
+const noteRows = 6
+
 // renderInputPopup renders a centered popup for username/password input
 func (m model) renderInputPopup(label string, value string, masked bool) string {
-	var b strings.Builder
-
-	title := fmt.Sprintf("Tailscale Devices (ts-cli v%s)", m.version)
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
 	popupWidth := 50
 	if m.input.mode == inputText && m.input.path != pathNone {
 		popupWidth = 72 // paths are long
+	}
+	if m.input.multiline {
+		popupWidth = 64
 	}
 	if m.width > 0 && m.width < popupWidth+20 {
 		popupWidth = m.width - 10
@@ -433,7 +437,11 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 		Background(cur.inputBg).
 		Padding(0, 1).
 		Width(popupWidth - 8)
-	content.WriteString(inputStyle.Render(renderEditable(value, m.input.cursor, masked, "▌", popupWidth-12)))
+	if m.input.multiline {
+		content.WriteString(inputStyle.Render(renderMultiline(value, m.input.cursor, "▌", popupWidth-12, noteRows)))
+	} else {
+		content.WriteString(inputStyle.Render(renderEditable(value, m.input.cursor, masked, "▌", popupWidth-12)))
+	}
 	content.WriteString("\n")
 	if m.input.mode == inputText && m.input.path != pathNone {
 		// A marker as well as colour, so focus is visible without colours.
@@ -451,6 +459,8 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 	}
 	keys := "enter confirm • esc cancel • ctrl+v paste"
 	switch {
+	case m.input.multiline:
+		keys = "enter new line • ctrl+s save • esc cancel"
 	case m.input.mode == inputText && m.input.path.remote():
 		keys = "↓ then enter, or ctrl+o: browse the machine • " + keys
 	case m.input.mode == inputText && m.input.path != pathNone:
@@ -458,9 +468,7 @@ func (m model) renderInputPopup(label string, value string, masked bool) string 
 	}
 	content.WriteString(grayItalicStyle.Render(truncateForWidth(keys, popupWidth-8)))
 
-	b.WriteString(popupStyle.Render(content.String()))
-
-	return b.String()
+	return popupStyle.Render(content.String())
 }
 
 // renderSSHRetryMenu renders the retry menu after SSH connection failure
@@ -661,7 +669,7 @@ func (m model) renderMachineCredsView() string {
 
 // getHelpText returns context-sensitive help text based on current mode
 func (m model) getHelpText() string {
-	help := fitHints(m.listHints(), hintTail, m.hintWidth())
+	help := fitHintLines(m.listHints(), hintTail, m.hintWidth(), maxHintLines)
 	if m.run.visible {
 		switch m.activeFocus {
 		case focusRun:
@@ -673,7 +681,7 @@ func (m model) getHelpText() string {
 				help = "1/2/3 frame • ↑/k ↓/j • g/G top/end • c copy path • n copy name • x stop • C clear • tab/shift+tab switch • esc close"
 			}
 		default:
-			help = "1/2/3 frame • ↑/k ↓/j • space select • * all • s ssh • : run • tab/shift+tab switch • esc close"
+			help = "1/2/3 frame • ↑/k ↓/j • space select • A all • s ssh • : run • tab/shift+tab switch • esc close"
 		}
 	}
 

@@ -87,10 +87,12 @@ func (m model) startHealth(d client.Device) (tea.Model, tea.Cmd) {
 	case len(d.Addresses) == 0:
 		m.act = actionState{err: fmt.Errorf("the machine has no IP address")}
 		return m, nil
-	case m.needsAccountSwitch(d):
-		m.act = actionState{err: fmt.Errorf("switch to the machine's Tailscale account first (connect once with s)")}
-		return m, nil
 	}
+	return m.ensureAccount(d, func(m model) (tea.Model, tea.Cmd) { return m.runHealth(d) })
+}
+
+// runHealth runs the check once the account is right.
+func (m model) runHealth(d client.Device) (tea.Model, tea.Cmd) {
 	username := m.usernameForDevice(d)
 	if username == "" {
 		m.act = actionState{err: fmt.Errorf("no saved username: connect once with s so the login is remembered")}

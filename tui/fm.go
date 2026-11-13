@@ -63,10 +63,12 @@ func (m model) openFileManager() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	d := targets[0]
+	return m.ensureAccount(d, func(m model) (tea.Model, tea.Cmd) { return m.showFileManager(d) })
+}
+
+// showFileManager opens the manager once the account is right.
+func (m model) showFileManager(d client.Device) (tea.Model, tea.Cmd) {
 	switch {
-	case m.needsAccountSwitch(d):
-		m.notify.sshError = fmt.Errorf("%s belongs to another account than the one this computer uses; switch with m first", displayName(d))
-		return m, nil
 	case m.usernameForDevice(d) == "":
 		m.notify.sshError = fmt.Errorf("no username saved for %s; connect once with s to set one", displayName(d))
 		return m, nil

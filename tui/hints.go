@@ -18,29 +18,65 @@ const hintTail = "? help" + hintSep + "q quit"
 // fitHints joins as many hints as fit into width cells, then the tail.
 // width <= 0 means no limit.
 func fitHints(hints []string, tail string, width int) string {
+	return fitHintLines(hints, tail, width, 1)
+}
+
+// maxHintLines is how many lines the list's hint bar may use.
+const maxHintLines = 3
+
+// fitHintLines fills up to maxLines lines of width cells with the hints in
+// priority order, wrapping at the separators; the tail ends the last line.
+// The hints that do not fit are dropped from the end. width <= 0 means one
+// unlimited line.
+func fitHintLines(hints []string, tail string, width, maxLines int) string {
+	if width <= 0 {
+		maxLines = 1
+	}
+	var lines []string
 	line := ""
 	for _, h := range hints {
 		next := h
 		if line != "" {
 			next = line + hintSep + h
 		}
-		if width > 0 && lipgloss.Width(next+hintSep+tail) > width {
-			break
+		last := len(lines) == maxLines-1
+		limit := width
+		if last { // the last line must still hold the tail
+			next += hintSep + tail
+		}
+		if width > 0 && lipgloss.Width(next) > limit {
+			if last {
+				break
+			}
+			lines = append(lines, line)
+			line = h
+			if len(lines) == maxLines-1 && lipgloss.Width(line+hintSep+tail) > width {
+				line = ""
+				break
+			}
+			continue
+		}
+		if last {
+			next = strings.TrimSuffix(next, hintSep+tail)
 		}
 		line = next
 	}
-	if line == "" {
-		return tail
+	switch {
+	case line == "":
+		line = tail
+	default:
+		line += hintSep + tail
 	}
-	return line + hintSep + tail
+	return strings.Join(append(lines, line), "\n")
 }
 
 // listHints are the hints of the machine list, in priority order.
 func (m model) listHints() []string {
 	hints := []string{
 		"↑/k ↓/j move", "space mark", "s ssh", "/ search", "p ping", ": run",
-		"tab run panel + machine actions", "H offline", "d forget password", "m accounts", "F12 settings",
-		"f upload", "F download", "b files", "* pin", "N note", "y copy ip", "E export", "S sort", "r reload", "c copy", "P profile", "o options", "a about",
+		"tab run panel + machine actions", "H offline", "m accounts", "F12 settings",
+		"f upload", "F download", "b files", "y/Y copy ip/name", "* pin", "N note", "E export", "d forget password",
+		"A mark all", "S sort", "r reload", "c copy ssh cmd", "P profile", "o options", "a about",
 	}
 	return hints
 }

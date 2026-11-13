@@ -37,8 +37,8 @@ func TestStartRebootRefusals(t *testing.T) {
 	other.AccountTailnet = "other.example.com"
 	m2 := m
 	m2.acct.tailscaleActiveAccount = "mine.example.com"
-	if u, c := m2.startReboot(other); c != nil || !strings.Contains(u.(model).act.err.Error(), "account") {
-		t.Fatal("other account")
+	if u, c := m2.startReboot(other); c == nil || u.(model).pendingSwitch == nil || !strings.Contains(u.(model).notify.info, "Switching the Tailscale account") {
+		t.Fatal("another account is switched to by itself, not refused")
 	}
 
 	m3 := flowModel(t, nil, "")

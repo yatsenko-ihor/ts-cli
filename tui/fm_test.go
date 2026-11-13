@@ -407,8 +407,8 @@ func TestFileManagerRefusalsAndListErrors(t *testing.T) {
 	other.list.devices[0].AccountTailnet = "other.example.com"
 	other.list.filteredDevices = other.list.devices
 	other.acct.tailscaleActiveAccount = "mine.example.com"
-	if u, _ := other.openFileManager(); u.(model).fm != nil || !strings.Contains(u.(model).notify.sshError.Error(), "another account") {
-		t.Fatal("other account")
+	if u, c := other.openFileManager(); u.(model).fm != nil || c == nil || u.(model).pendingSwitch == nil {
+		t.Fatal("another account is switched to by itself, not refused")
 	}
 	noAddr := flowModel(t, map[string]machineCredential{"dev-1": {username: "pi"}}, "pi")
 	noAddr.list.devices[0].Addresses = nil

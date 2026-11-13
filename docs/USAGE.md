@@ -144,6 +144,10 @@ ts-cli i            # short alias
 ts-cli tui          # alternative alias
 ```
 
+The key bar at the bottom wraps to up to three lines, so every key fits at a normal width (the least important ones are dropped on a very narrow terminal; `?` shows them all). Prompts (SSH username and password, notes, rename, …) are popups drawn over the list, not separate screens.
+
+Actions on a machine of another Tailscale account (reboot, health check, file manager) switch this computer's account by themselves and say so (`Switching the Tailscale account to … `), then carry on.
+
 #### TUI Keyboard Shortcuts
 
 | Key         | Action                                            |
@@ -164,7 +168,7 @@ ts-cli tui          # alternative alias
 | `Space`     | Mark/unmark the machine for a multi-machine run   |
 | `A`         | Mark all visible machines (again to clear)        |
 | `*`         | Pin/unpin the machine: pinned machines stay at the top of the list (★) |
-| `N`         | Note for the machine (kept only in `config.json`; shown in the details panel and the Machine tab) |
+| `N`         | Note for the machine: several lines (`Enter` adds a line, `Ctrl+S` saves, `Esc` cancels); kept only in `config.json`; shown in the details panel and the Machine tab |
 | `y` / `Y`   | Copy the machine's IP address / name to the clipboard |
 | `E`         | Export the visible machines to a file: `.json` for JSON, anything else CSV (notes included; mode 0600) |
 | `p`         | Ping the selected machine(s)                      |

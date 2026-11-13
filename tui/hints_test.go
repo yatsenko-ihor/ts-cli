@@ -82,3 +82,42 @@ func TestQuestionMarkOpensAndClosesHelp(t *testing.T) {
 		t.Fatal("? must close it again")
 	}
 }
+
+func TestHintBarWrapsInsteadOfDroppingKeys(t *testing.T) {
+	hints := []string{"aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff"}
+	// everything fits on one line
+	if got := fitHintLines(hints, "tail", 100, 3); got != "aaaa • bbbb • cccc • dddd • eeee • ffff • tail" {
+		t.Fatalf("one line: %q", got)
+	}
+	// two lines: the hints wrap, the tail ends the last line, nothing is lost
+	got := fitHintLines(hints, "tail", 26, 3)
+	lines := strings.Split(got, "\n")
+	if len(lines) < 2 || !strings.HasSuffix(got, " • tail") || strings.Count(got, "aaaa")+strings.Count(got, "bbbb")+strings.Count(got, "cccc")+strings.Count(got, "dddd")+strings.Count(got, "eeee")+strings.Count(got, "ffff") != len(hints) {
+		t.Fatalf("wrapped: %q", got)
+	}
+	for _, l := range lines {
+		if lipgloss.Width(l) > 26 {
+			t.Fatalf("line %q is wider than 26", l)
+		}
+	}
+	// too many hints for the allowed lines: the least useful ones are dropped, the tail stays
+	short := fitHintLines(hints, "tail", 14, 2)
+	if len(strings.Split(short, "\n")) != 2 || !strings.HasSuffix(short, "tail") || strings.Contains(short, "ffff") {
+		t.Fatalf("dropped: %q", short)
+	}
+	// no room at all: just the tail; unknown width: one unlimited line
+	if got := fitHintLines(hints, "tail", 3, 2); got != "tail" && !strings.HasSuffix(got, "tail") {
+		t.Fatalf("tiny: %q", got)
+	}
+	if got := fitHintLines(hints, "tail", 0, 3); strings.Contains(got, "\n") {
+		t.Fatalf("no width: %q", got)
+	}
+	// the real list hints at a normal terminal: every documented key shows
+	m := model{width: 140}
+	bar := m.getHelpText()
+	for _, key := range []string{"y/Y copy ip/name", "b files", "* pin", "N note", "E export", "d forget password", "A mark all", "? help", "q quit"} {
+		if !strings.Contains(bar, key) {
+			t.Errorf("the bar lacks %q:\n%s", key, bar)
+		}
+	}
+}

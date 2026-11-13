@@ -37,30 +37,31 @@ type model struct {
 	set            uiSettings
 	settingsMode   bool
 	settingsCursor int
-	browse         *fileBrowser          // local file browser opened from a path prompt
-	act            actionState           // Machine tab result
-	reboot         *rebootState          // reboot being watched, nil when none
-	samples        map[string][]sample   // ping history by machineKey
-	failStreak     map[string]int        // consecutive failed monitor pings
-	downAlerted    map[string]bool       // machines reported as not answering
-	failedFromUp   map[string]bool       // the machine was reachable when its failure streak began
-	alerts         []string              // monitor events, newest last
-	monitorSeq     int                   // tells monitor loops apart
-	monitorNext    int                   // where the next monitor round starts
-	health         map[string]healthInfo // last health check by machineKey
-	pinned         map[string]bool       // pinned machine keys
-	notes          map[string]string     // notes by machine key
-	fm             *fileManager          // two-pane file manager, nil when closed
-	fmDirs         map[string][2]string  // last directories of the manager by machineKey
-	rebootSeq      int                   // tells watches apart
-	peers          map[string]peerInfo   // daemon view of peers, by Tailscale IP
-	pingInfo       map[string]pingDetail // detailed ping results by machineKey
-	lastMachine    string                // key of the machine connected to most recently
-	ping           map[string]pingState  // explicit reachability results by machineKey
-	pingAt         map[string]time.Time  // when each machine was last pinged
-	pinging        map[string]bool       // pings in flight
-	pingSeq        int                   // debounce counter for auto-ping on cursor rest
-	preflight      *preflight            // launch waiting for its reachability check
+	browse         *fileBrowser                     // local file browser opened from a path prompt
+	act            actionState                      // Machine tab result
+	reboot         *rebootState                     // reboot being watched, nil when none
+	samples        map[string][]sample              // ping history by machineKey
+	failStreak     map[string]int                   // consecutive failed monitor pings
+	downAlerted    map[string]bool                  // machines reported as not answering
+	failedFromUp   map[string]bool                  // the machine was reachable when its failure streak began
+	alerts         []string                         // monitor events, newest last
+	monitorSeq     int                              // tells monitor loops apart
+	monitorNext    int                              // where the next monitor round starts
+	health         map[string]healthInfo            // last health check by machineKey
+	pinned         map[string]bool                  // pinned machine keys
+	notes          map[string]string                // notes by machine key
+	pendingSwitch  func(model) (tea.Model, tea.Cmd) // continues an action after an automatic account switch
+	fm             *fileManager                     // two-pane file manager, nil when closed
+	fmDirs         map[string][2]string             // last directories of the manager by machineKey
+	rebootSeq      int                              // tells watches apart
+	peers          map[string]peerInfo              // daemon view of peers, by Tailscale IP
+	pingInfo       map[string]pingDetail            // detailed ping results by machineKey
+	lastMachine    string                           // key of the machine connected to most recently
+	ping           map[string]pingState             // explicit reachability results by machineKey
+	pingAt         map[string]time.Time             // when each machine was last pinged
+	pinging        map[string]bool                  // pings in flight
+	pingSeq        int                              // debounce counter for auto-ping on cursor rest
+	preflight      *preflight                       // launch waiting for its reachability check
 }
 
 // NewModel builds the initial TUI state. machineCreds is the per-machine
@@ -330,6 +331,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case accountSwitchedMsg:
 		// Handle account switch result
 		if msg.err != nil {
+			m.pendingSwitch = nil
+			m.notify.info = ""
 			m.notify.sshError = fmt.Errorf("failed to switch to account %s: %w", msg.accountName, msg.err)
 			return m, nil
 		}
@@ -337,6 +340,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.acct.activeAccount = msg.accountName
 		// Update the real Tailscale active account
 		m.acct.tailscaleActiveAccount = getRealTailscaleAccount()
+		// Continue the action that switched the account by itself
+		if next := m.pendingSwitch; next != nil {
+			m.pendingSwitch = nil
+			m.notify.info = "✓ Switched the Tailscale account to " + msg.accountName
+			return next(m)
+		}
 		// Resume the SSH attempt that triggered the switch
 		if msg.proceedWithSSH {
 			return m.continueSSH()
@@ -592,21 +601,37 @@ func (m model) viewBody() string {
 		return m.renderSSHRetryMenu()
 	}
 
-	// Show SSH input prompts as popups
-	if m.input.mode == inputUsername {
-		return m.renderInputPopup("SSH Username", m.input.value, false)
+	// Prompts are popups over the screen they were opened from.
+	if box := m.inputPopupBox(); box != "" {
+		return overlayCenter(m.backgroundScreen(), box, m.width, m.height)
 	}
-	if m.input.mode == inputPassword {
-		return m.renderInputPopup("SSH Password", m.input.value, true)
-	}
-	if m.input.mode == inputText {
-		return m.renderInputPopup(m.input.label, m.input.value, m.input.masked)
-	}
+	return m.backgroundScreen()
+}
 
+// backgroundScreen is the screen under the prompts: the file manager when it
+// is open, else the machine list.
+func (m model) backgroundScreen() string {
 	if m.fm != nil {
 		return m.renderFM()
 	}
+	return m.renderMain()
+}
 
+// inputPopupBox is the popup of the active username, password or text prompt.
+func (m model) inputPopupBox() string {
+	switch m.input.mode {
+	case inputUsername:
+		return m.renderInputPopup("SSH Username", m.input.value, false)
+	case inputPassword:
+		return m.renderInputPopup("SSH Password", m.input.value, true)
+	case inputText:
+		return m.renderInputPopup(m.input.label, m.input.value, m.input.masked)
+	}
+	return ""
+}
+
+// renderMain renders the machine list screen.
+func (m model) renderMain() string {
 	var b strings.Builder
 
 	// Title
