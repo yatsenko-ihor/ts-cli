@@ -29,7 +29,7 @@ The demo uses invented machines and a fake API ([how it is made](demo/README.md)
 - **Operations**: reboot and wait, port forwarding, health check, background monitor with latency history and down/up alerts, automatic reconnect
 - **Health and updates**: `ts-cli doctor` checks tools, the daemon, the key and API keys; `ts-cli upgrade` checks GitHub Releases (and installs a verified build with `--install`)
 - **ssh-config**: `ts-cli ssh-config --install` makes every machine reachable by name from ssh, scp, rsync, git and editors
-- **Machine actions**: ping details (direct or relay), key expiry, rename, tags, delete
+- **Machine actions**: ping details (direct or relay), reboot, port forwarding, health check, notes (the administrative actions — key expiry, rename, tags, delete — are disabled for now)
 - **Scriptable CLI**: `ts-cli list` with filters and JSON output, `ts-cli account`, `ts-cli ssh`
 
 ## Install

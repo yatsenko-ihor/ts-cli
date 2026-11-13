@@ -30,27 +30,30 @@ type machineAction struct {
 	run    func(m model, d client.Device) (tea.Model, tea.Cmd)
 }
 
-// machineActions lists the actions for d; the key-expiry row depends on its
-// current state.
+// machineActions lists the actions for d.
 func machineActions(d client.Device) []machineAction {
-	expiry := machineAction{
-		title: "Disable key expiry",
-		desc:  "The device key never expires. (The API cannot extend a key; to renew one, log in again on the device.)",
-		run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
-			return m.startAPIAction(d, "Key expiry disabled for "+displayName(d), func(c *client.Client) error {
-				return c.SetKeyExpiryDisabled(d.ID, true)
-			})
-		},
-	}
-	if d.KeyExpiryDisabled {
-		expiry.title = "Enable key expiry"
-		expiry.desc = "The device key expires again after the tailnet's key lifetime."
-		expiry.run = func(m model, d client.Device) (tea.Model, tea.Cmd) {
-			return m.startAPIAction(d, "Key expiry enabled for "+displayName(d), func(c *client.Client) error {
-				return c.SetKeyExpiryDisabled(d.ID, false)
-			})
-		}
-	}
+	// DISABLED ON PURPOSE (for now): the administrative actions below (key expiry,
+	// expire key, rename, edit tags, delete from tailnet) are commented out of the
+	// Machine tab. The client calls (client/device_actions.go), startAPIAction and
+	// handleDeviceAction stay, so re-enabling means removing the comment marks.
+	//	expiry := machineAction{
+	//		title: "Disable key expiry",
+	//		desc:  "The device key never expires. (The API cannot extend a key; to renew one, log in again on the device.)",
+	//		run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
+	//			return m.startAPIAction(d, "Key expiry disabled for "+displayName(d), func(c *client.Client) error {
+	//				return c.SetKeyExpiryDisabled(d.ID, true)
+	//			})
+	//		},
+	//	}
+	//	if d.KeyExpiryDisabled {
+	//		expiry.title = "Enable key expiry"
+	//		expiry.desc = "The device key expires again after the tailnet's key lifetime."
+	//		expiry.run = func(m model, d client.Device) (tea.Model, tea.Cmd) {
+	//			return m.startAPIAction(d, "Key expiry enabled for "+displayName(d), func(c *client.Client) error {
+	//				return c.SetKeyExpiryDisabled(d.ID, false)
+	//			})
+	//		}
+	//	}
 	return []machineAction{
 		{
 			title: "Ping with details",
@@ -88,72 +91,76 @@ func machineActions(d client.Device) []machineAction {
 			desc:  "ssh -L: a port on this computer (127.0.0.1) leads to a port on the machine, until you stop it with x",
 			run:   func(m model, d client.Device) (tea.Model, tea.Cmd) { return m.promptForward(d) },
 		},
-		expiry,
-		{
-			title:  "Expire key now",
-			desc:   "The device is logged out and must authenticate again",
-			danger: true,
-			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
-				return m.confirmByName(d, "Expire the key of "+displayName(d), func(m model) (tea.Model, tea.Cmd) {
-					return m.startAPIAction(d, "Key expired for "+displayName(d), func(c *client.Client) error { return c.ExpireKey(d.ID) })
-				})
-			},
-		},
-		{
-			title: "Rename…",
-			desc:  "Set the machine name (a DNS label)",
-			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
-				current := shortHost(displayName(d))
-				m.input = textInput{
-					mode: inputText, label: "Rename " + current, value: current, cursor: len([]rune(current)),
-					hint: "Letters, digits and hyphens",
-					onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
-						m.input = textInput{}
-						name := strings.TrimSpace(v)
-						if name == "" || name == current {
-							return m, nil
-						}
-						return m.startAPIAction(d, fmt.Sprintf("Renamed %s to %s", current, name), func(c *client.Client) error {
-							return c.RenameDevice(d.ID, name)
-						})
-					},
-				}
-				return m, nil
-			},
-		},
-		{
-			title: "Edit tags…",
-			desc:  "Replace the tags (tag:name, comma separated); the ACL must allow them",
-			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
-				current := strings.Join(d.Tags, ", ")
-				m.input = textInput{
-					mode: inputText, label: "Tags of " + shortHost(displayName(d)), value: current, cursor: len([]rune(current)),
-					hint: "e.g. tag:server, tag:prod",
-					onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
-						m.input = textInput{}
-						tags := client.NormalizeTags(v)
-						if len(tags) == 0 {
-							m.act = actionState{err: fmt.Errorf("at least one tag is required")}
-							return m, nil
-						}
-						return m.startAPIAction(d, "Tags set: "+strings.Join(tags, ", "), func(c *client.Client) error {
-							return c.SetTags(d.ID, tags)
-						})
-					},
-				}
-				return m, nil
-			},
-		},
-		{
-			title:  "Delete from tailnet…",
-			desc:   "Removes the machine from Tailscale; it must log in again to return",
-			danger: true,
-			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
-				return m.confirmByName(d, "Delete "+displayName(d)+" from the tailnet", func(m model) (tea.Model, tea.Cmd) {
-					return m.startAPIAction(d, displayName(d)+" deleted", func(c *client.Client) error { return c.DeleteDevice(d.ID) })
-				})
-			},
-		},
+		// DISABLED ON PURPOSE (for now): the administrative actions below (key expiry,
+		// expire key, rename, edit tags, delete from tailnet) are commented out of the
+		// Machine tab. The client calls (client/device_actions.go), startAPIAction and
+		// handleDeviceAction stay, so re-enabling means removing the comment marks.
+		// 		expiry,
+		// 		{
+		// 			title:  "Expire key now",
+		// 			desc:   "The device is logged out and must authenticate again",
+		// 			danger: true,
+		// 			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
+		// 				return m.confirmByName(d, "Expire the key of "+displayName(d), func(m model) (tea.Model, tea.Cmd) {
+		// 					return m.startAPIAction(d, "Key expired for "+displayName(d), func(c *client.Client) error { return c.ExpireKey(d.ID) })
+		// 				})
+		// 			},
+		// 		},
+		// 		{
+		// 			title: "Rename…",
+		// 			desc:  "Set the machine name (a DNS label)",
+		// 			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
+		// 				current := shortHost(displayName(d))
+		// 				m.input = textInput{
+		// 					mode: inputText, label: "Rename " + current, value: current, cursor: len([]rune(current)),
+		// 					hint: "Letters, digits and hyphens",
+		// 					onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
+		// 						m.input = textInput{}
+		// 						name := strings.TrimSpace(v)
+		// 						if name == "" || name == current {
+		// 							return m, nil
+		// 						}
+		// 						return m.startAPIAction(d, fmt.Sprintf("Renamed %s to %s", current, name), func(c *client.Client) error {
+		// 							return c.RenameDevice(d.ID, name)
+		// 						})
+		// 					},
+		// 				}
+		// 				return m, nil
+		// 			},
+		// 		},
+		// 		{
+		// 			title: "Edit tags…",
+		// 			desc:  "Replace the tags (tag:name, comma separated); the ACL must allow them",
+		// 			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
+		// 				current := strings.Join(d.Tags, ", ")
+		// 				m.input = textInput{
+		// 					mode: inputText, label: "Tags of " + shortHost(displayName(d)), value: current, cursor: len([]rune(current)),
+		// 					hint: "e.g. tag:server, tag:prod",
+		// 					onSubmit: func(m model, v string) (tea.Model, tea.Cmd) {
+		// 						m.input = textInput{}
+		// 						tags := client.NormalizeTags(v)
+		// 						if len(tags) == 0 {
+		// 							m.act = actionState{err: fmt.Errorf("at least one tag is required")}
+		// 							return m, nil
+		// 						}
+		// 						return m.startAPIAction(d, "Tags set: "+strings.Join(tags, ", "), func(c *client.Client) error {
+		// 							return c.SetTags(d.ID, tags)
+		// 						})
+		// 					},
+		// 				}
+		// 				return m, nil
+		// 			},
+		// 		},
+		// 		{
+		// 			title:  "Delete from tailnet…",
+		// 			desc:   "Removes the machine from Tailscale; it must log in again to return",
+		// 			danger: true,
+		// 			run: func(m model, d client.Device) (tea.Model, tea.Cmd) {
+		// 				return m.confirmByName(d, "Delete "+displayName(d)+" from the tailnet", func(m model) (tea.Model, tea.Cmd) {
+		// 					return m.startAPIAction(d, displayName(d)+" deleted", func(c *client.Client) error { return c.DeleteDevice(d.ID) })
+		// 				})
+		// 			},
+		// 		},
 	}
 }
 
@@ -192,6 +199,8 @@ type deviceActionMsg struct {
 }
 
 // startAPIAction runs call against the device's account in the background.
+//
+//lint:ignore U1000 kept for the administrative actions that are disabled on purpose (see machineActions)
 func (m model) startAPIAction(d client.Device, done string, call func(*client.Client) error) (tea.Model, tea.Cmd) {
 	c, err := m.apiClientFor(d)
 	if err != nil {

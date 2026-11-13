@@ -282,16 +282,11 @@ The **Machine** tab of the Run panel (`Tab`, then `]` to the last tab) acts on t
 | Action | What it does |
 |---|---|
 | Ping with details | `tailscale ping`: whether traffic goes direct (with the endpoint) or through a relay (with the region), and the latency |
-| Disable / enable key expiry | The device key never expires (or expires again). The API cannot extend a key; to renew one, log in again on the device |
-| Expire key now | Logs the device out; asks you to type the machine name |
-| Rename… | Sets the machine name |
-| Edit tags… | Replaces the tags (`tag:server, tag:prod`); the ACL must allow them |
 | Forward a port… | `ssh -L`: a port on this computer (always `127.0.0.1`) leads to a port on the machine. Enter `8080`, `8080:80` or `5432:db.internal:5432`. It runs as a job in the Output panel until you stop it with `x`; a busy local port or a refused forward is reported there, not as a login problem |
 | Check health | Uptime, load, memory and root-disk usage over ssh with the saved login (read-only, no prompts); shown in the details panel with its age |
 | Reboot and wait… | Reboots over ssh (root or passwordless sudo, uses the saved login), then watches with `tailscale ping` and tells you when the machine is back (Esc stops waiting); asks you to type the machine name |
-| Delete from tailnet… | Removes the machine; asks you to type the machine name |
 
-These use the Tailscale API with the account's key, which therefore needs permission to write devices; a read-only key shows the API's error. The details panel also shows a latency history (a sparkline of the last pings with min/avg/max; every ping adds to it) and what the local daemon knows about the machine (`tailscale status`): the current path, traffic and whether it offers Tailscale SSH.
+The administrative actions (disable/enable key expiry, expire key, rename, edit tags, delete from tailnet) are **disabled on purpose for now**: their code is commented out in `tui/actions.go` and the API calls stay in `client/device_actions.go`, so they can be switched back on. Change keys, names and tags in the Tailscale admin console meanwhile. The details panel also shows a latency history (a sparkline of the last pings with min/avg/max; every ping adds to it) and what the local daemon knows about the machine (`tailscale status`): the current path, traffic and whether it offers Tailscale SSH.
 
 **Key reminders.** A device whose key expires drops off the tailnet. Expired keys and keys expiring within 14 days are flagged in the list (`exp`, red when expired, yellow when soon) and summarised in a line on the main screen.
 

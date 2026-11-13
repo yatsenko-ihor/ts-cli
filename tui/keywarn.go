@@ -61,5 +61,5 @@ func (m model) deviceKeyWarning(now time.Time) string {
 	if firstAt.After(now) {
 		when = fmt.Sprintf("in %dd", int(firstAt.Sub(now).Hours()/24))
 	}
-	return fmt.Sprintf("⚠ Device keys: %s (soonest: %s %s)  — Machine tab can disable expiry", strings.Join(parts, ", "), firstName, when)
+	return fmt.Sprintf("⚠ Device keys: %s (soonest: %s %s)", strings.Join(parts, ", "), firstName, when)
 }

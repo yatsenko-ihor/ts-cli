@@ -93,31 +93,36 @@ func deliver(t *testing.T, m model, cmd tea.Cmd) (model, tea.Cmd) {
 	return updated.(model), next
 }
 
+// adminDisabled is why the tests of the administrative Machine-tab actions are
+// skipped: the rows are commented out of machineActions for now.
+const adminDisabled = "administrative Machine-tab actions are disabled on purpose (see machineActions)"
+
 // Verifies: REQ-ACT-001
 func TestMachineActionsListDependsOnKeyExpiryState(t *testing.T) {
-	titles := func(d client.Device) []string {
+	titles := func(d client.Device) string {
 		var out []string
 		for _, a := range machineActions(d) {
 			out = append(out, a.title)
 		}
-		return out
+		return strings.Join(out, "|")
 	}
-	on := strings.Join(titles(client.Device{}), "|")
-	off := strings.Join(titles(client.Device{KeyExpiryDisabled: true}), "|")
-	if !strings.Contains(on, "Disable key expiry") || strings.Contains(on, "Enable key expiry") {
-		t.Fatalf("expiring key offers disabling: %s", on)
+	got := titles(client.Device{})
+	if got != titles(client.Device{KeyExpiryDisabled: true}) {
+		t.Fatal("the list no longer depends on the key expiry state")
 	}
-	if !strings.Contains(off, "Enable key expiry") || strings.Contains(off, "Disable key expiry") {
-		t.Fatalf("non-expiring key offers enabling: %s", off)
-	}
-	for _, want := range []string{"Ping with details", "Expire key now", "Rename…", "Edit tags…", "Delete from tailnet…"} {
-		if !strings.Contains(on, want) {
-			t.Errorf("missing action %q", want)
+	for _, want := range []string{"Ping with details", "Edit note…", "Check health", "Reboot and wait…", "File manager…", "Forward a port…"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing action %q in %s", want, got)
 		}
 	}
-	d := client.Device{}
-	for _, a := range machineActions(d) {
-		if (a.title == "Expire key now" || strings.HasPrefix(a.title, "Delete") || strings.HasPrefix(a.title, "Reboot")) != a.danger {
+	// The administrative actions are disabled for now; this fails when they come back.
+	for _, gone := range []string{"key expiry", "Expire key now", "Rename…", "Edit tags…", "Delete from tailnet…"} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%q is disabled on purpose but is listed", gone)
+		}
+	}
+	for _, a := range machineActions(client.Device{}) {
+		if strings.HasPrefix(a.title, "Reboot") != a.danger {
 			t.Errorf("%q: danger flag = %v", a.title, a.danger)
 		}
 	}
@@ -125,6 +130,7 @@ func TestMachineActionsListDependsOnKeyExpiryState(t *testing.T) {
 
 // Verifies: REQ-ACT-002
 func TestKeyExpiryActionsCallTheAPIAndReload(t *testing.T) {
+	t.Skip(adminDisabled)
 	api := startFakeAPI(t)
 	m := actionsFixtureModel(t)
 
@@ -154,6 +160,7 @@ func TestKeyExpiryActionsCallTheAPIAndReload(t *testing.T) {
 
 // Verifies: REQ-ACT-003
 func TestDestructiveActionsNeedTheMachineNameTyped(t *testing.T) {
+	t.Skip(adminDisabled)
 	for _, tc := range []struct{ title, method, path string }{
 		{"Expire key now", "POST", "/device/n42/expire"},
 		{"Delete from tailnet…", "DELETE", "/device/n42"},
@@ -191,6 +198,7 @@ func TestDestructiveActionsNeedTheMachineNameTyped(t *testing.T) {
 
 // Verifies: REQ-ACT-004
 func TestRenameAndTagPrompts(t *testing.T) {
+	t.Skip(adminDisabled)
 	api := startFakeAPI(t)
 	m := actionsFixtureModel(t)
 
@@ -228,6 +236,7 @@ func TestRenameAndTagPrompts(t *testing.T) {
 
 // Verifies: REQ-ACT-005
 func TestAPIFailuresAndMissingAccountAreShown(t *testing.T) {
+	t.Skip(adminDisabled)
 	api := startFakeAPI(t)
 	api.code, api.reply = 403, `{"message":"requires devices:core scope"}`
 	m := actionsFixtureModel(t)
@@ -315,7 +324,7 @@ func TestMachineTabRendersAndEnterRunsTheAction(t *testing.T) {
 	m.width, m.height = 140, 60
 	m.activeFocus = focusRun
 	out := m.renderRunPanel()
-	for _, want := range []string{"Machine", "Ping with details", "Delete from tailnet", "only"} {
+	for _, want := range []string{"Machine", "Ping with details", "Forward a port", "only"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("panel lacks %q", want)
 		}
