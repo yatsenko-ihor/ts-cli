@@ -214,3 +214,24 @@ func TestExport(t *testing.T) {
 		t.Fatal("empty list")
 	}
 }
+
+func TestDefaultThemeFollowsTheTerminal(t *testing.T) {
+	old := terminalIsDark
+	t.Cleanup(func() { terminalIsDark = old })
+	terminalIsDark = func() bool { return true }
+	if got := loadUISettings(nil).theme; got != "dark" {
+		t.Fatalf("dark terminal: %q", got)
+	}
+	terminalIsDark = func() bool { return false }
+	if got := loadUISettings(nil).theme; got != "light" {
+		t.Fatalf("light terminal: %q", got)
+	}
+	// a stored choice wins, and an unknown stored name still means light
+	terminalIsDark = func() bool { return true }
+	if got := loadUISettings(map[string]string{uiTheme: "hacker"}).theme; got != "hacker" {
+		t.Fatalf("stored: %q", got)
+	}
+	if got := loadUISettings(map[string]string{uiTheme: "nope"}).theme; got != "light" {
+		t.Fatalf("unknown: %q", got)
+	}
+}

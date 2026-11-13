@@ -22,7 +22,7 @@ const (
 	uiIcons          = "icons"         // "symbols" (default) or "emoji"
 	uiTailscaleSSH   = "tailscale_ssh" // use `tailscale ssh` for machines that offer it (default off)
 	uiTmuxSplit      = "tmux_split"    // ssh sessions in a tmux pane when running inside tmux
-	uiTheme          = "theme"         // light (default), dark, dark-pastel or hacker
+	uiTheme          = "theme"         // dark or light by the terminal (default), dark-pastel, hacker or a custom one
 	uiMonitor        = "monitor"       // ping the visible machines in the background and report changes (default off)
 )
 
@@ -39,6 +39,18 @@ type uiSettings struct {
 	monitor        bool   // background monitor of the visible machines
 }
 
+// terminalIsDark asks the terminal for its background colour; a seam for tests.
+var terminalIsDark = lipgloss.HasDarkBackground
+
+// defaultTheme follows the terminal when no theme was chosen: dark on a dark
+// background, light on a light one.
+func defaultTheme() string {
+	if terminalIsDark() {
+		return "dark"
+	}
+	return "light"
+}
+
 // loadUISettings builds the settings from the config map; absent keys mean "on".
 func loadUISettings(ui map[string]string) uiSettings {
 	on := func(key string) bool { return ui[key] != "off" }
@@ -48,11 +60,20 @@ func loadUISettings(ui map[string]string) uiSettings {
 		showDetails:    on(uiShowDetails),
 		shortNames:     on(uiShortNames),
 		emojiIcons:     ui[uiIcons] == "emoji",
-		theme:          validTheme(ui[uiTheme]),
+		theme:          validTheme(chosenTheme(ui)),
 		tmuxSplit:      on(uiTmuxSplit),
 		tailscaleSSH:   ui[uiTailscaleSSH] == "on",
 		monitor:        ui[uiMonitor] == "on",
 	}
+}
+
+// chosenTheme is the stored theme, or the one matching the terminal when none
+// is stored (so a first start looks right on a dark terminal too).
+func chosenTheme(ui map[string]string) string {
+	if t := ui[uiTheme]; t != "" {
+		return t
+	}
+	return defaultTheme()
 }
 
 // settingItem is one row of the settings window.
