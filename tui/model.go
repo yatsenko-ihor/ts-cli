@@ -581,13 +581,12 @@ func (m model) viewBody() string {
 	}
 
 	// Show options menu if in options mode
+	// Options and About are popups over the screen they were opened from.
 	if m.opts.active {
-		return m.renderOptionsMenu()
+		return overlayCenter(m.backgroundScreen(), m.renderOptionsMenu(), m.width, m.height)
 	}
-
-	// Show about screen
 	if m.aboutMode {
-		return m.renderAbout()
+		return overlayCenter(m.backgroundScreen(), m.renderAbout(), m.width, m.height)
 	}
 
 	// Show help screen

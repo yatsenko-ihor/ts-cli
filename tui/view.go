@@ -347,14 +347,8 @@ func (m model) renderProfileSelection() string {
 	return b.String()
 }
 
-// renderAbout renders the about/info screen
+// renderAbout renders the about/info popup
 func (m model) renderAbout() string {
-	var b strings.Builder
-
-	title := "About ts-cli"
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
 	listWidth := 60
 	if m.width > 0 && m.width < 80 {
 		listWidth = m.width - 10
@@ -370,6 +364,7 @@ func (m model) renderAbout() string {
 		Width(listWidth)
 
 	var content strings.Builder
+	content.WriteString(titleStyle.Render("About ts-cli") + "\n\n")
 	content.WriteString(lipgloss.NewStyle().Bold(true).Render("ts-cli"))
 	content.WriteString(fmt.Sprintf(" v%s\n", m.version))
 	content.WriteString("\n")
@@ -380,12 +375,10 @@ func (m model) renderAbout() string {
 	content.WriteString(grayItalicStyle.Render("GitHub:") + "  https://github.com/yatsenko-ihor/ts-cli\n")
 	content.WriteString("\n")
 	content.WriteString(grayItalicStyle.Render("License: MIT + Commons Clause"))
+	content.WriteString("\n\n")
+	content.WriteString(helpStyle.Render("Press any key to close"))
 
-	b.WriteString(aboutBox.Render(content.String()))
-	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("Press any key to return"))
-
-	return b.String()
+	return aboutBox.Render(content.String())
 }
 
 // noteRows is the height of a multi-line prompt.
@@ -535,10 +528,6 @@ func (m model) renderOptionsMenu() string {
 
 	var b strings.Builder
 
-	title := fmt.Sprintf("Options (ts-cli v%s)", m.version)
-	b.WriteString(titleStyle.Render(title))
-	b.WriteString("\n\n")
-
 	listWidth := 60
 	if m.width > 0 && m.width < 80 {
 		listWidth = m.width - 10
@@ -549,11 +538,13 @@ func (m model) renderOptionsMenu() string {
 
 	optionsList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(cur.border).
+		BorderForeground(cur.borderFocus).
 		Padding(1, 2).
 		Width(listWidth)
 
 	var listContent strings.Builder
+	listContent.WriteString(titleStyle.Render(fmt.Sprintf("Options (ts-cli v%s)", m.version)))
+	listContent.WriteString("\n\n")
 
 	// Option: View machines with saved passwords
 	machineCredsLabel := fmt.Sprintf("Machines with saved passwords (%d)", len(m.ssh.machineCreds))
@@ -581,45 +572,39 @@ func (m model) renderOptionsMenu() string {
 		listContent.WriteString(normalStyle.Render("  " + secretLabel))
 	}
 
-	b.WriteString(optionsList.Render(listContent.String()))
-	b.WriteString("\n\n")
+	listContent.WriteString("\n\n")
 
 	// Info text
-	b.WriteString(grayItalicStyle.Render("Passwords and API keys are encrypted with AES-256-GCM"))
-	b.WriteString("\n")
+	listContent.WriteString(grayItalicStyle.Render(truncateForWidth("Passwords and API keys are encrypted with AES-256-GCM", listWidth-6)))
+	listContent.WriteString("\n")
 	savedCount := len(m.ssh.machineCreds)
 	if savedCount > 0 {
-		b.WriteString(successStyle.Render(fmt.Sprintf("✓ %d machine(s) with saved credentials", savedCount)))
+		listContent.WriteString(successStyle.Render(fmt.Sprintf("✓ %d machine(s) with saved credentials", savedCount)))
 	} else {
-		b.WriteString(grayItalicStyle.Render("Credentials will be saved per-machine after the first successful SSH connection"))
+		listContent.WriteString(grayItalicStyle.Render(truncateForWidth("Credentials are saved per machine after the first successful SSH connection", listWidth-6)))
 	}
-	b.WriteString("\n")
+	listContent.WriteString("\n")
 	if m.opts.secretStoreMsg != "" {
 		style := successStyle
 		if strings.HasPrefix(m.opts.secretStoreMsg, "✗") {
 			style = errorStyle
 		}
-		b.WriteString(style.Render(truncateForWidth(m.opts.secretStoreMsg, listWidth)))
-		b.WriteString("\n")
+		listContent.WriteString(style.Render(truncateForWidth(m.opts.secretStoreMsg, listWidth-6)))
+		listContent.WriteString("\n")
 	} else if notice := util.KeyStoreNotice(); notice != "" {
-		b.WriteString(infoStyle.Render(truncateForWidth("⚠ "+notice, listWidth)))
-		b.WriteString("\n")
+		listContent.WriteString(infoStyle.Render(truncateForWidth("⚠ "+notice, listWidth-6)))
+		listContent.WriteString("\n")
 	}
 
-	b.WriteString("\n")
-	help := "↑/k up • ↓/j down • enter toggle/select • esc/q back"
-	b.WriteString(helpStyle.Render(help))
+	listContent.WriteString("\n")
+	listContent.WriteString(helpStyle.Render(truncateForWidth("↑/k up • ↓/j down • enter toggle/select • esc/q back", listWidth-6)))
 
+	b.WriteString(optionsList.Render(listContent.String()))
 	return b.String()
 }
 
 // renderMachineCredsView renders the list of machines with saved credentials
 func (m model) renderMachineCredsView() string {
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("Machines with saved passwords"))
-	b.WriteString("\n\n")
-
 	listWidth := 60
 	if m.width > 0 && m.width < 80 {
 		listWidth = m.width - 10
@@ -630,11 +615,13 @@ func (m model) renderMachineCredsView() string {
 
 	optionsList := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(cur.border).
+		BorderForeground(cur.borderFocus).
 		Padding(1, 2).
 		Width(listWidth)
 
 	var listContent strings.Builder
+	listContent.WriteString(titleStyle.Render("Machines with saved passwords"))
+	listContent.WriteString("\n\n")
 
 	machineIDs := m.getSortedMachineCredIDs()
 
@@ -658,13 +645,10 @@ func (m model) renderMachineCredsView() string {
 		}
 	}
 
-	b.WriteString(optionsList.Render(listContent.String()))
-	b.WriteString("\n\n")
+	listContent.WriteString("\n\n")
+	listContent.WriteString(helpStyle.Render(truncateForWidth("↑/k up • ↓/j down • d delete • esc/q back", listWidth-6)))
 
-	help := "↑/k up • ↓/j down • d delete • esc/q back"
-	b.WriteString(helpStyle.Render(help))
-
-	return b.String()
+	return optionsList.Render(listContent.String())
 }
 
 // getHelpText returns context-sensitive help text based on current mode

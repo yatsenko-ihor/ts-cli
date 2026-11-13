@@ -23,6 +23,7 @@
 - [x] Version 1.2.0
 - [x] Version 1.3.0: auto-reconnect, `d` forgets the saved password, empty timestamps in device JSON
 - [x] Version 1.4.0: reboot and wait, port forwarding, health check, monitor, file manager, ssh-config, pins/notes/export, upgrade, doctor
+- [x] Version 1.5.0: key bar wraps, prompts/Options/About as popups, multi-line notes, automatic account switch, health in the Output panel, mc-style file manager (F5/F6/F7/F8), administrative Machine actions disabled for now
 
 ## Not done
 

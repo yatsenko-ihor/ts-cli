@@ -182,3 +182,31 @@ func TestPopupsAreDrawnOverTheScreen(t *testing.T) {
 		t.Fatal("text prompts are popups too")
 	}
 }
+
+func TestOptionsAndAboutArePopups(t *testing.T) {
+	m := personalModel(t)
+	m.width, m.height = 120, 40
+	m.version = "9.9.9"
+
+	m2 := m
+	m2.opts.active = true
+	view := m2.View()
+	for _, want := range []string{"Options (ts-cli v9.9.9)", "Machines with saved passwords", "Encryption key", "alpha", "Tailscale Devices"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("options popup: %q missing", want)
+		}
+	}
+	m3 := m2
+	m3.opts.showMachineCreds = true
+	if view := m3.View(); !strings.Contains(view, "Machines with saved passwords") || !strings.Contains(view, "No machines with saved passwords") || !strings.Contains(view, "alpha") {
+		t.Fatal("the credentials list is a popup too")
+	}
+	m4 := m
+	m4.aboutMode = true
+	view = m4.View()
+	for _, want := range []string{"About ts-cli", "v9.9.9", "Ihor Yatsenko", "alpha", "any key to close"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("about popup: %q missing", want)
+		}
+	}
+}
