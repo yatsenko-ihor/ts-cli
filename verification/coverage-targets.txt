@@ -16,6 +16,7 @@ commands/sshconfig.go 100
 commands/tailscale_check.go 100
 commands/uninstall.go 100
 commands/up.go 100
+commands/upgrade.go 100
 config/config.go 100
 scripts/scripts.go 100
 tui/accounts.go 100

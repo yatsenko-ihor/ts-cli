@@ -23,6 +23,7 @@ const (
 	uiTailscaleSSH   = "tailscale_ssh" // use `tailscale ssh` for machines that offer it (default off)
 	uiTmuxSplit      = "tmux_split"    // ssh sessions in a tmux pane when running inside tmux
 	uiTheme          = "theme"         // dark or light by the terminal (default), dark-pastel, hacker or a custom one
+	uiUpdateCheck    = "update_check"  // look for a newer release once a day (default on)
 	uiMonitor        = "monitor"       // ping the visible machines in the background and report changes (default off)
 )
 
@@ -37,6 +38,7 @@ type uiSettings struct {
 	tmuxSplit      bool   // open ssh sessions in a tmux split when inside tmux
 	tailscaleSSH   bool   // use `tailscale ssh` for machines that offer it
 	monitor        bool   // background monitor of the visible machines
+	updateCheck    bool   // ask GitHub for a newer release once a day
 }
 
 // terminalIsDark asks the terminal for its background colour; a seam for tests.
@@ -64,6 +66,7 @@ func loadUISettings(ui map[string]string) uiSettings {
 		tmuxSplit:      on(uiTmuxSplit),
 		tailscaleSSH:   ui[uiTailscaleSSH] == "on",
 		monitor:        ui[uiMonitor] == "on",
+		updateCheck:    on(uiUpdateCheck),
 	}
 }
 
@@ -90,6 +93,7 @@ var settingItems = []settingItem{
 	{uiShortNames, "Short names", "Strip the tailnet suffix (.tailXXXX.ts.net) from machine names"},
 	{uiTmuxSplit, "SSH in a tmux split", "Inside tmux, s opens the session in a pane next to the list (a real terminal: vim, htop, mouse, scrolling)"},
 	{uiTailscaleSSH, "Use Tailscale SSH when offered", "s runs `tailscale ssh` for machines that offer it (no password or key needed; the ACL decides); off = plain ssh"},
+	{uiUpdateCheck, "Check for updates", "Once a day ask GitHub for the latest ts-cli release and show a line when a newer one exists (one unauthenticated request; `ts-cli upgrade` installs it)"},
 	{uiMonitor, "Monitor machines", "Every 30 s ping the visible online machines in turn (a few at a time), keep a latency history and say when one stops or starts answering"},
 	{uiTheme, "Theme", "light, dark, dark-pastel, hacker or your own from ~/.ts-cli/themes/*.json; all but light paint the whole screen"},
 	{uiIcons, "Icon style", "symbols: coloured ● ○ and text flags   emoji: 🟢 🔴 ⭕️ 🔐"},
@@ -118,6 +122,8 @@ func (s uiSettings) value(key string) string {
 		return flag(s.tailscaleSSH)
 	case uiMonitor:
 		return flag(s.monitor)
+	case uiUpdateCheck:
+		return flag(s.updateCheck)
 	case uiTheme:
 		return validTheme(s.theme)
 	case uiIcons:
@@ -146,6 +152,8 @@ func (s uiSettings) toggled(key string) uiSettings {
 		s.tailscaleSSH = !s.tailscaleSSH
 	case uiMonitor:
 		s.monitor = !s.monitor
+	case uiUpdateCheck:
+		s.updateCheck = !s.updateCheck
 	case uiTheme:
 		s.theme = nextTheme(validTheme(s.theme))
 	case uiIcons:

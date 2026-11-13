@@ -191,6 +191,9 @@ func (m model) Init() tea.Cmd {
 	if m.set.monitor {
 		cmds = append(cmds, tickMonitor(m.monitorSeq, monitorFirst))
 	}
+	if m.set.updateCheck {
+		cmds = append(cmds, updateCheckCmd())
+	}
 	if tailscaleAvailable() {
 		cmds = append(cmds, loadPeersCmd())
 	}
@@ -444,6 +447,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.value, m.input.cursor = insertText(m.input.value, m.input.cursor, msg.text)
 		}
 		return m, nil
+
+	case updateMsg:
+		return m.handleUpdate(msg)
 
 	case personalSavedMsg:
 		if msg.err != nil {

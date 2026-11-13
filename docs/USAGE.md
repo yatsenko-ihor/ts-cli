@@ -250,6 +250,7 @@ Press `F12` to open the settings window (Up/Down, Space/Enter to toggle, Esc to 
 - **Details panel**: with the Run panel closed and a terminal at least 100 columns wide, the highlighted machine's OS, address, last seen, key expiry, SSH setup and ping result are shown on the right.
 - **Group by account**: section headers per account (only with more than one account).
 - **SSH in a tmux split**: inside tmux, `s` opens the session in a new pane to the right of the list instead of taking over ts-cli's terminal (see [Running In tmux](#running-in-tmux)). On by default; has no effect outside tmux.
+- **Check for updates** (on by default): once a day ask GitHub for the latest release and show `⬆ ts-cli vX is available` when it is newer than this version (see `ts-cli upgrade`).
 - **Monitor machines** (off by default): every 30 s ping the visible online machines in turn (a few at a time), keep a latency history for the details panel and report when a machine stops answering (after two failed pings in a row) or answers again. Pings use `tailscale ping`; nothing is sent to the machines beyond that.
 - **Use Tailscale SSH when offered** (off by default): for machines that run the Tailscale SSH server, `s` runs `tailscale ssh [user@]machine` instead of plain ssh. No password, key or username prompt and nothing is saved; the tailnet's ACL decides who may connect. Machines that offer it show `Tailscale SSH` in the details panel.
 - **Theme**: until you choose one, ts-cli asks the terminal for its background and uses `dark` on a dark one and `light` on a light one. Choices: `light` (keeps your terminal background), `dark`, `dark-pastel` (soft pastels on slate) or `hacker` (near-black with a muted green text; bright green only for the cursor and online machines, cyan, amber and red for the rest). Every theme except `light` paints the whole screen, so it looks the same on any terminal background. The choice is stored in `~/.ts-cli/config.json` under `ui.theme` (`light`, `dark`, `dark-pastel`, `hacker`) and can be edited there too. You can also add your own themes, see below.
@@ -464,6 +465,12 @@ ts-cli ssh-config --install             # also add `Include "<file>"` at the top
 ```
 
 Run it again to refresh after machines change.
+
+### `upgrade`
+
+Asks GitHub for the latest release and compares it with this version (one unauthenticated GET of the public release information; nothing about you or your tailnet is sent). `ts-cli upgrade` only reports; `ts-cli upgrade --install` downloads the archive for this system, verifies its SHA-256 against the release's `checksums.txt`, and replaces the running binary (a refused or mismatching download changes nothing; on Windows, replace the file by hand). If the binary lives in a directory you cannot write to, run it with `sudo`.
+
+The TUI also checks once a day (the answer is cached in `~/.ts-cli/update_check.json`) and shows a line when a newer release exists; switch that off in `F12` → **Check for updates**.
 
 ### `interactive` / `i` / `tui`
 
