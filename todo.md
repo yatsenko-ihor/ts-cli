@@ -42,13 +42,29 @@
 - [x] Requirement/coverage gate extended to `commands/` and the TUI account/list logic (all gated files at 100 %)
 - [x] `account add` identifies the account by tailnet only and rejects a duplicate display name
 
+## Future
+
+### Fleet mode ("парк")
+- [ ] Saved machine groups (by tag or by hand, e.g. "all Raspberry") and ready-made actions on a group: reboot, update, disk check, view logs, with one result table (a row per machine). Builds on multi-run, the Run panel and saved commands; what is missing is the groups and the action templates.
+
+### Accounts and login
+- [ ] `ts-cli account import` (from plain JSON / `TAILSCALE_API_KEY` / `tailscale switch --list`) and a per-account default SSH username (listed above)
+
+### Terminal and scripting
+- [ ] Mouse click on the Browse button of the path prompts (needs terminal mouse capture, which disables normal text selection; enable it only while a path prompt is open)
+- [ ] Shell completion: `ts-cli completion bash|zsh|fish` (Cobra provides it almost for free; document the install steps)
+- [ ] `ts-cli connect <name>` with fuzzy name matching, without the TUI, for scripts and aliases
+- [ ] Highlight and search by tag and OS in the list; remember the last filter
+- [ ] A background mode for pinging several machines at once (`p` on marked machines exists; the F12 monitor covers the visible list)
+
+### Tailscale API administration
+- [ ] **Auth keys**: `ts-cli key create --tag server --ephemeral` to onboard new machines
+- [ ] **Subnet routes and exit nodes**: view and approve advertised routes (a machine that offers `192.168.1.0/24` or `0.0.0.0/0`), mark a machine as exit node, use one from this computer (`tailscale set --exit-node=…`) from the TUI; device posture attributes
+- [ ] **ACL**: `acl show` and `acl validate` first (read-only); applying a policy only with validation and a confirmation, since a wrong policy can lock you out
+- [ ] **Audit and DNS**: the configuration audit log (who changed what, when; depends on the plan) and the DNS settings (nameservers, search paths, MagicDNS)
+- [ ] Users and invites, webhooks, flow logs
+
 ## Ideas (not planned yet)
 
-- Tailscale API: create auth keys (`ts-cli key create --tag … --ephemeral`) to onboard machines
-- Tailscale API: subnet routes (view, approve), device posture attributes
-- Tailscale API: ACL policy (`acl show`, `acl validate`), DNS settings, users and invites, webhooks, audit and flow logs
 - Importing hosts from `~/.ssh/config` is a bigger job
-- Saved machine groups / tag-based selection for runs
-- Ready-made group actions (reboot, update, disk check) on the marked machines
 - Tailscale SSH: fall back to plain ssh when the ACL refuses
-- Mouse click on the Browse button (needs terminal mouse capture, which disables normal text selection; could be enabled only while a path prompt is open)
